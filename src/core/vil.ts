@@ -9,7 +9,8 @@
 // does not read from the board yet (macro, tap_dance, combo, key_override,
 // alt_repeat_key, settings) are left out: vial-gui's restore skips missing
 // fields, whereas an empty list would erase that feature on the board. On load
-// they are reported, not applied.
+// they are reported, not applied. Active extensions (src/core/extensions/)
+// add their own fields on save and their own restore steps on load.
 
 import type { Keyboard } from "./keyboard.ts";
 import type { KeycodeTable } from "./keycodes/table.ts";
@@ -25,10 +26,17 @@ export interface VilFile {
   layoutOptions: number;
   viaProtocol: number | null;
   vialProtocol: number | null;
-  /** From the Theis194 layer-names fork; null when absent. */
-  layerNames: string[] | null;
-  /** Fields this version does not apply but which carry real data. */
-  skippedFeatures: string[];
+  /** The whole parsed object, for extensions that own other fields. */
+  raw: Readonly<Record<string, unknown>>;
+  /** Fields with real data that core vial-ts does not apply; extensions may handle some. */
+  unhandledFields: UnhandledField[];
+}
+
+export interface UnhandledField {
+  /** Top-level .vil key, e.g. "tap_dance". */
+  key: string;
+  /** Human-readable feature name, e.g. "tap dance". */
+  label: string;
 }
 
 export class VilFormatError extends Error {
@@ -79,7 +87,9 @@ export function saveVil(kb: Keyboard): string {
     ["vial_protocol", kb.vialProtocol],
     ["via_protocol", kb.viaProtocol],
   ];
-  if (kb.capabilities.layerNames) fields.push(["layer_names", kb.layerNames.slice(0, kb.layers)]);
+  for (const { extension, state } of kb.activeExtensions) {
+    if (extension.vil) fields.push(...Object.entries(extension.vil.save(state)));
+  }
   return pythonJson(Object.fromEntries(fields));
 }
 
@@ -132,10 +142,6 @@ export function parseVil(text: string): VilFile {
   // The uid can exceed 2^53, so read it from the text rather than the parsed number.
   const uidMatch = /"uid"\s*:\s*(\d+)/.exec(text);
   const intOrNull = (v: unknown) => (typeof v === "number" && Number.isInteger(v) ? v : null);
-  const layerNames =
-    Array.isArray(obj.layer_names) && obj.layer_names.every((n) => typeof n === "string")
-      ? (obj.layer_names as string[])
-      : null;
 
   return {
     version: intOrNull(obj.version) ?? 1,
@@ -145,15 +151,16 @@ export function parseVil(text: string): VilFile {
     layoutOptions: intOrNull(obj.layout_options) ?? -1,
     viaProtocol: intOrNull(obj.via_protocol),
     vialProtocol: intOrNull(obj.vial_protocol),
-    layerNames,
-    skippedFeatures: detectSkippedFeatures(obj),
+    raw: obj,
+    unhandledFields: detectUnhandledFields(obj),
   };
 }
 
 export type RestoreOp =
   | { kind: "key"; layer: number; row: number; col: number; code: number }
   | { kind: "encoder"; layer: number; index: number; direction: 0 | 1; code: number }
-  | { kind: "layoutOptions"; value: number };
+  | { kind: "layoutOptions"; value: number }
+  | { kind: "extension"; extensionId: string; description: string; apply: () => Promise<void> };
 
 export interface RestorePlan {
   /** Only entries that differ from the board's current state. */
@@ -163,6 +170,7 @@ export interface RestorePlan {
   unknownKeycodes: string[];
   /** Positions in the file the board does not have (extra layers, keys or encoders). */
   ignoredEntries: number;
+  /** Features in the file that neither core vial-ts nor an active extension applies. */
   skippedFeatures: string[];
 }
 
@@ -213,12 +221,21 @@ export function planVilRestore(kb: Keyboard, file: VilFile): RestorePlan {
     ops.push({ kind: "layoutOptions", value: file.layoutOptions });
   }
 
+  const handledKeys = new Set<string>();
+  for (const { extension, state } of kb.activeExtensions) {
+    if (!extension.vil) continue;
+    extension.vil.keys.forEach((k) => handledKeys.add(k));
+    for (const step of extension.vil.restore(state, file.raw)) {
+      ops.push({ kind: "extension", extensionId: extension.id, ...step });
+    }
+  }
+
   return {
     ops,
     uidMismatch: file.uid !== null && file.uid !== kb.uid,
     unknownKeycodes: [...unknown],
     ignoredEntries: ignored,
-    skippedFeatures: file.skippedFeatures,
+    skippedFeatures: file.unhandledFields.filter((f) => !handledKeys.has(f.key)).map((f) => f.label),
   };
 }
 
@@ -234,7 +251,8 @@ export async function applyVilRestore(
     const op = plan.ops[i];
     if (op.kind === "key") await kb.setKey(op.layer, op.row, op.col, op.code);
     else if (op.kind === "encoder") await kb.setEncoder(op.layer, op.index, op.direction, op.code);
-    else await kb.setLayoutOptions(op.value);
+    else if (op.kind === "layoutOptions") await kb.setLayoutOptions(op.value);
+    else await op.apply();
     onProgress?.(i + 1, total);
   }
 }
@@ -262,31 +280,32 @@ function isNested(value: unknown, depth: number): boolean {
  * e.g. a full tap_dance list of KC_NO entries for boards that never used it.
  * Adapted from Vialite's vilFile.ts.
  */
-function detectSkippedFeatures(obj: Record<string, unknown>): string[] {
-  const skipped: string[] = [];
+function detectUnhandledFields(obj: Record<string, unknown>): UnhandledField[] {
+  const skipped: UnhandledField[] = [];
+  const add = (key: string, label: string) => skipped.push({ key, label });
   const realKeycode = (v: unknown): boolean => typeof v === "string" && v !== "KC_NO" && v !== "KC_TRNS";
   const hasKeycode = (entry: unknown): boolean => Array.isArray(entry) && entry.some(realKeycode);
 
   if (Array.isArray(obj.macro) && obj.macro.some((m) => Array.isArray(m) && m.length > 0))
-    skipped.push("macros");
-  if (Array.isArray(obj.tap_dance) && obj.tap_dance.some(hasKeycode)) skipped.push("tap dance");
-  if (Array.isArray(obj.combo) && obj.combo.some(hasKeycode)) skipped.push("combos");
+    add("macro", "macros");
+  if (Array.isArray(obj.tap_dance) && obj.tap_dance.some(hasKeycode)) add("tap_dance", "tap dance");
+  if (Array.isArray(obj.combo) && obj.combo.some(hasKeycode)) add("combo", "combos");
   const enabled = (entry: unknown, bit: number) =>
     typeof entry === "object" &&
     entry !== null &&
     typeof (entry as Record<string, unknown>).options === "number" &&
     ((entry as Record<string, number>).options & bit) !== 0;
   if (Array.isArray(obj.key_override) && obj.key_override.some((e) => enabled(e, 1 << 7))) {
-    skipped.push("key overrides");
+    add("key_override", "key overrides");
   }
   if (Array.isArray(obj.alt_repeat_key) && obj.alt_repeat_key.some((e) => enabled(e, 1 << 3))) {
-    skipped.push("alt repeat keys");
+    add("alt_repeat_key", "alt repeat keys");
   }
   if (typeof obj.settings === "object" && obj.settings !== null && Object.keys(obj.settings).length > 0) {
-    skipped.push("QMK settings");
+    add("settings", "QMK settings");
   }
   if (Array.isArray(obj.layer_names) && obj.layer_names.some((n) => typeof n === "string" && n !== "")) {
-    skipped.push("layer names");
+    add("layer_names", "layer names");
   }
   return skipped;
 }

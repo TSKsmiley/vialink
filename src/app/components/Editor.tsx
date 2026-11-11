@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
+import { activeUi } from "../extensions/registry.tsx";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { KeyboardView, type Selection } from "./KeyboardView.tsx";
 import { KeycodePicker } from "./KeycodePicker.tsx";
@@ -75,9 +76,13 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
     }
   };
 
+  const extensionUi = activeUi(keyboard);
   const layerName = (l: number) => {
-    const name = keyboard.capabilities.layerNames ? keyboard.layerNames[l] : "";
-    return name ? `${l}: ${name}` : String(l);
+    for (const ui of extensionUi) {
+      const label = ui.layerTabLabel?.(keyboard, l);
+      if (label) return label;
+    }
+    return String(l);
   };
 
   return (
@@ -96,6 +101,11 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
               {layerName(l)}
             </button>
           ))}
+          {extensionUi.map((ui) =>
+            ui.LayerActions ? (
+              <ui.LayerActions key={ui.id} keyboard={keyboard} layer={layer} onError={onError} />
+            ) : null,
+          )}
         </div>
         <VilControls
           keyboard={keyboard}

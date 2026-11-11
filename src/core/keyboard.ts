@@ -13,6 +13,8 @@ import {
   type VialDefinition,
 } from "./definition/definition.ts";
 import { packLayoutOptions, unpackLayoutOptions, type LayoutLabel } from "./definition/layoutOptions.ts";
+import { BUILTIN_EXTENSIONS } from "./extensions/index.ts";
+import type { ActiveExtension, ExtensionContext, KeyboardExtension } from "./extensions/types.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
   viaGetLayerCount,
@@ -26,7 +28,6 @@ import {
   vialGetDynamicEntryCounts,
   vialGetEncoder,
   vialGetKeyboardId,
-  vialGetLayerName,
   vialGetUnlockStatus,
   vialQmkSettingsQuery,
   vialSetEncoder,
@@ -53,13 +54,16 @@ export class UnsupportedProtocolError extends Error {
 
 export class UnlockRequiredError extends Error {
   constructor(what: string) {
-    super(
-      `${what} requires the keyboard to be unlocked. Unlocking arrives in a later vial-ts release; ` +
-        "until then, unlock the keyboard in desktop Vial first.",
-    );
+    super(`${what} requires the keyboard to be unlocked.`);
     this.name = "UnlockRequiredError";
   }
 }
+
+/**
+ * Asks the user to unlock the board (the app shows the unlock dialog).
+ * Resolves true once unlocked, false if the user cancelled.
+ */
+export type UnlockHandler = (reason: string) => Promise<boolean>;
 
 /** What the board supports, probed at connect time. */
 export interface Capabilities {
@@ -72,12 +76,24 @@ export interface Capabilities {
   features: string[];
   /** QMK setting ids (qsids) the board supports; empty below Vial protocol 4. */
   qmkSettings: number[];
-  /** Theis194 dynamic-layer-names extension answered a get with status 0. */
-  layerNames: boolean;
 }
 
 export type LoadStage =
-  "protocol" | "definition" | "layers" | "macros" | "capabilities" | "keymap" | "encoders" | "layout options";
+  | "protocol"
+  | "definition"
+  | "layers"
+  | "macros"
+  | "capabilities"
+  | "keymap"
+  | "encoders"
+  | "layout options"
+  | "extensions";
+
+export interface LoadOptions {
+  onProgress?: (p: LoadProgress) => void;
+  /** Extensions to probe; defaults to every built-in one. */
+  extensions?: readonly KeyboardExtension<unknown>[];
+}
 
 export interface LoadProgress {
   stage: LoadStage;
@@ -106,12 +122,14 @@ export class Keyboard {
   macroCount = 0;
   macroMemory = 0;
   capabilities!: Capabilities;
-  layerNames: string[] = [];
   keycodes!: KeycodeTable;
+  /** Set by the app to show the unlock dialog when an operation needs it. */
+  unlockHandler: UnlockHandler | null = null;
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
+  private readonly active = new Map<string, ActiveExtension>();
   private revision = 0;
 
   private constructor(queue: RequestQueue) {
@@ -119,10 +137,22 @@ export class Keyboard {
   }
 
   /** Connects and loads the keyboard, mirroring vial-gui's Keyboard.reload(). */
-  static async load(queue: RequestQueue, onProgress?: (p: LoadProgress) => void): Promise<Keyboard> {
+  static async load(queue: RequestQueue, options: LoadOptions = {}): Promise<Keyboard> {
     const kb = new Keyboard(queue);
-    await kb.reload(onProgress);
+    await kb.reload(options.onProgress);
+    await kb.probeExtensions(options.extensions ?? BUILTIN_EXTENSIONS, options.onProgress);
     return kb;
+  }
+
+  /** The state of an extension active on this board, or null when unsupported or disabled. */
+  extension<State>(ext: KeyboardExtension<State>): State | null {
+    const found = this.active.get(ext.id);
+    return found ? (found.state as State) : null;
+  }
+
+  /** Every extension active on this board, in probe order. */
+  get activeExtensions(): readonly ActiveExtension[] {
+    return [...this.active.values()];
   }
 
   /** Increments on every change; handy as a React dependency. */
@@ -213,11 +243,36 @@ export class Keyboard {
     return vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode())).unlocked;
   }
 
+  /**
+   * Makes sure the board is unlocked before an operation that needs it, asking
+   * the user through {@link unlockHandler}. Throws UnlockRequiredError when the
+   * board stays locked (no handler, or the user cancelled).
+   */
+  async ensureUnlocked(reason: string): Promise<void> {
+    if (await this.isUnlocked()) return;
+    if (this.unlockHandler && (await this.unlockHandler(reason))) return;
+    throw new UnlockRequiredError(reason);
+  }
+
   /** vial-gui unlocks before writing QK_BOOT (keyboard_comm.py set_key/set_encoder). */
   private async ensureUnlockedFor(code: number): Promise<void> {
-    if (code === this.keycodes.resolve(RESET_KEYCODE) && !(await this.isUnlocked())) {
-      throw new UnlockRequiredError("Assigning QK_BOOT (bootloader)");
+    if (code === this.keycodes.resolve(RESET_KEYCODE)) {
+      await this.ensureUnlocked("Assigning QK_BOOT (bootloader)");
     }
+  }
+
+  private async probeExtensions(
+    extensions: readonly KeyboardExtension<unknown>[],
+    onProgress?: (p: LoadProgress) => void,
+  ): Promise<void> {
+    const ctx: ExtensionContext = { keyboard: this, queue: this.queue, changed: () => this.changed() };
+    for (let i = 0; i < extensions.length; i++) {
+      onProgress?.({ stage: "extensions", done: i, total: extensions.length });
+      const ext = extensions[i];
+      const state = await ext.probe(ctx);
+      if (state !== null) this.active.set(ext.id, { extension: ext, state });
+    }
+    this.changed();
   }
 
   private changed(): void {
@@ -319,7 +374,6 @@ export class Keyboard {
     const features = new Set<string>();
     let dynamic: DynamicEntryCounts | null = null;
     const qmkSettings: number[] = [];
-    let layerNames = false;
 
     if (this.vialProtocol >= C.VIAL_PROTOCOL_DYNAMIC) {
       dynamic = vialGetDynamicEntryCounts.decode(await q.request(vialGetDynamicEntryCounts.encode()));
@@ -347,27 +401,12 @@ export class Keyboard {
       }
     }
 
-    if (this.vialProtocol >= C.VIAL_PROTOCOL_DYNAMIC && this.layers > 0) {
-      // Theis194 layer-names extension. Stock Vial leaves the unknown sub-command's
-      // reply untouched (first byte 0xFE), so only status 0 means "supported".
-      const first = vialGetLayerName.decode(await q.request(vialGetLayerName.encode(0), { retries: 3 }));
-      if (first.ok) {
-        layerNames = true;
-        this.layerNames = [first.name];
-        for (let layer = 1; layer < this.layers; layer++) {
-          const reply = vialGetLayerName.decode(await q.request(vialGetLayerName.encode(layer)));
-          this.layerNames.push(reply.ok ? reply.name : "");
-        }
-      }
-    }
-
     return {
       lighting: this.definition.lighting ?? "none",
       matrixTester: this.vialProtocol >= C.VIAL_PROTOCOL_MATRIX_TESTER,
       dynamic,
       features: [...features],
       qmkSettings: qmkSettings.sort((a, b) => a - b),
-      layerNames,
     };
   }
 }

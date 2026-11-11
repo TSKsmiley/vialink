@@ -269,6 +269,20 @@ export class SimulatedKeyboard implements Transport {
         msg.set(name, 1);
         return;
       }
+      case C.DYNAMIC_VIAL_LAYER_NAME_SET: {
+        if (!this.layerNames) return;
+        const layer = msg[3];
+        const raw = msg.slice(4, 4 + C.LAYER_NAME_LEN);
+        msg.fill(0);
+        // Assumed to need an unlocked board, as the fork's GUI always unlocks first.
+        if (layer >= this.opts.layers || !this.unlocked) {
+          msg[0] = 1;
+          return;
+        }
+        const end = raw.indexOf(0);
+        this.layerNames[layer] = new TextDecoder().decode(end === -1 ? raw : raw.slice(0, end));
+        return;
+      }
       default:
       // Not implemented in vial.c either (no default case): reply untouched.
     }

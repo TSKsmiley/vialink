@@ -400,3 +400,29 @@ svg.keyboard {
 .debug-log li.reply code {
   color: var(--muted);
 }
+
+.rename-layer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.rename-layer input {
+  width: 12em;
+}
+.extension-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.extension-list li {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.extension-list label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.extension-list .hint {
+  margin: 4px 0 0 26px;
+}

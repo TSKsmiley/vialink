@@ -13,6 +13,8 @@ import {
 } from "./connection.ts";
 import { DebugPanel } from "./components/DebugPanel.tsx";
 import { Editor } from "./components/Editor.tsx";
+import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
+import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
 import { errorMessage } from "./hooks.ts";
 
 type Status =
@@ -26,29 +28,35 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [showExtensions, setShowExtensions] = useState(false);
+  const [disabledExtensions, setDisabledExtensions] = useState(loadDisabledExtensions);
 
-  const start = useCallback(async (demo: boolean) => {
-    setError(null);
-    setNotice(null);
-    try {
-      const transport = demo ? await demoTransport() : webHidTransport(await requestDevice());
-      setStatus({ kind: "connecting", progress: null });
-      const connection = await connect(transport, {
-        demo,
-        onQueue: setQueue,
-        onProgress: (progress) => setStatus({ kind: "connecting", progress }),
-      });
-      setStatus({ kind: "connected", connection });
-    } catch (err) {
-      setStatus({ kind: "idle" });
-      if (
-        err instanceof NoDeviceSelectedError ||
-        (err instanceof DOMException && err.name === "NotFoundError")
-      )
-        return;
-      setError(errorMessage(err));
-    }
-  }, []);
+  const start = useCallback(
+    async (demo: boolean) => {
+      setError(null);
+      setNotice(null);
+      try {
+        const transport = demo ? await demoTransport() : webHidTransport(await requestDevice());
+        setStatus({ kind: "connecting", progress: null });
+        const connection = await connect(transport, {
+          demo,
+          onQueue: setQueue,
+          onProgress: (progress) => setStatus({ kind: "connecting", progress }),
+          extensions: enabledExtensions(disabledExtensions),
+        });
+        setStatus({ kind: "connected", connection });
+      } catch (err) {
+        setStatus({ kind: "idle" });
+        if (
+          err instanceof NoDeviceSelectedError ||
+          (err instanceof DOMException && err.name === "NotFoundError")
+        )
+          return;
+        setError(errorMessage(err));
+      }
+    },
+    [disabledExtensions],
+  );
 
   const disconnect = useCallback(async () => {
     if (status.kind === "connected") await status.connection.queue.close().catch(() => undefined);
@@ -91,6 +99,7 @@ export function App() {
           </dl>
         )}
         <div className="header-actions">
+          <button onClick={() => setShowExtensions(true)}>Extensions</button>
           <button onClick={() => setShowLog((s) => !s)} aria-pressed={showLog}>
             HID log
           </button>
@@ -98,6 +107,17 @@ export function App() {
         </div>
       </header>
 
+      {showExtensions && (
+        <ExtensionsDialog
+          disabled={disabledExtensions}
+          keyboard={kb}
+          onChange={(next) => {
+            setDisabledExtensions(next);
+            saveDisabledExtensions(next);
+          }}
+          onClose={() => setShowExtensions(false)}
+        />
+      )}
       {error && (
         <div className="banner error" role="alert">
           {error}

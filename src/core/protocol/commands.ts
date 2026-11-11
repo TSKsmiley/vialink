@@ -190,3 +190,41 @@ export const vialGetLayerName = cmd({
     return { ok: r[0] === 0, status: r[0], name };
   },
 });
+
+/**
+ * Theis194 layer-names extension: "BBBB" layer + 16 bytes of NUL-padded UTF-8
+ * → reply status (0 = ok). Names longer than 16 bytes are cut at a character
+ * boundary, so the stored bytes are always valid UTF-8.
+ */
+export const vialSetLayerName = cmd({
+  encode: (layer: number, name: string) =>
+    bytes(
+      C.CMD_VIA_VIAL_PREFIX,
+      C.CMD_VIAL_DYNAMIC_ENTRY_OP,
+      C.DYNAMIC_VIAL_LAYER_NAME_SET,
+      layer,
+      layerNameBytes(name),
+    ),
+  decode: (r): { ok: boolean; status: number } => ({ ok: r[0] === 0, status: r[0] }),
+});
+
+/** UTF-8 bytes of a layer name, truncated to whole characters within 16 bytes and NUL-padded. */
+export function layerNameBytes(name: string): Uint8Array {
+  const out = new Uint8Array(C.LAYER_NAME_LEN);
+  const encoder = new TextEncoder();
+  let used = 0;
+  for (const ch of name) {
+    const b = encoder.encode(ch);
+    if (used + b.length > C.LAYER_NAME_LEN) break;
+    out.set(b, used);
+    used += b.length;
+  }
+  return out;
+}
+
+/** The name as the board will store it (after truncation). */
+export function normalizeLayerName(name: string): string {
+  const raw = layerNameBytes(name);
+  const end = raw.indexOf(0);
+  return new TextDecoder().decode(end === -1 ? raw : raw.slice(0, end));
+}
