@@ -4,6 +4,7 @@
 import { useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { activeUi } from "../extensions/registry.tsx";
+import { MatrixTester } from "./MatrixTester.tsx";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { KeyboardView, type Selection } from "./KeyboardView.tsx";
 import { KeycodePicker } from "./KeycodePicker.tsx";
@@ -21,6 +22,7 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
   const [layer, setLayer] = useState(0);
   const [selection, setSelection] = useState<Selection>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState("keymap");
 
   const current =
     selection?.kind === "key"
@@ -85,8 +87,50 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
     return String(l);
   };
 
+  const panels = extensionUi.flatMap((ui) => ui.panels ?? []);
+  const views = [
+    { id: "keymap", title: "Keymap" },
+    { id: "matrix", title: "Matrix tester" },
+    ...panels.map((p) => ({ id: p.id, title: p.title })),
+  ];
+  const panel = panels.find((p) => p.id === view);
+
+  const viewTabs = (
+    <nav className="views" role="tablist" aria-label="Editor views">
+      {views.map((v) => (
+        <button
+          key={v.id}
+          role="tab"
+          aria-selected={view === v.id}
+          className={view === v.id ? "active" : ""}
+          onClick={() => setView(v.id)}
+        >
+          {v.title}
+        </button>
+      ))}
+    </nav>
+  );
+
+  if (view === "matrix") {
+    return (
+      <div className="editor">
+        {viewTabs}
+        <MatrixTester keyboard={keyboard} onError={onError} />
+      </div>
+    );
+  }
+  if (panel) {
+    return (
+      <div className="editor">
+        {viewTabs}
+        <panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} />
+      </div>
+    );
+  }
+
   return (
     <div className="editor">
+      {viewTabs}
       <div className="toolbar">
         <div className="layers" role="tablist" aria-label="Layers">
           <span>Layer</span>

@@ -228,3 +228,59 @@ export function normalizeLayerName(name: string): string {
   const end = raw.indexOf(0);
   return new TextDecoder().decode(end === -1 ? raw : raw.slice(0, end));
 }
+
+// ── Unlock and matrix tester (vial.c vial_unlock_*, via.c id_switch_matrix_state) ──
+
+/** "BB": starts an unlock; the board counts down while the unlock keys are held. */
+export const vialUnlockStart = cmd({
+  encode: () => bytes(C.CMD_VIA_VIAL_PREFIX, C.CMD_VIAL_UNLOCK_START),
+  decode: ignore,
+});
+
+export interface UnlockPoll {
+  unlocked: boolean;
+  inProgress: boolean;
+  /** Counts down from 50 (VIAL_UNLOCK_COUNTER_MAX) while the keys are held; resets when released. */
+  counter: number;
+}
+
+/** "BB" → reply: unlocked, in progress, counter. */
+export const vialUnlockPoll = cmd({
+  encode: () => bytes(C.CMD_VIA_VIAL_PREFIX, C.CMD_VIAL_UNLOCK_POLL),
+  decode: (r): UnlockPoll => ({ unlocked: r[0] === 1, inProgress: r[1] === 1, counter: r[2] }),
+});
+
+/** "BB": locks the board again. */
+export const vialLock = cmd({
+  encode: () => bytes(C.CMD_VIA_VIAL_PREFIX, C.CMD_VIAL_LOCK),
+  decode: ignore,
+});
+
+/** Whether the matrix state fits one reply; via.c sends nothing otherwise, and vial-gui disables the tester. */
+export function matrixStateFits(rows: number, cols: number): boolean {
+  return (Math.floor(cols / 8) + 1) * rows <= 28;
+}
+
+/**
+ * "BB" VIA_SWITCH_MATRIX_STATE → reply echo, id, then each row as
+ * ceil(cols / 8) big-endian bytes, bit n = column n. Only answered when the
+ * board is unlocked (otherwise byte 0 is 0xFF, id_unhandled).
+ */
+export const viaGetMatrixState = {
+  encode: () => bytes(C.CMD_VIA_GET_KEYBOARD_VALUE, C.VIA_SWITCH_MATRIX_STATE),
+  decode: (r: Uint8Array, rows: number, cols: number): boolean[][] | null => {
+    if (r[0] !== C.CMD_VIA_GET_KEYBOARD_VALUE) return null;
+    const rowSize = Math.ceil(cols / 8);
+    const out: boolean[][] = [];
+    for (let row = 0; row < rows; row++) {
+      const start = 2 + row * rowSize;
+      const line: boolean[] = [];
+      for (let col = 0; col < cols; col++) {
+        const byte = r[start + rowSize - 1 - Math.floor(col / 8)];
+        line.push(((byte >> (col % 8)) & 1) === 1);
+      }
+      out.push(line);
+    }
+    return out;
+  },
+};

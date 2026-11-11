@@ -29,6 +29,9 @@ import {
   vialGetEncoder,
   vialGetKeyboardId,
   vialGetUnlockStatus,
+  vialLock,
+  matrixStateFits,
+  viaGetMatrixState,
   vialQmkSettingsQuery,
   vialSetEncoder,
   type DynamicEntryCounts,
@@ -125,6 +128,8 @@ export class Keyboard {
   keycodes!: KeycodeTable;
   /** Set by the app to show the unlock dialog when an operation needs it. */
   unlockHandler: UnlockHandler | null = null;
+  /** Last known lock state; null until first checked. Updated by every status check, unlock and lock. */
+  unlocked: boolean | null = null;
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
@@ -240,7 +245,44 @@ export class Keyboard {
 
   async isUnlocked(): Promise<boolean> {
     if (this.vialProtocol < 0) return true;
-    return vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode())).unlocked;
+    const status = vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode()));
+    this.setUnlocked(status.unlocked);
+    return status.unlocked;
+  }
+
+  /** Full unlock status, including whether an unlock was started and never finished. */
+  async unlockStatus() {
+    const status = vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode()));
+    this.setUnlocked(status.unlocked);
+    return status;
+  }
+
+  /** Locks the board again (the Security → Lock action of vial-gui). */
+  async lock(): Promise<void> {
+    if (this.vialProtocol < 0) return;
+    await this.queue.request(vialLock.encode());
+    await this.isUnlocked();
+  }
+
+  /** Records a lock state learned elsewhere (e.g. by the unlock flow). */
+  setUnlocked(unlocked: boolean): void {
+    if (this.unlocked === unlocked) return;
+    this.unlocked = unlocked;
+    this.changed();
+  }
+
+  /**
+   * The matrix tester needs Vial protocol 3+ and a matrix whose state fits one
+   * reply; vial-gui's matrix_test.py disables it otherwise, and so does via.c.
+   */
+  get matrixTesterSupported(): boolean {
+    return this.vialProtocol >= C.VIAL_PROTOCOL_MATRIX_TESTER && matrixStateFits(this.rows, this.cols);
+  }
+
+  /** Pressed state per [row][col], or null when the board is locked (it refuses to answer). */
+  async pollMatrix(): Promise<boolean[][] | null> {
+    const reply = await this.queue.request(viaGetMatrixState.encode(), { retries: 3 });
+    return viaGetMatrixState.decode(reply, this.rows, this.cols);
   }
 
   /**

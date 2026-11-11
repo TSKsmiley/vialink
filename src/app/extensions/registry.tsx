@@ -15,6 +15,20 @@ export interface LayerActionProps {
   onError: (message: string) => void;
 }
 
+export interface PanelProps {
+  keyboard: Keyboard;
+  onError: (message: string) => void;
+  onNotice: (message: string) => void;
+}
+
+/** A whole editor view, shown as a tab next to Keymap and Matrix tester. */
+export interface ExtensionPanel {
+  /** Unique within the app, e.g. "macros". */
+  id: string;
+  title: string;
+  Component: ComponentType<PanelProps>;
+}
+
 export interface AppExtension {
   /** Id of the core extension this UI belongs to. */
   id: string;
@@ -22,6 +36,8 @@ export interface AppExtension {
   layerTabLabel?(keyboard: Keyboard, layer: number): string | null;
   /** Controls shown next to the layer tabs for the selected layer. */
   LayerActions?: ComponentType<LayerActionProps>;
+  /** Editor views this extension adds. */
+  panels?: readonly ExtensionPanel[];
 }
 
 export const APP_EXTENSIONS: readonly AppExtension[] = [layerNamesUi];

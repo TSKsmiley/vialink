@@ -14,8 +14,10 @@ import {
 import { DebugPanel } from "./components/DebugPanel.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
+import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
-import { errorMessage } from "./hooks.ts";
+import { errorMessage, useKeyboardVersion } from "./hooks.ts";
+import type { Keyboard } from "../core/keyboard.ts";
 
 type Status =
   | { kind: "idle" }
@@ -30,6 +32,10 @@ export function App() {
   const [showLog, setShowLog] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
   const [disabledExtensions, setDisabledExtensions] = useState(loadDisabledExtensions);
+  const [unlockRequest, setUnlockRequest] = useState<{
+    reason: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
 
   const start = useCallback(
     async (demo: boolean) => {
@@ -44,7 +50,16 @@ export function App() {
           onProgress: (progress) => setStatus({ kind: "connecting", progress }),
           extensions: enabledExtensions(disabledExtensions),
         });
+        const kb = connection.keyboard;
+        kb.unlockHandler = (reason) =>
+          new Promise<boolean>((resolve) => setUnlockRequest({ reason, resolve }));
         setStatus({ kind: "connected", connection });
+        // vial-gui finishes an unlock that was started and never completed before
+        // doing anything else; offer the same, but let the user cancel.
+        const unlock = await kb.unlockStatus().catch(() => null);
+        if (unlock?.inProgress && !unlock.unlocked) {
+          void kb.ensureUnlocked("Finishing an unlock that was started earlier").catch(() => undefined);
+        }
       } catch (err) {
         setStatus({ kind: "idle" });
         if (
@@ -99,6 +114,7 @@ export function App() {
           </dl>
         )}
         <div className="header-actions">
+          {kb && <LockControls keyboard={kb} onError={setError} />}
           <button onClick={() => setShowExtensions(true)}>Extensions</button>
           <button onClick={() => setShowLog((s) => !s)} aria-pressed={showLog}>
             HID log
@@ -107,6 +123,16 @@ export function App() {
         </div>
       </header>
 
+      {kb && unlockRequest && (
+        <UnlockDialog
+          keyboard={kb}
+          reason={unlockRequest.reason}
+          onFinish={(ok) => {
+            unlockRequest.resolve(ok);
+            setUnlockRequest(null);
+          }}
+        />
+      )}
       {showExtensions && (
         <ExtensionsDialog
           disabled={disabledExtensions}
@@ -187,5 +213,29 @@ function Connecting({ progress }: { progress: LoadProgress | null }) {
       </p>
       <progress max={progress?.total || 1} value={progress?.done ?? 0} />
     </section>
+  );
+}
+
+/** Lock state with Unlock/Lock actions (vial-gui's Security menu). */
+function LockControls({ keyboard, onError }: { keyboard: Keyboard; onError: (m: string) => void }) {
+  useKeyboardVersion(keyboard);
+  useEffect(() => {
+    if (keyboard.unlocked === null) void keyboard.isUnlocked().catch(() => undefined);
+  }, [keyboard]);
+  if (keyboard.vialProtocol < 0 || keyboard.unlocked === null) return null;
+  return keyboard.unlocked ? (
+    <button
+      onClick={() => void keyboard.lock().catch((e) => onError(errorMessage(e)))}
+      title="The keyboard is unlocked. Lock it again."
+    >
+      🔓 Lock
+    </button>
+  ) : (
+    <button
+      onClick={() => void keyboard.ensureUnlocked("Unlocking").catch(() => undefined)}
+      title="The keyboard is locked."
+    >
+      🔒 Unlock
+    </button>
   );
 }

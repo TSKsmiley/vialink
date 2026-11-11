@@ -6,7 +6,13 @@
 import klorDefinitionUrl from "../../fixtures/definitions/klor.vial.json.xz?url";
 import type { KeyboardExtension } from "../core/extensions/types.ts";
 import { Keyboard, type LoadProgress } from "../core/keyboard.ts";
-import { RAW_HID_USAGE, RAW_HID_USAGE_PAGE } from "../core/protocol/constants.ts";
+import {
+  CMD_VIA_VIAL_PREFIX,
+  CMD_VIAL_UNLOCK_POLL,
+  CMD_VIAL_UNLOCK_START,
+  RAW_HID_USAGE,
+  RAW_HID_USAGE_PAGE,
+} from "../core/protocol/constants.ts";
 import { SimulatedKeyboard } from "../core/sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../core/transport/queue.ts";
 import type { Transport } from "../core/transport/types.ts";
@@ -88,7 +94,7 @@ export async function demoTransport(): Promise<Transport> {
     [0x38, 0x37, 0x36, 0x10, 0x11, 0x00],
     [0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
   ];
-  return new SimulatedKeyboard({
+  const sim = new SimulatedKeyboard({
     info: { productName: "Klor (demo)", vendorId: 0xfc32, productId: 0x0287 },
     compressedDefinition: compressed,
     rows: 8,
@@ -100,5 +106,19 @@ export async function demoTransport(): Promise<Transport> {
     dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 0, featureFlags: 0b11 },
     qmkSettings: [1, 2, 7],
     layerNames: ["Base", "Lower", "Raise", "Adjust"],
+    unlockKeys: [
+      { row: 0, col: 3 },
+      { row: 4, col: 3 },
+    ],
   });
+  // Nobody can hold the keys of a simulated board: "hold" them once an unlock
+  // starts, and let them go again when it finishes.
+  sim.handlers.push((msg, board) => {
+    if (msg[0] === CMD_VIA_VIAL_PREFIX && msg[1] === CMD_VIAL_UNLOCK_START) board.holdUnlockKeys();
+    if (msg[0] === CMD_VIA_VIAL_PREFIX && msg[1] === CMD_VIAL_UNLOCK_POLL && board.unlocked) {
+      board.holdUnlockKeys(false);
+    }
+    return false;
+  });
+  return sim;
 }

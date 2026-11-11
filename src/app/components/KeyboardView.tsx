@@ -19,11 +19,23 @@ const GAP = 3;
 interface Props {
   keyboard: Keyboard;
   layer: number;
-  selection: Selection;
-  onSelect: (s: Selection) => void;
+  selection?: Selection;
+  onSelect?: (s: Selection) => void;
+  /** Extra CSS class per matrix position, e.g. "pressed" in the matrix tester or "target" when unlocking. */
+  highlight?: (row: number, col: number) => string | null;
+  /** Label for the whole view; defaults to "Layer n keymap". */
+  label?: string;
 }
 
-export function KeyboardView({ keyboard, layer, selection, onSelect }: Props) {
+export function KeyboardView({
+  keyboard,
+  layer,
+  selection = null,
+  onSelect,
+  highlight,
+  label: viewLabel,
+}: Props) {
+  const interactive = onSelect !== undefined;
   const version = useKeyboardVersion(keyboard);
   const choices = keyboard.layoutChoices;
   const placed = useMemo(
@@ -42,28 +54,33 @@ export function KeyboardView({ keyboard, layer, selection, onSelect }: Props) {
       viewBox={`-4 -4 ${placed.width * U + 8} ${placed.height * U + 8}`}
       width={placed.width * U + 8}
       role="group"
-      aria-label={`Layer ${layer} keymap`}
+      aria-label={viewLabel ?? `Layer ${layer} keymap`}
     >
       {placed.keys.map(({ shape: k, shiftX, shiftY }, i) => {
         const code = keyboard.getKey(layer, k.row, k.col) ?? 0;
         const label = keyboard.keycodes.label(code);
         const selected = selection?.kind === "key" && selection.row === k.row && selection.col === k.col;
+        const extra = highlight?.(k.row, k.col);
         return (
           <g
             key={`k${i}`}
-            className={`key${selected ? " selected" : ""}${code === 0 ? " empty" : ""}`}
+            className={`key${selected ? " selected" : ""}${code === 0 ? " empty" : ""}${extra ? ` ${extra}` : ""}${interactive ? "" : " static"}`}
             transform={transform(k, shiftX, shiftY)}
-            onClick={() => onSelect({ kind: "key", row: k.row, col: k.col })}
-            role="button"
-            tabIndex={0}
-            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}`}
-            aria-pressed={selected}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onSelect({ kind: "key", row: k.row, col: k.col });
-              }
-            }}
+            {...(interactive
+              ? {
+                  onClick: () => onSelect({ kind: "key", row: k.row, col: k.col }),
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-pressed": selected,
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect({ kind: "key", row: k.row, col: k.col });
+                    }
+                  },
+                }
+              : {})}
+            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}${extra ? ` (${extra})` : ""}`}
           >
             <title>{label.tooltip ?? keyboard.keycodes.serialize(code)}</title>
             {hasSecondRect(k) && (
@@ -104,19 +121,23 @@ export function KeyboardView({ keyboard, layer, selection, onSelect }: Props) {
         return (
           <g
             key={`e${i}`}
-            className={`key encoder${selected ? " selected" : ""}`}
+            className={`key encoder${selected ? " selected" : ""}${interactive ? "" : " static"}`}
             transform={transform(e, shiftX, shiftY)}
-            onClick={() => onSelect({ kind: "encoder", index: e.index, direction: e.direction })}
-            role="button"
-            tabIndex={0}
+            {...(interactive
+              ? {
+                  onClick: () => onSelect({ kind: "encoder", index: e.index, direction: e.direction }),
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-pressed": selected,
+                  onKeyDown: (ev: React.KeyboardEvent) => {
+                    if (ev.key === "Enter" || ev.key === " ") {
+                      ev.preventDefault();
+                      onSelect({ kind: "encoder", index: e.index, direction: e.direction });
+                    }
+                  },
+                }
+              : {})}
             aria-label={`Encoder ${e.index} ${e.direction === 0 ? "counter-clockwise" : "clockwise"}: ${keyboard.keycodes.serialize(code)}`}
-            aria-pressed={selected}
-            onKeyDown={(ev) => {
-              if (ev.key === "Enter" || ev.key === " ") {
-                ev.preventDefault();
-                onSelect({ kind: "encoder", index: e.index, direction: e.direction });
-              }
-            }}
           >
             <title>{`Encoder ${e.index} ${e.direction === 0 ? "↺" : "↻"}: ${label.tooltip ?? ""}`}</title>
             <circle cx={cx} cy={cy} r={r} />

@@ -6,6 +6,7 @@
 
 import { be16, be32, le32, u16be, u16le, u32be, u32le } from "../util/bytes.ts";
 import * as C from "../protocol/constants.ts";
+import { UNLOCK_COUNTER_MAX } from "../unlock.ts";
 import {
   DeviceDisconnectedError,
   MSG_LEN,
@@ -43,7 +44,15 @@ export interface SimulatedKeyboardOptions {
   /** Enables the Theis194 layer-names extension with these initial names. */
   layerNames?: string[] | null;
   unlocked?: boolean;
+  /** Keys to hold for an unlock; defaults to matrix 0,0 and 0,1. Empty = VIAL_INSECURE. */
+  unlockKeys?: { row: number; col: number }[];
 }
+
+/**
+ * Lets a feature's tests teach the simulator extra commands. Return true when
+ * the handler answered the report (it edits `msg` in place, as firmware does).
+ */
+export type SimulatorHandler = (msg: Uint8Array, sim: SimulatedKeyboard) => boolean;
 
 export class SimulatedKeyboard implements Transport {
   readonly info: DeviceInfo;
@@ -56,6 +65,11 @@ export class SimulatedKeyboard implements Transport {
   layerNames: string[] | null;
   /** Set to make the next n requests go unanswered (timeout). */
   dropNext = 0;
+  /** Matrix positions currently "held down", as "row,col". Drives unlock polls and the matrix tester. */
+  readonly pressed = new Set<string>();
+  unlockInProgress = false;
+  unlockCounter = 0;
+  readonly handlers: SimulatorHandler[] = [];
 
   private readonly opts: SimulatedKeyboardOptions;
   private readonly keymap: Uint8Array;
@@ -136,14 +150,33 @@ export class SimulatedKeyboard implements Transport {
     this.keymap[off + 1] = code & 0xff;
   }
 
+  get unlockKeys(): { row: number; col: number }[] {
+    return (
+      this.opts.unlockKeys ?? [
+        { row: 0, col: 0 },
+        { row: 0, col: 1 },
+      ]
+    );
+  }
+
+  /** Simulates holding (or releasing) every unlock key. */
+  holdUnlockKeys(held = true): void {
+    for (const k of this.unlockKeys) {
+      if (held) this.pressed.add(`${k.row},${k.col}`);
+      else this.pressed.delete(`${k.row},${k.col}`);
+    }
+  }
+
   private handle(msg: Uint8Array): void {
     const { layers, rows, cols } = this.opts;
+    for (const handler of this.handlers) if (handler(msg, this)) return;
     switch (msg[0]) {
       case C.CMD_VIA_GET_PROTOCOL_VERSION:
         msg.set(be16(this.viaProtocol), 1);
         return;
       case C.CMD_VIA_GET_KEYBOARD_VALUE:
         if (msg[1] === C.VIA_LAYOUT_OPTIONS) msg.set(be32(this.layoutOptions), 2);
+        else if (msg[1] === C.VIA_SWITCH_MATRIX_STATE && this.unlocked) this.writeMatrixState(msg);
         else msg[0] = 0xff;
         return;
       case C.CMD_VIA_SET_KEYBOARD_VALUE:
@@ -220,11 +253,35 @@ export class SimulatedKeyboard implements Transport {
       case C.CMD_VIAL_GET_UNLOCK_STATUS:
         msg.fill(0xff);
         msg[0] = this.unlocked ? 1 : 0;
-        msg[1] = 0;
-        msg[2] = 0; // unlock combo: matrix 0,0 and 0,1
-        msg[3] = 0;
-        msg[4] = 0;
-        msg[5] = 1;
+        msg[1] = this.unlockInProgress ? 1 : 0;
+        this.unlockKeys.forEach((k, i) => msg.set([k.row, k.col], 2 + i * 2));
+        return;
+      case C.CMD_VIAL_UNLOCK_START:
+        this.unlockInProgress = true;
+        this.unlockCounter = UNLOCK_COUNTER_MAX;
+        return;
+      case C.CMD_VIAL_UNLOCK_POLL: {
+        // vial.c decrements once per poll more than 100 ms apart while every key is held;
+        // the simulator takes bigger steps so tests run fast.
+        if (this.unlockInProgress) {
+          const holding = this.unlockKeys.every((k) => this.pressed.has(`${k.row},${k.col}`));
+          if (holding) {
+            this.unlockCounter = Math.max(0, this.unlockCounter - 10);
+            if (this.unlockCounter === 0) {
+              this.unlockInProgress = false;
+              this.unlocked = true;
+            }
+          } else {
+            this.unlockCounter = UNLOCK_COUNTER_MAX;
+          }
+        }
+        msg[0] = this.unlocked ? 1 : 0;
+        msg[1] = this.unlockInProgress ? 1 : 0;
+        msg[2] = this.unlockCounter;
+        return;
+      }
+      case C.CMD_VIAL_LOCK:
+        this.unlocked = false;
         return;
       case C.CMD_VIAL_QMK_SETTINGS_QUERY: {
         const cur = u16le(msg, 2);
@@ -238,6 +295,19 @@ export class SimulatedKeyboard implements Transport {
         return;
       default:
       // vial.c leaves unknown sub-commands' replies untouched.
+    }
+  }
+
+  private writeMatrixState(msg: Uint8Array): void {
+    const { rows, cols } = this.opts;
+    if ((Math.floor(cols / 8) + 1) * rows > 28) return; // via.c sends nothing for large matrices
+    const rowSize = Math.ceil(cols / 8);
+    msg.fill(0, 2);
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (!this.pressed.has(`${row},${col}`)) continue;
+        msg[2 + row * rowSize + rowSize - 1 - Math.floor(col / 8)] |= 1 << (col % 8);
+      }
     }
   }
 
