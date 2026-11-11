@@ -7,12 +7,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Keyboard } from "../../core/keyboard.ts";
 import { SimulatedKeyboard } from "../../core/sim/simulatedKeyboard.ts";
 import { installTapDanceSimulator } from "../../core/sim/tap-dance.ts";
+import type { TapDanceEntry } from "../../core/protocol/tap-dance.ts";
 import { RequestQueue } from "../../core/transport/queue.ts";
 import { Editor } from "../components/Editor.tsx";
 
 afterEach(cleanup);
 
-async function setup(tapDance = 3) {
+async function setup(tapDance = 3, entries: Partial<TapDanceEntry>[] = [{ onTap: 0x04 }]) {
   const sim = new SimulatedKeyboard({
     compressedDefinition: new Uint8Array(
       readFileSync(resolve(process.cwd(), "fixtures/definitions/klor.vial.json.xz")),
@@ -22,7 +23,7 @@ async function setup(tapDance = 3) {
     layers: 4,
     dynamic: { tapDance, combo: 0, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 },
   });
-  const td = installTapDanceSimulator(sim, { count: tapDance, entries: [{ onTap: 0x04 }] });
+  const td = installTapDanceSimulator(sim, { count: tapDance, entries });
   await sim.open();
   const kb = await Keyboard.load(new RequestQueue(sim, { retryDelayMs: 0 }));
   const onError = vi.fn();
@@ -80,6 +81,20 @@ describe("Tap dance panel", () => {
         true,
       ),
     );
+  });
+
+  it("clamps a stored tapping term above 10000 like vial-gui's QSpinBox and lets the card save", async () => {
+    const { td, onError } = await setup(1, [{ onTap: 0x04, tappingTerm: 15000 }]);
+    const card = within(openTab()).getByRole("form", { name: /^TD\(0\)/ });
+    expect((within(card).getByLabelText("Tapping term (ms)") as HTMLInputElement).value).toBe("10000");
+    expect(within(card).getByText("(modified)")).toBeTruthy();
+
+    fireEvent.change(within(card).getByLabelText("On hold"), { target: { value: "KC_LCTL" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Save TD(0)" }));
+    await waitFor(() =>
+      expect(td.entries[0]).toMatchObject({ onTap: 0x04, onHold: 0xe0, tappingTerm: 10000 }),
+    );
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("rejects invalid keycodes and tapping terms without writing", async () => {

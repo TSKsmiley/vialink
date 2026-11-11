@@ -7,10 +7,12 @@
 // Deviations from vial-gui:
 // - Entries are kept as integers and serialized on save; vial-gui keeps the
 //   serialized strings. The saved .vil field is the same.
-// - A failed read of entry 0 makes the extension inactive instead of failing
-//   the whole load (a board that advertises entries but never answers, e.g. a
-//   simulator without the handler). A failed read of any later entry throws,
-//   as _retrieve_dynamic_entries does.
+// - When the reply to the read of entry 0 is the request echoed back untouched
+//   (what vial-ts's SimulatedKeyboard does for a command it has no handler for;
+//   real firmware always overwrites byte 0 with the status, 0 or 0xFF), the
+//   extension is inactive instead of failing the whole load. Any other failed
+//   read, including a nonzero status for entry 0, throws, as
+//   _retrieve_dynamic_entries does (base_protocol.py: data[0] != 0 raises).
 // - The set reply's status is checked (vial-gui ignores it).
 // - .vil restore skips entries it cannot pack (not a 5-element list, or a
 //   keycode / tapping term outside 0..65535) instead of raising mid-restore;
@@ -138,6 +140,11 @@ export class TapDance {
   }
 }
 
+/** True when the reply is the request unchanged: no handler answered it (see the header). */
+function isUntouchedEcho(request: Uint8Array, reply: Uint8Array): boolean {
+  return request.every((b, i) => reply[i] === b);
+}
+
 export const tapDanceExtension: KeyboardExtension<TapDance> = {
   id: "tap-dance",
   name: "Tap dance",
@@ -149,9 +156,11 @@ export const tapDanceExtension: KeyboardExtension<TapDance> = {
     if (keyboard.vialProtocol < VIAL_PROTOCOL_DYNAMIC || !count) return null;
     const entries: TapDanceEntry[] = [];
     for (let idx = 0; idx < count; idx++) {
-      const reply = vialTapDanceGet.decode(await queue.request(vialTapDanceGet.encode(idx)));
+      const request = vialTapDanceGet.encode(idx);
+      const raw = await queue.request(request);
+      if (idx === 0 && isUntouchedEcho(request, raw)) return null;
+      const reply = vialTapDanceGet.decode(raw);
       if (!reply.ok) {
-        if (idx === 0) return null;
         throw new TapDanceError(`failed retrieving tap dance entry ${idx} from the device`);
       }
       entries.push(reply.entry);

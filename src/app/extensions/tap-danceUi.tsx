@@ -8,6 +8,9 @@
 // from the keycode tabs; every change, including the tapping term, is written
 // with the card's Save button (vial-gui writes key changes at once and the
 // tapping term on Save). Revert resets the card to the board's stored entry.
+// A stored tapping term above 10000 is clamped to 10000 when the card loads,
+// as QSpinBox.setValue does, and the card shows as modified until it is saved
+// (vial-gui marks the tab modified the same way and writes 10000 on Save).
 
 import { useId, useState } from "react";
 import { TapDance, tapDanceExtension } from "../../core/extensions/tap-dance.ts";
@@ -39,7 +42,8 @@ interface Draft {
 function toDraft(keyboard: Keyboard, entry: Readonly<TapDanceEntry>): Draft {
   const keys = {} as Record<TapDanceKeyField, string>;
   for (const f of TAP_DANCE_KEY_FIELDS) keys[f] = keyboard.keycodes.serialize(entry[f]);
-  return { keys, term: String(entry.tappingTerm) };
+  // QSpinBox.setValue clamps to its range (0..10000).
+  return { keys, term: String(Math.min(entry.tappingTerm, TAPPING_TERM_MAX)) };
 }
 
 /** Parses a draft; returns the entry or a message per invalid field. */
@@ -81,8 +85,10 @@ function TapDanceCard({ keyboard, state, idx, onError }: CardProps) {
 
   const { entry, errors } = parseDraft(keyboard, draft);
   const original = toDraft(keyboard, stored);
+  // Compare with the stored term, not the clamped one, so a clamped term counts as a change.
   const edited =
-    draft.term !== original.term || TAP_DANCE_KEY_FIELDS.some((f) => draft.keys[f] !== original.keys[f]);
+    draft.term !== String(stored.tappingTerm) ||
+    TAP_DANCE_KEY_FIELDS.some((f) => draft.keys[f] !== original.keys[f]);
   const idBase = `${useId()}-td${idx}`;
   const headingId = `${idBase}-title`;
 
