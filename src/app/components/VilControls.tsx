@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Save the current layout as .vil, or load one and write it to the board with
-// progress, after a confirmation that names a UID mismatch and anything the
-// file holds that this version does not apply yet.
+// Save the current layout as a .vil file or in the browser, and load either
+// back onto the board with progress, after a confirmation that names a UID
+// mismatch and anything the layout holds that this version does not apply.
 
 import { useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { applyVilRestore, parseVil, planVilRestore, saveVil, type RestorePlan } from "../../core/vil.ts";
 import { downloadText, errorMessage } from "../hooks.ts";
+import { defaultLayoutName, layoutStore, newLayoutId, requestPersistence } from "../storage/savedLayouts.ts";
+import { SavedLayoutsDialog } from "./SavedLayoutsDialog.tsx";
 
 interface Props {
   keyboard: Keyboard;
@@ -16,20 +18,45 @@ interface Props {
   onNotice: (message: string) => void;
 }
 
+export function fileNameFor(name: string): string {
+  return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}.vil`;
+}
+
 export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ name: string; plan: RestorePlan } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [saveName, setSaveName] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
 
-  const save = () => {
-    const name = (keyboard.name || "keyboard").replace(/[^\w-]+/g, "_");
-    downloadText(`${name}.vil`, saveVil(keyboard));
+  const download = () => downloadText(fileNameFor(keyboard.name), saveVil(keyboard));
+
+  /** Shared by files and browser saves: parse, plan, and ask before writing. */
+  const loadText = (text: string, source: string) => {
+    try {
+      setPending({ name: source, plan: planVilRestore(keyboard, parseVil(text)) });
+    } catch (err) {
+      onError(errorMessage(err));
+    }
   };
 
-  const onFile = async (file: File) => {
+  const saveToBrowser = async (name: string) => {
     try {
-      const plan = planVilRestore(keyboard, parseVil(await file.text()));
-      setPending({ name: file.name, plan });
+      await layoutStore().put({
+        id: newLayoutId(),
+        name: name.trim() || defaultLayoutName(keyboard.name),
+        uid: keyboard.uid.toString(),
+        keyboardName: keyboard.name,
+        savedAt: new Date().toISOString(),
+        vil: saveVil(keyboard),
+      });
+      const persistent = await requestPersistence();
+      onNotice(
+        persistent
+          ? `Saved “${name.trim() || "layout"}” in this browser.`
+          : `Saved “${name.trim() || "layout"}” in this browser. The browser may clear it if space runs low; download a .vil to be safe.`,
+      );
+      setSaveName(null);
     } catch (err) {
       onError(errorMessage(err));
     }
@@ -43,7 +70,9 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
     try {
       await applyVilRestore(keyboard, plan, (done, total) => setProgress({ done, total }));
       onNotice(
-        plan.ops.length === 0 ? "The board already matches this file." : `Wrote ${plan.ops.length} changes.`,
+        plan.ops.length === 0
+          ? "The board already matches this layout."
+          : `Wrote ${plan.ops.length} changes.`,
       );
     } catch (err) {
       onError(errorMessage(err));
@@ -53,9 +82,18 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
     }
   };
 
+  const extensionSteps = pending?.plan.ops.filter((op) => op.kind === "extension") ?? [];
+  const keymapWrites = (pending?.plan.ops.length ?? 0) - extensionSteps.length;
+
   return (
     <div className="vil-controls">
-      <button onClick={save} disabled={busy}>
+      <button onClick={() => setSaveName(defaultLayoutName(keyboard.name))} disabled={busy}>
+        Save in browser
+      </button>
+      <button onClick={() => setShowSaved(true)} disabled={busy}>
+        Saved layouts
+      </button>
+      <button onClick={download} disabled={busy}>
         Save .vil
       </button>
       <button onClick={() => input.current?.click()} disabled={busy}>
@@ -69,7 +107,11 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
-          if (file) void onFile(file);
+          if (file)
+            void file.text().then(
+              (text) => loadText(text, file.name),
+              (err) => onError(errorMessage(err)),
+            );
         }}
       />
       {progress && (
@@ -78,21 +120,73 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
         </span>
       )}
 
+      {saveName !== null && (
+        <div className="dialog-backdrop" role="presentation">
+          <form
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-title"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveToBrowser(saveName);
+            }}
+          >
+            <h2 id="save-title">Save in this browser</h2>
+            <p className="hint">
+              Keeps a copy of the current layout in this browser, for this site only. Open it again from Saved
+              layouts.
+            </p>
+            <label className="field">
+              Name
+              <input value={saveName} autoFocus onChange={(e) => setSaveName(e.target.value)} />
+            </label>
+            <div className="dialog-actions">
+              <button type="button" onClick={() => setSaveName(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="primary">
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showSaved && (
+        <SavedLayoutsDialog
+          keyboard={keyboard}
+          onLoad={(layout) => {
+            setShowSaved(false);
+            loadText(layout.vil, layout.name);
+          }}
+          onError={onError}
+          onClose={() => setShowSaved(false)}
+        />
+      )}
+
       {pending && (
         <div className="dialog-backdrop" role="presentation">
           <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="vil-title">
             <h2 id="vil-title">Load {pending.name}?</h2>
             {pending.plan.uidMismatch && (
               <p className="warning">
-                This file was saved from a different keyboard (UID mismatch). Loading it may assign keys that
-                make no sense on this board.
+                This layout was saved from a different keyboard (UID mismatch). Loading it may assign keys
+                that make no sense on this board.
               </p>
             )}
             <p>
               {pending.plan.ops.length === 0
-                ? "The board already matches this file's keymap."
-                : `${pending.plan.ops.length} keys, encoders or layout options will be written to the board.`}
+                ? "The board already matches this layout."
+                : `${keymapWrites} keys, encoders or layout options will be written to the board.`}
             </p>
+            {extensionSteps.length > 0 && (
+              <ul>
+                {extensionSteps.map((op, i) => (
+                  <li key={i}>{op.kind === "extension" ? op.description : null}</li>
+                ))}
+              </ul>
+            )}
             {pending.plan.skippedFeatures.length > 0 && (
               <p>Not applied by this version: {pending.plan.skippedFeatures.join(", ")}.</p>
             )}

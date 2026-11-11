@@ -3,3 +3,5 @@ pnpm-lock.yaml
 src/core/keycodes/data/keycodes.json
 fixtures
 LICENSE
+.claude
+.memory

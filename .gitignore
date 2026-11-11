@@ -8,3 +8,6 @@ __pycache__
 
 # Session notes and handoffs (local only)
 .memory/
+
+# Agent worktrees
+.claude/worktrees/
