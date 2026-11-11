@@ -6,7 +6,7 @@
 import { useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { applyVilRestore, parseVil, planVilRestore, saveVil, type RestorePlan } from "../../core/vil.ts";
-import { downloadText, errorMessage } from "../hooks.ts";
+import { downloadText, errorMessage, fileNameFor } from "../hooks.ts";
 import { defaultLayoutName, layoutStore, newLayoutId, requestPersistence } from "../storage/savedLayouts.ts";
 import { SavedLayoutsDialog } from "./SavedLayoutsDialog.tsx";
 
@@ -16,10 +16,6 @@ interface Props {
   setBusy: (b: boolean) => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
-}
-
-export function fileNameFor(name: string): string {
-  return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}.vil`;
 }
 
 export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Props) {

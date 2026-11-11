@@ -22,3 +22,8 @@ export function downloadText(filename: string, text: string, type = "application
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+
+/** A safe .vil file name for a keyboard or layout name. */
+export function fileNameFor(name: string): string {
+  return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}.vil`;
+}

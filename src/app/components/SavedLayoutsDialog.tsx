@@ -2,9 +2,9 @@
 // Layouts saved in this browser: load onto the board, download as .vil,
 // rename or delete. Layouts from this keyboard (same UID) are listed first.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
-import { downloadText, errorMessage } from "../hooks.ts";
+import { downloadText, errorMessage, fileNameFor } from "../hooks.ts";
 import { layoutStore, type SavedLayout } from "../storage/savedLayouts.ts";
 
 interface Props {
@@ -20,18 +20,25 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      setLayouts(await layoutStore().list());
-      setFailure(null);
-    } catch (err) {
-      setFailure(errorMessage(err));
-    }
-  }, []);
+  const [reload, setReload] = useState(0);
+  const refresh = () => setReload((n) => n + 1);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let live = true;
+    layoutStore()
+      .list()
+      .then(
+        (list) => {
+          if (!live) return;
+          setLayouts(list);
+          setFailure(null);
+        },
+        (err: unknown) => live && setFailure(errorMessage(err)),
+      );
+    return () => {
+      live = false;
+    };
+  }, [reload]);
 
   const uid = keyboard.uid.toString();
   const mine = layouts?.filter((l) => l.uid === uid) ?? [];
@@ -40,7 +47,7 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
   const act = async (fn: () => Promise<void>) => {
     try {
       await fn();
-      await refresh();
+      refresh();
     } catch (err) {
       onError(errorMessage(err));
     }
@@ -88,7 +95,7 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
               Load
             </button>
             <button
-              onClick={() => downloadText(`${l.name.replace(/[^\w-]+/g, "_")}.vil`, l.vil)}
+              onClick={() => downloadText(fileNameFor(l.name), l.vil)}
               aria-label={`Download ${l.name}`}
             >
               Download
