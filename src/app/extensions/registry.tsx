@@ -8,6 +8,7 @@ import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { layerNamesUi } from "./layerNamesUi.tsx";
+import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
 
 export interface LayerActionProps {
   keyboard: Keyboard;
@@ -40,7 +41,7 @@ export interface AppExtension {
   panels?: readonly ExtensionPanel[];
 }
 
-export const APP_EXTENSIONS: readonly AppExtension[] = [layerNamesUi];
+export const APP_EXTENSIONS: readonly AppExtension[] = [layerNamesUi, qmkSettingsUi];
 
 /** UI entries whose core extension is active on this keyboard. */
 export function activeUi(keyboard: Keyboard): AppExtension[] {
