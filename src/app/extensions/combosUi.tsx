@@ -52,7 +52,9 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
       await combos.setKey(target.combo, target.slot, value);
       if (keepSelection) return;
       // Move on to the next slot of the same combo, as the keymap editor moves to the next key.
-      setSelected(target.slot < COMBO_INPUTS ? { combo: target.combo, slot: target.slot + 1 } : null);
+      // Only if the user has not picked another slot while the write was in flight.
+      const next = target.slot < COMBO_INPUTS ? { combo: target.combo, slot: target.slot + 1 } : null;
+      setSelected((cur) => (cur && cur.combo === target.combo && cur.slot === target.slot ? next : cur));
     });
   };
 
@@ -60,7 +62,8 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
     <section className="combos" aria-label="Combos">
       <p className="hint">
         Hold the trigger keys together to send the output key. {combos.count} combo
-        {combos.count === 1 ? "" : "s"} available; empty trigger slots (KC_NO) are not used.
+        {combos.count === 1 ? "" : "s"} available; trigger keys after the first empty slot (KC_NO) are
+        ignored.
       </p>
       <ol className="combo-list">
         {combos.entries.map((entry, idx) => {

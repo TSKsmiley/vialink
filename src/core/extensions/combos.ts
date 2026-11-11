@@ -24,6 +24,9 @@
 // - restore() compares keycodes numerically and only writes entries that
 //   differ (vial-gui compares a JSON list to a tuple, which never matches, and
 //   so rewrites every combo).
+// - describeCombo() (the row summary and restore step text) has no vial-gui
+//   counterpart. It follows the firmware: trigger keys after the first KC_NO
+//   are listed as ignored.
 
 import { RESET_KEYCODE, type KeycodeTable } from "../keycodes/table.ts";
 import { COMBO_INPUTS, vialComboGet, vialComboSet, type ComboEntry } from "../protocol/combos.ts";
@@ -153,9 +156,20 @@ export const combosExtension: KeyboardExtension<Combos> = {
   },
 };
 
-/** "KC_A + KC_B → KC_ESC", leaving out empty trigger slots. */
+/**
+ * "KC_A + KC_B → KC_ESC". The firmware's combo key list ends at the first
+ * KC_NO (vial.c reload_combo() copies the inputs into a COMBO_END (0)
+ * terminated array), so only the triggers before the first empty slot are
+ * shown; any set after it are named as ignored.
+ */
 export function describeCombo(table: KeycodeTable, entry: Readonly<ComboEntry>): string {
-  const inputs = entry.slice(0, COMBO_INPUTS).filter((code) => code !== 0);
-  const left = inputs.length ? inputs.map((code) => table.serialize(code)).join(" + ") : "(no keys)";
-  return `${left} → ${table.serialize(entry[COMBO_INPUTS])}`;
+  const triggers = entry.slice(0, COMBO_INPUTS);
+  const end = triggers.indexOf(0);
+  const used = end === -1 ? triggers : triggers.slice(0, end);
+  const ignored = end === -1 ? [] : triggers.slice(end).filter((code) => code !== 0);
+  const left = used.length ? used.map((code) => table.serialize(code)).join(" + ") : "(no keys)";
+  const note = ignored.length
+    ? ` (ignored after an empty slot: ${ignored.map((code) => table.serialize(code)).join(", ")})`
+    : "";
+  return `${left} → ${table.serialize(entry[COMBO_INPUTS])}${note}`;
 }

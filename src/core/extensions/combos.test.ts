@@ -9,7 +9,7 @@ import { SimulatedKeyboard } from "../sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../transport/queue.ts";
 import { toHex } from "../util/bytes.ts";
 import { parseVil, planVilRestore, saveVil } from "../vil.ts";
-import { ComboError, combosExtension } from "./combos.ts";
+import { ComboError, combosExtension, describeCombo } from "./combos.ts";
 
 const xz = new Uint8Array(
   readFileSync(resolve(process.cwd(), "fixtures/definitions/test_2x2_encoder.vial.json.xz")),
@@ -66,6 +66,52 @@ describe("combos extension", () => {
     const silent = await board({ handler: false });
     expect(silent.kb.extension(combosExtension)).toBeNull();
     expect(saveVil(silent.kb)).not.toContain('"combo"');
+  });
+
+  it("fails the load when a later combo entry cannot be read, as vial-gui does", async () => {
+    const sim = new SimulatedKeyboard({
+      compressedDefinition: xz,
+      rows: 2,
+      cols: 2,
+      layers: 2,
+      encoderCount: 1,
+      dynamic: { tapDance: 0, combo: 4, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 },
+    });
+    installCombos(sim, { count: 4 });
+    // base_protocol.py _retrieve_dynamic_entries: data[0] != 0 raises.
+    sim.handlers.unshift((msg) => {
+      if (toHex(msg.slice(0, 3)) !== "fe0d03" || msg[3] !== 2) return false;
+      msg[0] = 0xff;
+      return true;
+    });
+    await sim.open();
+    await expect(Keyboard.load(new RequestQueue(sim, { retryDelayMs: 0 }))).rejects.toThrow(
+      /failed retrieving combo entry 2/,
+    );
+  });
+
+  it("simulator stores a QK_BOOT output as KC_NO while locked, like vial_keycode_firewall", async () => {
+    const { sim, combos: stored } = await board();
+    // FE 0D 04 idx=1, inputs KC_A KC_S 0 0, output QK_BOOT (little endian).
+    const req = new Uint8Array(32);
+    req.set([0xfe, 0x0d, 0x04, 0x01, 0x04, 0x00, 0x16, 0x00, 0, 0, 0, 0, 0x00, 0x7c]);
+    const reply = await sim.send(req);
+    expect(reply[0]).toBe(0);
+    expect(stored!.entries[1]).toEqual([KC_A, KC_S, 0, 0, 0]);
+    sim.unlocked = true;
+    await sim.send(req);
+    expect(stored!.entries[1]).toEqual([KC_A, KC_S, 0, 0, QK_BOOT]);
+  });
+
+  it("describes only the trigger keys before the first KC_NO, as the firmware reads them", async () => {
+    const { kb } = await board();
+    expect(describeCombo(kb.keycodes, [KC_A, KC_S, 0, 0, KC_ESC])).toBe("KC_A + KC_S → KC_ESCAPE");
+    expect(describeCombo(kb.keycodes, [KC_A, 0, KC_S, 0, KC_ESC])).toBe(
+      "KC_A → KC_ESCAPE (ignored after an empty slot: KC_S)",
+    );
+    expect(describeCombo(kb.keycodes, [0, KC_A, KC_S, 0, KC_ESC])).toBe(
+      "(no keys) → KC_ESCAPE (ignored after an empty slot: KC_A, KC_S)",
+    );
   });
 
   it("writes changed combos only, and updates state after the write", async () => {

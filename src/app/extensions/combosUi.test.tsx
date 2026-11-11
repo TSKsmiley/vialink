@@ -65,6 +65,25 @@ describe("Combos panel", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("keeps a slot the user selected while a write was in flight", async () => {
+    const { kb, combos } = await setup();
+    render(<CombosPanel keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
+    fireEvent.click(screen.getByRole("button", { name: "Combo 2 key 1: KC_NO" }));
+    fireEvent.click(screen.getByRole("button", { name: "Q" }));
+    // The write has not resolved yet; pick another combo's slot meanwhile.
+    fireEvent.click(screen.getByRole("button", { name: "Combo 3 output: KC_NO" }));
+    await waitFor(() => expect(combos.entries[1]).toEqual([0x14, 0, 0, 0, 0]));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Q" }) as HTMLButtonElement).disabled).toBe(false),
+    );
+    expect(screen.getByRole("button", { name: "Combo 3 output: KC_NO" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Combo 2 key 2: KC_NO" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
   it("clears a combo", async () => {
     const { kb, combos } = await setup();
     render(<CombosPanel keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
