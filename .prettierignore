@@ -1,0 +1,5 @@
+dist
+pnpm-lock.yaml
+src/core/keycodes/data/keycodes.json
+fixtures
+LICENSE
