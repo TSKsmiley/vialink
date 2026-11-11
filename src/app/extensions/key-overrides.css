@@ -1,0 +1,118 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Key override panel (key-overridesUi.tsx). Uses the colour tokens of styles.css. */
+
+.key-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ko-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 12px;
+}
+.ko-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.ko-card.disabled {
+  border-style: dashed;
+}
+.ko-card.disabled > :not(header) {
+  opacity: 0.7;
+}
+.ko-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ko-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.ko-card label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.88rem;
+}
+.ko-card fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0;
+  padding: 6px 10px 10px;
+  min-width: 0;
+}
+.ko-card legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 4px;
+}
+.ko-key-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ko-row-label {
+  width: 92px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.ko-key {
+  min-width: 64px;
+  min-height: 40px;
+  max-width: 100%;
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+.ko-mods {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 8px;
+}
+.ko-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+}
+.ko-layer-grid label.beyond {
+  color: var(--muted);
+}
+.ko-layer-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.ko-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ko-options label {
+  align-items: flex-start;
+}
+.ko-options input {
+  margin-top: 3px;
+}
+.ko-picker {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--bg);
+  padding-top: 4px;
+}
+.ko-picker .keycode-grid {
+  max-height: 180px;
+}
+@media (max-height: 640px) {
+  .ko-picker {
+    position: static;
+  }
+}
