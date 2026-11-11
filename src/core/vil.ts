@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 // .vil layout files, compatible with vial-gui's keyboard_comm.py
 // save_layout()/restore_layout(). Ideas adapted from Vialite's
 // src/protocol/vilFile.ts (https://github.com/tcyeee/vialite, GPL-2.0): the uid
-// is handled as a BigInt from the raw text, and "macro" is left out on save.
+// is handled as a BigInt from the raw text, and "macro" is left out on save;
+// detectSkippedFeatures() is adapted from it. Modified for vial-ts, November 2026.
 //
 // Milestone 1 reads and writes the keymap fields only. On save, fields vial-ts
 // does not read from the board yet (macro, tap_dance, combo, key_override,

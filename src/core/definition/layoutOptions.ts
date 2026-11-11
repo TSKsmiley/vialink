@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 // Packing of the layout-options u32, as vial-gui's editor/layout_editor.py
 // does it: each label takes 1 bit (a bare string is a checkbox) or
 // bit_length(choices - 1) bits (a [title, ...choices] dropdown), the first label
 // in the most significant position. Adapted from Vialite's keyboard.ts
-// (https://github.com/tcyeee/vialite, GPL-2.0).
+// (https://github.com/tcyeee/vialite, GPL-2.0). Modified for vial-ts, November 2026.
 
 /** A bare string is a boolean toggle; an array is [title, ...choices]. */
 export type LayoutLabel = string | string[];

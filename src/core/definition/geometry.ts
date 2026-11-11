@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 // Pure layout placement, mirroring vial-gui's widgets/keyboard_widget.py
 // place_widgets(): keys of an unselected layout option are hidden, each
 // selected option variant is shifted onto variant 0's top-left, and the result
 // is normalized to start at (0, 0). Adapted from Vialite's
 // src/components/keymap/layout/layoutGeometry.ts (https://github.com/tcyeee/vialite, GPL-2.0).
+// Modified for vial-ts, November 2026.
 
 import type { PhysicalEncoder, PhysicalKey, PhysicalShape } from "./definition.ts";
 

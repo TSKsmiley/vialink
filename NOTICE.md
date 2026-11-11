@@ -1,7 +1,13 @@
 # Credits and third-party code
 
-vial-ts is free software under the GNU General Public License, version 2 or
-(at your option) any later version. See [LICENSE](LICENSE).
+vial-ts's own code is free software under the GNU General Public License,
+version 2 or (at your option) any later version (`GPL-2.0-or-later`).
+
+The files adapted from Vialite (listed below) are under GPL version 2 only
+(`GPL-2.0-only`), because Vialite is licensed under GPL-2.0 without the
+"or any later version" option. vial-ts as a whole, including the built app, is
+therefore distributed under **GPL version 2**. Each file's
+`SPDX-License-Identifier` header gives its own licence. See [LICENSE](LICENSE).
 
 ## Vial — vial-gui
 
@@ -31,7 +37,8 @@ The layer-names extension follows the `dynamic-layer-names` branch of
 
 [Vialite](https://github.com/tcyeee/vialite) by tcyeee (GPL-2.0) is a web
 configurator for Vial keyboards that also ports vial-gui to TypeScript. vial-ts
-adapts these parts of it:
+adapts these parts of it; each file is `GPL-2.0-only` and notes that it was
+modified for vial-ts (November 2026):
 
 - `src/core/transport/webhid.ts`: reply-sequence tracking from `src/protocol/transport.ts`
 - `src/core/definition/kle.ts`: from `src/protocol/kleSerial.ts`
@@ -39,7 +46,7 @@ adapts these parts of it:
   (XZ reader): from `src/protocol/keyboard.ts`
 - `src/core/definition/geometry.ts`: from `src/components/keymap/layout/layoutGeometry.ts`
 - `src/core/vil.ts`: BigInt uid handling, macro omission and skipped-feature
-  detection from `src/protocol/vilFile.ts`
+  detection (`detectSkippedFeatures`) from `src/protocol/vilFile.ts`
 
 ## Fixtures
 

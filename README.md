@@ -66,4 +66,6 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
 
 ## Licence
 
-GPL-2.0-or-later, as vial-gui. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+vial-ts's own code is GPL-2.0-or-later, as vial-gui. A few files adapted from Vialite are
+GPL-2.0-only, so vial-ts as a whole is distributed under GPL version 2. See [LICENSE](LICENSE)
+and [NOTICE.md](NOTICE.md) for which files those are.

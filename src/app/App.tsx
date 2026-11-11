@@ -128,7 +128,7 @@ export function App() {
 
       <footer>
         Built on <a href="https://github.com/vial-kb/vial-gui">vial-gui</a> and{" "}
-        <a href="https://github.com/tcyeee/vialite">Vialite</a>. GPL-2.0-or-later.
+        <a href="https://github.com/tcyeee/vialite">Vialite</a>. Licensed under GPL-2.0.
       </footer>
     </div>
   );

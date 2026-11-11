@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: GPL-2.0-only
 // The keyboard's vial.json: fetched page by page, XZ-decompressed, validated,
 // and turned into physical keys and encoders. Follows vial-gui's
 // keyboard_comm.py::reload_layout; the XZ reader is adapted from Vialite's
-// keyboard.ts (https://github.com/tcyeee/vialite, GPL-2.0).
+// keyboard.ts (https://github.com/tcyeee/vialite, GPL-2.0), modified for vial-ts,
+// November 2026.
 
 import xz from "xz-decompress";
 import { vialGetDefinitionPage, vialGetDefinitionSize } from "../protocol/commands.ts";
