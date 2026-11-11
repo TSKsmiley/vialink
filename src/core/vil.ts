@@ -48,6 +48,27 @@ export class VilFormatError extends Error {
 
 // ── Save ────────────────────────────────────────────────────────────────────
 
+/**
+ * Top-level key order of vial-gui's keyboard_comm.py save_layout(), plus the
+ * Theis194 fork's layer_names. Fields not listed go last, in the order added.
+ */
+export const VIL_KEY_ORDER: readonly string[] = [
+  "version",
+  "uid",
+  "layout",
+  "encoder_layout",
+  "layout_options",
+  "macro",
+  "vial_protocol",
+  "via_protocol",
+  "tap_dance",
+  "combo",
+  "key_override",
+  "alt_repeat_key",
+  "settings",
+  "layer_names",
+];
+
 /** Serializes the keyboard's current state in vial-gui's field order and JSON style. */
 export function saveVil(kb: Keyboard): string {
   const layout: (string | number)[][][] = [];
@@ -90,6 +111,12 @@ export function saveVil(kb: Keyboard): string {
   for (const { extension, state } of kb.activeExtensions) {
     if (extension.vil) fields.push(...Object.entries(extension.vil.save(state)));
   }
+  // Same key order as vial-gui's save_layout(), wherever an extension adds a field.
+  const rank = (key: string) => {
+    const i = VIL_KEY_ORDER.indexOf(key);
+    return i === -1 ? VIL_KEY_ORDER.length : i;
+  };
+  fields.sort((a, b) => rank(a[0]) - rank(b[0]));
   return pythonJson(Object.fromEntries(fields));
 }
 
