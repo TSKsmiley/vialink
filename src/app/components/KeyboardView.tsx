@@ -30,6 +30,10 @@ interface Props {
    * that sets one), dimmed. ViaLink addition; vial-gui shows ▽.
    */
   fallthrough?: boolean;
+  /** Code to draw instead of the keyboard's (a paste preview); undefined keeps the stored one. */
+  codeAt?: (row: number, col: number) => number | undefined;
+  /** Extra words for a key's label and tooltip, e.g. "was KC_B". */
+  note?: (row: number, col: number) => string | null;
   /** Extra CSS class per matrix position, e.g. "pressed" in the matrix tester or "target" when unlocking. */
   highlight?: (row: number, col: number) => string | null;
   /** Label for the whole view; defaults to "Layer n keymap". */
@@ -45,6 +49,8 @@ export function KeyboardView({
   highlight,
   label: viewLabel,
   fallthrough = false,
+  codeAt,
+  note,
 }: Props) {
   const interactive = onSelect !== undefined;
   const version = useKeyboardVersion(keyboard);
@@ -68,7 +74,8 @@ export function KeyboardView({
       aria-label={viewLabel ?? `Layer ${layer} keymap`}
     >
       {placed.keys.map(({ shape: k, shiftX, shiftY }, i) => {
-        const code = keyboard.getKey(layer, k.row, k.col) ?? 0;
+        const code = codeAt?.(k.row, k.col) ?? keyboard.getKey(layer, k.row, k.col) ?? 0;
+        const extraNote = note?.(k.row, k.col) ?? null;
         let shownCode = code;
         let through = false;
         if (fallthrough && code === KC_TRNS) {
@@ -109,9 +116,11 @@ export function KeyboardView({
                   },
                 }
               : {})}
-            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}${through ? ` (shows ${keyboard.keycodes.serialize(shownCode)} from below)` : ""}${highlight?.(k.row, k.col) ? ` (${highlight(k.row, k.col)})` : ""}`}
+            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}${through ? ` (shows ${keyboard.keycodes.serialize(shownCode)} from below)` : ""}${highlight?.(k.row, k.col) ? ` (${highlight(k.row, k.col)})` : ""}${extraNote ? `, ${extraNote}` : ""}`}
           >
-            <title>{label.tooltip ?? keyboard.keycodes.serialize(code)}</title>
+            <title>
+              {(label.tooltip ?? keyboard.keycodes.serialize(code)) + (extraNote ? ` (${extraNote})` : "")}
+            </title>
             {hasSecondRect(k) && (
               <rect
                 x={(k.x + k.x2) * U + GAP}

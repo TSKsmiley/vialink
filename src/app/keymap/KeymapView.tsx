@@ -7,16 +7,29 @@
 // - Shift-click selects several keys; an assignment sets all of them as one
 //   undo step.
 // - Transparent keys show the key they fall through to, dimmed.
+// - Layer operations (design board 5): copy, paste with a preview and three
+//   modes, duplicate, swap (menu or drag), clear; Ctrl+C / Ctrl+V copy the
+//   selected keys, or the whole layer when nothing is selected.
 
 import { useEffect, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { keyCount, reachSummary, visiblePositions } from "../../core/layerInfo.ts";
+import {
+  applyLayerWrites,
+  firstEmptyLayer,
+  planClear,
+  planPaste,
+  snapshotCounts,
+  snapshotLayer,
+  swapLayers,
+} from "../../core/layers.ts";
 import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
 import { activeUi } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
+import { PastePreview, type PasteSource } from "./PastePreview.tsx";
 
 type Target = NonNullable<Selection>;
 
@@ -59,6 +72,8 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
   const [targets, setTargets] = useState<readonly Target[]>([]);
   const [writing, setWriting] = useState(false);
   const busy = writing || locked;
+  const [clipboard, setClipboard] = useState<PasteSource | null>(null);
+  const [pasting, setPasting] = useState<{ source: PasteSource; target: number } | null>(null);
   const [autoAdvance, setAutoAdvance] = useState(() =>
     load(ADVANCE_KEY, false, (v): v is boolean => typeof v === "boolean"),
   );
@@ -96,6 +111,70 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
       prev.some((p) => sameTarget(p, s)) ? prev.filter((p) => !sameTarget(p, s)) : [...prev, s],
     );
   };
+
+  /** Runs a layer operation with the busy flag, reporting errors. */
+  const run = async (fn: () => Promise<void>) => {
+    setWriting(true);
+    try {
+      await fn();
+    } catch (err) {
+      onError(errorMessage(err));
+    } finally {
+      setWriting(false);
+    }
+  };
+
+  const copy = (l: number, only?: readonly Target[]) => {
+    const snapshot = snapshotLayer(keyboard, l, only);
+    const n = snapshot.keys.size + snapshot.encoders.size;
+    setClipboard({
+      snapshot,
+      name: only ? `${n} ${n === 1 ? "key" : "keys"} from ${layerName(l)}` : layerName(l),
+    });
+  };
+  const pasteOnto = (l: number) => {
+    if (clipboard) setPasting({ source: clipboard, target: l });
+  };
+  const emptyLayer = firstEmptyLayer(keyboard, (l) => named(l) !== null);
+  const menu = {
+    onCopy: (l: number) => copy(l),
+    onPaste: clipboard ? pasteOnto : undefined,
+    canDuplicate: emptyLayer !== null,
+    onDuplicate: (l: number) =>
+      void run(async () => {
+        const to = firstEmptyLayer(keyboard, (x) => named(x) !== null);
+        if (to === null) return;
+        const plan = planPaste(keyboard, snapshotLayer(keyboard, l), to, "replace", true);
+        await applyLayerWrites(keyboard, to, plan.writes, `Duplicate ${layerName(l)} to layer ${to}`);
+        setLayer(to);
+      }),
+    onSwap: (a: number, b: number) =>
+      void run(() => swapLayers(keyboard, a, b, `Swap ${layerName(a)} and ${layerName(b)}`)),
+    onClear: (l: number) =>
+      void run(() => applyLayerWrites(keyboard, l, planClear(keyboard, l), `Clear ${layerName(l)}`)),
+  };
+
+  // Ctrl+C / Ctrl+V on the keymap: the selected keys, or the whole layer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== "c" && key !== "v") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (t?.closest('[role="dialog"]')) return;
+      if (key === "c") {
+        if (window.getSelection()?.toString()) return; // copying page text
+        e.preventDefault();
+        copy(layer, targets.length > 0 ? targets : undefined);
+      } else if (clipboard) {
+        e.preventDefault();
+        pasteOnto(layer);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const write = (t: Target, value: number) =>
     t.kind === "key"
@@ -181,74 +260,98 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
           layerName={named}
           actions={actions}
           onError={onError}
+          menu={menu}
+          copied={clipboard ? { name: clipboard.name, ...snapshotCounts(clipboard.snapshot) } : null}
+          onClearCopied={() => setClipboard(null)}
+          pasteTarget={pasting?.target ?? null}
         />
       </div>
 
-      <section aria-label="Keyboard" className="flex min-w-0 flex-col gap-3 [grid-area:board] lg:row-span-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="m-0 text-xl font-semibold">{layerName(shownLayer)}</h1>
-          <span className="text-sm text-kumo-subtle">
-            {peek !== null
-              ? "Peeking: let go of Alt to return"
-              : `${keys} ${keys === 1 ? "key" : "keys"} · ${reach === "default" ? "default layer, on at power-up" : reach}`}
-          </span>
-          <div className="flex-1" />
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-accent"
-              checked={autoAdvance}
-              onChange={(e) => {
-                setAutoAdvance(e.target.checked);
-                save(ADVANCE_KEY, e.target.checked);
-              }}
-            />
-            Move to the next key after assigning
-          </label>
-        </div>
-        <div
-          className={
-            "board-wrap rounded-xl border border-kumo-line bg-kumo-elevated p-2 md:p-3 " +
-            (peek !== null ? "outline-2 outline-offset-2 outline-dashed outline-accent" : "")
-          }
-        >
-          <KeyboardView
-            keyboard={keyboard}
-            layer={shownLayer}
-            isSelected={peek !== null ? () => false : (s) => targets.some((t) => sameTarget(t, s))}
-            onSelect={peek !== null ? undefined : select}
-            fallthrough
-          />
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-3 rounded-[3px] border border-(--vl-layer-key) bg-(--vl-layer-key-bg)" />
-            Layer keys
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-3 rounded-[3px] border-2 border-accent bg-accent-tint" />
-            Selected
-          </span>
-          <span>Click a key to edit it. Shift-click to select several. Esc clears the selection.</span>
-        </div>
-        <div className="legacy-view">
-          <LayoutOptionsPanel keyboard={keyboard} onChange={(c) => void setLayout(c)} busy={busy} />
-        </div>
-      </section>
-
-      <div className="min-w-0 [grid-area:insp] lg:sticky lg:top-4">
-        <KeyInspector
+      {pasting ? (
+        <PastePreview
           keyboard={keyboard}
-          layer={layer}
-          targets={targets}
-          current={current}
-          onPick={(c, o) => void pick(c, o)}
-          busy={busy}
-          info={info}
+          source={pasting.source}
+          target={pasting.target}
+          onTarget={(t) => setPasting({ ...pasting, target: t })}
           layerName={layerName}
-          recent={recent}
+          onError={onError}
+          onClose={(onto) => {
+            setPasting(null);
+            if (onto !== null) setLayer(onto);
+          }}
         />
-      </div>
+      ) : (
+        <>
+          <section
+            aria-label="Keyboard"
+            className="flex min-w-0 flex-col gap-3 [grid-area:board] lg:row-span-1"
+          >
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="m-0 text-xl font-semibold">{layerName(shownLayer)}</h1>
+              <span className="text-sm text-kumo-subtle">
+                {peek !== null
+                  ? "Peeking: let go of Alt to return"
+                  : `${keys} ${keys === 1 ? "key" : "keys"} · ${reach === "default" ? "default layer, on at power-up" : reach}`}
+              </span>
+              <div className="flex-1" />
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-accent"
+                  checked={autoAdvance}
+                  onChange={(e) => {
+                    setAutoAdvance(e.target.checked);
+                    save(ADVANCE_KEY, e.target.checked);
+                  }}
+                />
+                Move to the next key after assigning
+              </label>
+            </div>
+            <div
+              className={
+                "board-wrap rounded-xl border border-kumo-line bg-kumo-elevated p-2 md:p-3 " +
+                (peek !== null ? "outline-2 outline-offset-2 outline-dashed outline-accent" : "")
+              }
+            >
+              <KeyboardView
+                keyboard={keyboard}
+                layer={shownLayer}
+                isSelected={peek !== null ? () => false : (s) => targets.some((t) => sameTarget(t, s))}
+                onSelect={peek !== null ? undefined : select}
+                fallthrough
+              />
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-3 rounded-[3px] border border-(--vl-layer-key) bg-(--vl-layer-key-bg)" />
+                Layer keys
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-3 rounded-[3px] border-2 border-accent bg-accent-tint" />
+                Selected
+              </span>
+              <span>Click a key to edit it. Shift-click to select several. Esc clears the selection.</span>
+            </div>
+            <div className="legacy-view">
+              <LayoutOptionsPanel keyboard={keyboard} onChange={(c) => void setLayout(c)} busy={busy} />
+            </div>
+          </section>
+
+          <div className="min-w-0 [grid-area:insp] lg:sticky lg:top-4">
+            <KeyInspector
+              keyboard={keyboard}
+              layer={layer}
+              targets={targets}
+              current={current}
+              onPick={(c, o) => void pick(c, o)}
+              busy={busy}
+              info={info}
+              layerName={layerName}
+              recent={recent}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

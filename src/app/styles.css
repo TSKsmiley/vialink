@@ -153,6 +153,12 @@ svg.keyboard {
 .key.layer-key .key-label .inner {
   fill: var(--vl-layer-key-text);
 }
+/* Paste preview: keys the paste would change. */
+.key.changed rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
 /* Transparent keys showing the key from the layer below. */
 .key.through .key-label {
   opacity: 0.4;
