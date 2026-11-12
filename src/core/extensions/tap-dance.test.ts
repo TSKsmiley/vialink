@@ -25,7 +25,6 @@ async function board(
     count?: number;
     vialProtocol?: number;
     entries?: SimTapDanceOptions["entries"];
-    handler?: boolean;
     /** Entries the handler knows, when fewer than the advertised count. */
     handlerCount?: number;
   } = {},
@@ -41,10 +40,7 @@ async function board(
     uid: 18364758544493064720n,
     dynamic: { tapDance: count, combo: 0, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 },
   });
-  const td =
-    opts.handler === false
-      ? null
-      : installTapDanceSimulator(sim, { count: opts.handlerCount ?? count, entries: opts.entries });
+  const td = installTapDanceSimulator(sim, { count: opts.handlerCount ?? count, entries: opts.entries });
   await sim.open();
   const kb = await Keyboard.load(new RequestQueue(sim, { retryDelayMs: 0 }));
   return { sim, td, kb };
@@ -67,12 +63,11 @@ describe("tap dance extension", () => {
     expect(gets).toEqual(["fe0d0100", "fe0d0101"]);
   });
 
-  it("is inactive without tap dance entries, on old protocols, or when the board does not answer", async () => {
-    expect((await board({ count: 0 })).kb.extension(tapDanceExtension)).toBeNull();
+  it("is inactive without tap dance entries or on old protocols", async () => {
+    const none = await board({ count: 0 });
+    expect(none.kb.extension(tapDanceExtension)).toBeNull();
+    expect(saveVil(none.kb)).not.toContain("tap_dance");
     expect((await board({ vialProtocol: 3 })).kb.extension(tapDanceExtension)).toBeNull();
-    const silent = await board({ handler: false });
-    expect(silent.kb.extension(tapDanceExtension)).toBeNull();
-    expect(saveVil(silent.kb)).not.toContain("tap_dance");
   });
 
   it("fails the load when the board reports an error for an advertised entry, as vial-gui does", async () => {

@@ -13,7 +13,13 @@ import {
   RAW_HID_USAGE,
   RAW_HID_USAGE_PAGE,
 } from "../core/protocol/constants.ts";
+import { installAltRepeatKey } from "../core/sim/alt-repeat-key.ts";
+import { installCombos } from "../core/sim/combos.ts";
+import { installKeyOverrides } from "../core/sim/key-overrides.ts";
+import { installMacroSimulator } from "../core/sim/macros.ts";
+import { installQmkSettings } from "../core/sim/qmk-settings.ts";
 import { SimulatedKeyboard } from "../core/sim/simulatedKeyboard.ts";
+import { installTapDanceSimulator } from "../core/sim/tap-dance.ts";
 import { RequestQueue } from "../core/transport/queue.ts";
 import type { Transport } from "../core/transport/types.ts";
 import { WebHidTransport } from "../core/transport/webhid.ts";
@@ -103,14 +109,25 @@ export async function demoTransport(): Promise<Transport> {
     keymap: [letters, letters.map((row) => row.map(() => 0x01))],
     macroCount: 16,
     macroBufferSize: 1024,
-    dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 0, featureFlags: 0b11 },
-    qmkSettings: [1, 2, 7],
+    dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 4, featureFlags: 0b11 },
     layerNames: ["Base", "Lower", "Raise", "Adjust"],
     unlockKeys: [
       { row: 0, col: 3 },
       { row: 4, col: 3 },
     ],
   });
+  // The Vial features each extension edits, with a little starter content.
+  installMacroSimulator(sim, {
+    count: 16,
+    memory: 1024,
+    contents: new TextEncoder().encode("Hello from vial-ts\0"),
+  });
+  installTapDanceSimulator(sim, { count: 4, entries: [{ onTap: 0x29, onHold: 0x39 }] }); // Esc / Caps Lock
+  installCombos(sim, { count: 8, entries: [[0x0d, 0x0e, 0, 0, 0x29]] }); // J + K = Esc
+  installKeyOverrides(sim, { count: 4 });
+  installAltRepeatKey(sim, { count: 4 });
+  installQmkSettings(sim);
+
   // Nobody can hold the keys of a simulated board: "hold" them once an unlock
   // starts, and let them go again when it finishes.
   sim.handlers.push((msg, board) => {

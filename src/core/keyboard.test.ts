@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { layerNamesExtension } from "./extensions/layerNames.ts";
 import { Keyboard, UnlockRequiredError } from "./keyboard.ts";
 import { SimulatedKeyboard } from "./sim/simulatedKeyboard.ts";
+import { installTapDanceSimulator } from "./sim/tap-dance.ts";
 import { RequestQueue } from "./transport/queue.ts";
 import { ReplayTransport } from "./transport/replay.ts";
 import { parseVil, planVilRestore, saveVil } from "./vil.ts";
@@ -22,6 +23,7 @@ function klor() {
     dynamic: { tapDance: 2, combo: 0, keyOverride: 0, altRepeatKey: 0, featureFlags: 0b11 },
     layerNames: ["Base", "Nav", "", ""],
   });
+  installTapDanceSimulator(sim, { count: 2 });
   return sim;
 }
 

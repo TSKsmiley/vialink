@@ -7,8 +7,8 @@
 // quantum/qmk_settings.c.
 //
 // data/qmk_settings.json is vial-gui's src/main/resources/base/qmk_settings.json
-// (https://github.com/vial-kb/vial-gui, GPL-2.0-or-later), copied with its data
-// unchanged (Prettier re-indents it).
+// (https://github.com/vial-kb/vial-gui at aef8222, GPL-2.0-or-later), copied
+// byte for byte (it is in .prettierignore).
 //
 // Deviations from vial-gui, all deliberate:
 // - The supported qsids come from Keyboard.capabilities.qmkSettings (probed

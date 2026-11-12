@@ -5,12 +5,17 @@
 // is handled as a BigInt from the raw text, and "macro" is left out on save;
 // detectSkippedFeatures() is adapted from it. Modified for vial-ts, November 2026.
 //
-// Milestone 1 reads and writes the keymap fields only. On save, fields vial-ts
-// does not read from the board yet (macro, tap_dance, combo, key_override,
-// alt_repeat_key, settings) are left out: vial-gui's restore skips missing
-// fields, whereas an empty list would erase that feature on the board. On load
-// they are reported, not applied. Active extensions (src/core/extensions/)
-// add their own fields on save and their own restore steps on load.
+// This file reads and writes the keymap fields. macro, tap_dance, combo,
+// key_override, alt_repeat_key, settings and layer_names belong to extensions
+// (src/core/extensions/): each active extension adds its field on save and its
+// own restore steps on load, and fields no active extension owns are reported
+// on load, not applied.
+//
+// Deviation: vial-gui always writes every field, e.g. "tap_dance": [] on a
+// board without tap dance. Here a feature whose extension is inactive (absent
+// on the board, or switched off by the user) writes no field. vial-gui's
+// restore_layout treats all of them as optional, and leaving them out is safer:
+// an empty "macro" list would erase every macro when the file is restored.
 
 import type { Keyboard } from "./keyboard.ts";
 import type { KeycodeTable } from "./keycodes/table.ts";

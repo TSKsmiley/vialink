@@ -58,7 +58,7 @@ describe("saving layouts in the browser", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Saved layouts" }));
     const dialog = await screen.findByRole("dialog", { name: "Saved layouts" });
-    expect(within(dialog).getByText("This keyboard")).toBeTruthy();
+    expect(await within(dialog).findByText("This keyboard")).toBeTruthy();
     fireEvent.click(await within(dialog).findByRole("button", { name: "Load Daily" }));
 
     const confirm = await screen.findByRole("dialog", { name: "Load Daily?" });

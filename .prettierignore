@@ -1,6 +1,7 @@
 dist
 pnpm-lock.yaml
 src/core/keycodes/data/keycodes.json
+src/core/extensions/data/qmk_settings.json
 fixtures
 LICENSE
 .claude
