@@ -25,6 +25,8 @@ export interface PanelProps {
   keyboard: Keyboard;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  /** Opens another view of the editor by id ("keymap", "qmk-settings", …); absent outside the editor. */
+  onOpen?: (view: string) => void;
 }
 
 /** A whole editor view, shown as a tab next to Keymap and Matrix tester. */
@@ -33,6 +35,8 @@ export interface ExtensionPanel {
   id: string;
   title: string;
   Component: ComponentType<PanelProps>;
+  /** True when the view uses only the new styles, so the pre-redesign styles stay off it. */
+  modern?: boolean;
   /** How many entries are set up, shown next to the title in the sidebar; null shows nothing. */
   count?(keyboard: Keyboard): number | null;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // SPDX-License-Identifier: GPL-2.0-or-later
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,8 @@ async function setup(count = 3) {
     cols: 6,
     layers: 4,
     dynamic: { tapDance: 0, combo: count, keyOverride: 0, altRepeatKey: 0, featureFlags: 0 },
+    // Base layer: row 0 = A B C D E F.
+    keymap: [[[0x04, 0x05, 0x06, 0x07, 0x08, 0x09]]],
   });
   const combos = installCombos(sim, { count, entries: [[0x04, 0x16, 0, 0, 0x29]] });
   await sim.open();
@@ -29,77 +31,60 @@ async function setup(count = 3) {
   return { sim, kb, combos };
 }
 
-describe("Combos panel", () => {
-  it("shows a Combos tab in the editor with one row per combo", async () => {
+const detail = (n: number) => screen.getByRole("region", { name: `Combo ${n}` });
+const baseKey = (col: number) =>
+  within(screen.getByRole("group", { name: /^Base layer/ })).getAllByRole("button", {
+    name: new RegExp(`^Key 0,${col}:`),
+  })[0];
+const choose = (label: string, text: string) => {
+  const box = screen.getByLabelText(label);
+  fireEvent.change(box, { target: { value: text } });
+  fireEvent.keyDown(box, { key: "Enter" });
+};
+
+describe("Combos view", () => {
+  it("lists the combos that are set up and shows one in detail", async () => {
     const { kb } = await setup();
     render(<Editor keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Combos" }));
-    const rows = screen.getAllByRole("listitem");
-    expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual(["Combo 1", "Combo 2", "Combo 3"]);
-    expect(screen.getByRole("button", { name: "Combo 1 key 1: KC_A" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Combo 1 output: KC_ESCAPE" })).toBeTruthy();
-    expect(screen.getByText("KC_A + KC_S → KC_ESCAPE")).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole("tablist", { name: "Edit" })).getByRole("tab", { name: "Combos" }),
+    );
+    expect(screen.getByText("1 of 3 used")).toBeTruthy();
+    expect(within(detail(1)).getByRole("heading", { name: "A + S sends Esc" })).toBeTruthy();
+    expect(within(detail(1)).getByText("KC_A + KC_S → KC_ESCAPE")).toBeTruthy();
   });
 
-  it("assigns a picked keycode to the selected slot and moves to the next slot", async () => {
+  it("adds triggers from the keyboard, packed, and sets the output by search", async () => {
     const { kb, combos } = await setup();
     const onError = vi.fn();
     render(<CombosPanel keyboard={kb} onError={onError} onNotice={() => undefined} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Combo 2 key 1: KC_NO" }));
-    expect(screen.getByRole("button", { name: "Combo 2 key 1: KC_NO" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Q" }));
-    await waitFor(() => expect(combos.entries[1]).toEqual([0x14, 0, 0, 0, 0]));
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Combo 2 key 2: KC_NO" }).getAttribute("aria-pressed")).toBe(
-        "true",
-      ),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Combo 2 output: KC_NO" }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "LCTL(KC_C)" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
-    await waitFor(() => expect(combos.entries[1]).toEqual([0x14, 0, 0, 0, 0x0106]));
+    fireEvent.click(screen.getByRole("button", { name: "New combo" }));
+    fireEvent.click(baseKey(2)); // C
+    await waitFor(() => expect(combos.entries[1]).toEqual([0x06, 0, 0, 0, 0]));
+    fireEvent.click(baseKey(3)); // D
+    await waitFor(() => expect(combos.entries[1]).toEqual([0x06, 0x07, 0, 0, 0]));
+    // Removing the first keeps the rest at the front.
+    fireEvent.click(baseKey(2));
+    await waitFor(() => expect(combos.entries[1]).toEqual([0x07, 0, 0, 0, 0]));
+    choose("Output key", "ctrl+c");
+    await waitFor(() => expect(combos.entries[1]).toEqual([0x07, 0, 0, 0, 0x0106]));
+    await kb.history.undo();
+    expect(combos.entries[1]).toEqual([0x07, 0, 0, 0, 0]);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("keeps a slot the user selected while a write was in flight", async () => {
+  it("deletes a combo", async () => {
     const { kb, combos } = await setup();
     render(<CombosPanel keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
-    fireEvent.click(screen.getByRole("button", { name: "Combo 2 key 1: KC_NO" }));
-    fireEvent.click(screen.getByRole("button", { name: "Q" }));
-    // The write has not resolved yet; pick another combo's slot meanwhile.
-    fireEvent.click(screen.getByRole("button", { name: "Combo 3 output: KC_NO" }));
-    await waitFor(() => expect(combos.entries[1]).toEqual([0x14, 0, 0, 0, 0]));
-    await waitFor(() =>
-      expect((screen.getByRole("button", { name: "Q" }) as HTMLButtonElement).disabled).toBe(false),
-    );
-    expect(screen.getByRole("button", { name: "Combo 3 output: KC_NO" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    expect(screen.getByRole("button", { name: "Combo 2 key 2: KC_NO" }).getAttribute("aria-pressed")).toBe(
-      "false",
-    );
-  });
-
-  it("clears a combo", async () => {
-    const { kb, combos } = await setup();
-    render(<CombosPanel keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
-    expect((screen.getByRole("button", { name: "Clear combo 2" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Clear combo 1" }));
+    fireEvent.click(within(detail(1)).getByRole("button", { name: "Delete combo" }));
     await waitFor(() => expect(combos.entries[0]).toEqual([0, 0, 0, 0, 0]));
-    expect(screen.getAllByText("unused")).toHaveLength(3);
   });
 
   it("reports a refused unlock through onError", async () => {
     const { kb, combos } = await setup();
     const onError = vi.fn();
     render(<CombosPanel keyboard={kb} onError={onError} onNotice={() => undefined} />);
-    fireEvent.click(screen.getByRole("button", { name: "Combo 1 output: KC_ESCAPE" }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "QK_BOOT" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    choose("Output key", "QK_BOOT");
     await waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0][0]).toMatch(/^Combo 1: .*unlocked/);
     expect(combos.entries[0]).toEqual([0x04, 0x16, 0, 0, 0x29]);
