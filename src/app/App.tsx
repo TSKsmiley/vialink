@@ -128,27 +128,29 @@ export function App() {
         />
 
         <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden md:px-5">
-          <Banner
-            variant="alert"
-            size="sm"
-            icon={<WarningIcon weight="fill" aria-hidden="true" />}
-            description={
-              <>
-                Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only
-                been tested on one keyboard, the{" "}
-                <a
-                  href="https://github.com/GEIGEIGEIST/KLOR"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline"
-                >
-                  KLOR by GEIGEIGEIST
-                </a>
-                . Save a backup of your layout before changing anything.
-              </>
-            }
-            role="note"
-          />
+          {!kb && (
+            <Banner
+              variant="alert"
+              size="sm"
+              icon={<WarningIcon weight="fill" aria-hidden="true" />}
+              description={
+                <>
+                  Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only
+                  been tested on one keyboard, the{" "}
+                  <a
+                    href="https://github.com/GEIGEIGEIST/KLOR"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    KLOR by GEIGEIGEIST
+                  </a>
+                  . Save a backup of your layout before changing anything.
+                </>
+              }
+              role="note"
+            />
+          )}
           {error && (
             <Banner
               variant="error"

@@ -52,13 +52,6 @@
     --vl-layer-key-bg: #fffbeb;
     --vl-layer-key-text: #92400e;
     --vl-scroll-thumb-hover: #a3a3a3;
-
-    /* Kumo's brand (primary buttons, selected states) and links follow the accent. */
-    --color-kumo-brand: var(--vl-accent);
-    --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), black 12%);
-    --text-color-kumo-link: var(--vl-accent-link);
-    /* Focus rings in the accent. */
-    --color-kumo-focus: var(--vl-accent);
   }
 
   :root[data-mode="dark"] {
@@ -76,11 +69,6 @@
     --vl-layer-key-bg: #2a1c09;
     --vl-layer-key-text: #ff8904;
     --vl-scroll-thumb-hover: #525252;
-
-    --color-kumo-brand: var(--vl-accent);
-    --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), white 12%);
-    --text-color-kumo-link: var(--vl-accent-link);
-    --color-kumo-focus: var(--vl-accent);
   }
 
   html,
@@ -133,4 +121,21 @@
   .vl-on-accent {
     color: var(--vl-on-accent) !important;
   }
+}
+
+/*
+ * Kumo's colour tokens follow the accent. Tailwind emits Kumo's @theme
+ * variables unlayered (":root, :host"), which beats any layer, so these
+ * overrides are unlayered too, with a more specific selector.
+ */
+html:root {
+  /* Primary buttons and selected states. */
+  --color-kumo-brand: var(--vl-accent);
+  --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), black 12%);
+  --text-color-kumo-link: var(--vl-accent-link);
+  /* Focus rings in the accent. */
+  --color-kumo-focus: var(--vl-accent);
+}
+html:root[data-mode="dark"] {
+  --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), white 12%);
 }

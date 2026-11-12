@@ -10,6 +10,7 @@ import { useEffect, useState, type ComponentType } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { keyCount, reachSummary } from "../../core/layerInfo.ts";
 import type { LayerActionProps } from "../extensions/registry.tsx";
+import { LayerMenu, type LayerMenuActions } from "./LayerMenu.tsx";
 
 export interface LayerRailProps {
   keyboard: Keyboard;
@@ -21,11 +22,35 @@ export interface LayerRailProps {
   /** Per-layer controls from extensions, shown on the current card. */
   actions: { id: string; Component: ComponentType<LayerActionProps> }[];
   onError: (message: string) => void;
+  /** Layer menu entries (copy, paste, duplicate, swap, clear); drag-and-drop swaps too. */
+  menu: LayerMenuActions;
+  /** What is copied, shown above the cards; null when nothing is. */
+  copied: { name: string; keys: number; encoders: number } | null;
+  onClearCopied: () => void;
+  /** The layer a paste preview targets, marked "pasting here". */
+  pasteTarget: number | null;
 }
 
-export function LayerRail({ keyboard, layer, onLayer, onPeek, layerName, actions, onError }: LayerRailProps) {
+const DRAG_TYPE = "application/x-vialink-layer";
+
+export function LayerRail({
+  keyboard,
+  layer,
+  onLayer,
+  onPeek,
+  layerName,
+  actions,
+  onError,
+  menu,
+  copied,
+  onClearCopied,
+  pasteTarget,
+}: LayerRailProps) {
   const [unfold, setUnfold] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
+  const [menuFor, setMenuFor] = useState<number | null>(null);
+  const [dropOn, setDropOn] = useState<number | null>(null);
+  const nameOf = (l: number) => layerName(l) || `Layer ${l}`;
 
   const layers = Array.from({ length: keyboard.layers }, (_, l) => {
     const keys = keyCount(keyboard, l);
@@ -71,6 +96,28 @@ export function LayerRail({ keyboard, layer, onLayer, onPeek, layerName, actions
           {used} of {keyboard.layers} used
         </span>
       </div>
+      {copied && (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-accent px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1">
+            Copied <strong>{copied.name}</strong>{" "}
+            <span className="text-kumo-subtle">
+              ({copied.keys} {copied.keys === 1 ? "key" : "keys"}
+              {copied.encoders > 0
+                ? `, ${copied.encoders} encoder ${copied.encoders === 1 ? "turn" : "turns"}`
+                : ""}
+              )
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Clear copied layer"
+            onClick={onClearCopied}
+            className="cursor-pointer rounded px-1 text-kumo-subtle hover:text-kumo-default"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div
         role="tablist"
         aria-label="Layer"
@@ -85,10 +132,32 @@ export function LayerRail({ keyboard, layer, onLayer, onPeek, layerName, actions
               key={l}
               className={
                 "rounded-lg border px-3 py-2.5 " +
-                (current
-                  ? "border-accent bg-accent-tint"
-                  : "border-kumo-line bg-kumo-base hover:bg-kumo-tint")
+                (dropOn === l
+                  ? "border-dashed border-accent bg-accent-tint"
+                  : current
+                    ? "border-accent bg-accent-tint"
+                    : "border-kumo-line bg-kumo-base hover:bg-kumo-tint")
               }
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DRAG_TYPE, String(l));
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                e.preventDefault();
+                setDropOn(l);
+              }}
+              onDragLeave={() => setDropOn((d) => (d === l ? null : d))}
+              onDrop={(e) => {
+                setDropOn(null);
+                const from = Number(e.dataTransfer.getData(DRAG_TYPE));
+                if (Number.isInteger(from) && from !== l) menu.onSwap(from, l);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenuFor(l);
+              }}
               onMouseEnter={(e) => {
                 setHovered(l);
                 if (e.altKey && !current) onPeek(l);
@@ -98,22 +167,34 @@ export function LayerRail({ keyboard, layer, onLayer, onPeek, layerName, actions
                 else if (!e.altKey) onPeek(null);
               }}
             >
-              <button
-                role="tab"
-                aria-selected={current}
-                aria-label={`${l}: ${title}`}
-                aria-description={detail}
-                onClick={() => onLayer(l)}
-                className="flex w-full cursor-pointer flex-col items-start gap-0.5 text-left"
-              >
-                <span className="flex w-full items-center gap-2">
-                  <span className="text-xs text-kumo-subtle tabular-nums">{l}</span>
-                  <span className={current ? "font-semibold" : ""}>{title}</span>
-                </span>
-                <span className={"text-xs " + (current ? "text-accent-link" : "text-kumo-subtle")}>
-                  {detail}
-                </span>
-              </button>
+              <div className="flex items-start gap-1">
+                <button
+                  role="tab"
+                  aria-selected={current}
+                  aria-label={`${l}: ${title}`}
+                  aria-description={detail}
+                  onClick={() => onLayer(l)}
+                  className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 text-left"
+                >
+                  <span className="flex w-full items-center gap-2">
+                    <span className="text-xs text-kumo-subtle tabular-nums">{l}</span>
+                    <span className={"truncate " + (current ? "font-semibold" : "")}>{title}</span>
+                  </span>
+                  <span className={"text-xs " + (current ? "text-accent-link" : "text-kumo-subtle")}>
+                    {pasteTarget === l ? <strong className="text-accent-link">Pasting here · </strong> : null}
+                    {detail}
+                  </span>
+                </button>
+                <LayerMenu
+                  layer={l}
+                  title={title}
+                  layerCount={keyboard.layers}
+                  layerName={nameOf}
+                  open={menuFor === l}
+                  onOpenChange={(o) => setMenuFor(o ? l : null)}
+                  {...menu}
+                />
+              </div>
               {current && actions.length > 0 && (
                 <div className="legacy-view mt-2 flex flex-wrap items-center gap-2 text-sm [&_button]:text-sm">
                   <PencilSimpleIcon aria-hidden="true" className="text-kumo-subtle" size={14} />
@@ -137,7 +218,8 @@ export function LayerRail({ keyboard, layer, onLayer, onPeek, layerName, actions
       )}
       <p className="m-0 px-0.5 text-xs leading-relaxed text-kumo-subtle hidden min-[1600px]:block">
         Hold <kbd className="rounded border border-kumo-line px-1 font-mono text-[11px]">Alt</kbd> over a
-        layer to peek at it. Transparent keys show the layer below, dimmed.
+        layer to peek at it. Transparent keys show the layer below, dimmed. Drag a card onto another to swap
+        them; right-click a card for its menu.
       </p>
     </section>
   );
