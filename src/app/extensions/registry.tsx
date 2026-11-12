@@ -8,6 +8,7 @@ import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { combosUi } from "./combosUi.tsx";
+import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { layerNamesUi } from "./layerNamesUi.tsx";
 import { tapDanceUi } from "./tap-danceUi.tsx";
 
@@ -42,7 +43,7 @@ export interface AppExtension {
   panels?: readonly ExtensionPanel[];
 }
 
-export const APP_EXTENSIONS: readonly AppExtension[] = [layerNamesUi, tapDanceUi, combosUi];
+export const APP_EXTENSIONS: readonly AppExtension[] = [layerNamesUi, tapDanceUi, combosUi, keyOverridesUi];
 
 /** UI entries whose core extension is active on this keyboard. */
 export function activeUi(keyboard: Keyboard): AppExtension[] {
