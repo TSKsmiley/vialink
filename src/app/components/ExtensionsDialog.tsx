@@ -4,6 +4,19 @@ import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 
+const GROUPS = [
+  {
+    standard: true,
+    title: "Standard Vial",
+    hint: "Part of Vial itself. Shown when the keyboard's firmware was built with them.",
+  },
+  {
+    standard: false,
+    title: "Non-standard extensions",
+    hint: "Need firmware beyond standard Vial. Standard desktop Vial does not show these.",
+  },
+];
+
 interface Props {
   disabled: Set<string>;
   onChange: (disabled: Set<string>) => void;
@@ -13,7 +26,8 @@ interface Props {
 }
 
 /**
- * Turns built-in extensions on and off. The choice is remembered in this
+ * Turns built-in features on and off, grouped into standard Vial features and
+ * non-standard extensions (e.g. layer names). The choice is remembered in this
  * browser and applies to the connected keyboard right away.
  */
 export function ExtensionsDialog({ disabled, onChange, keyboard, onError, onClose }: Props) {
@@ -64,40 +78,56 @@ export function ExtensionsDialog({ disabled, onChange, keyboard, onError, onClos
       >
         <div className="dialog-head">
           <h2 id="ext-title">Extensions</h2>
-          <p className="hint">Optional features. Your choices are remembered in this browser.</p>
+          <p className="hint">
+            Turn features off to hide them. Your choices are remembered in this browser; nothing is written to
+            the keyboard, so this is not part of undo.
+          </p>
         </div>
-        <ul className="extension-list dialog-body">
-          {BUILTIN_EXTENSIONS.map((ext) => {
-            const line = status(ext.id);
-            return (
-              <li key={ext.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={!disabled.has(ext.id)}
-                    disabled={checking !== null}
-                    onChange={(e) => void toggle(ext.id, e.target.checked)}
-                  />
-                  <strong>{ext.name}</strong>
-                </label>
-                <p className="hint">{ext.description}</p>
-                {ext.firmware && (
-                  <p className="hint">
-                    Firmware:{" "}
-                    <a href={ext.firmware.url} target="_blank" rel="noreferrer">
-                      {ext.firmware.label}
-                    </a>
-                  </p>
-                )}
-                {line && (
-                  <p className={`hint extension-status${active.has(ext.id) ? " on" : ""}`} aria-live="polite">
-                    {line}
-                  </p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="dialog-body">
+          {GROUPS.map((group) => (
+            <section key={group.title} aria-labelledby={`ext-group-${group.standard ? "std" : "ext"}`}>
+              <h3 id={`ext-group-${group.standard ? "std" : "ext"}`} className="extension-group">
+                {group.title}
+              </h3>
+              <p className="hint">{group.hint}</p>
+              <ul className="extension-list">
+                {BUILTIN_EXTENSIONS.filter((ext) => !!ext.standard === group.standard).map((ext) => {
+                  const line = status(ext.id);
+                  return (
+                    <li key={ext.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!disabled.has(ext.id)}
+                          disabled={checking !== null}
+                          onChange={(e) => void toggle(ext.id, e.target.checked)}
+                        />
+                        <strong>{ext.name}</strong>
+                      </label>
+                      <p className="hint">{ext.description}</p>
+                      {ext.firmware && (
+                        <p className="hint">
+                          Firmware:{" "}
+                          <a href={ext.firmware.url} target="_blank" rel="noreferrer">
+                            {ext.firmware.label}
+                          </a>
+                        </p>
+                      )}
+                      {line && (
+                        <p
+                          className={`hint extension-status${active.has(ext.id) ? " on" : ""}`}
+                          aria-live="polite"
+                        >
+                          {line}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
         <div className="dialog-actions">
           <button className="primary" onClick={onClose}>
             Done

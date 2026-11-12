@@ -43,7 +43,8 @@ export class LayerNames {
     const { keyboard, queue } = this.ctx;
     if (layer < 0 || layer >= keyboard.layers) throw new LayerNameError(`layer ${layer} does not exist`);
     const wanted = normalizeLayerName(name);
-    if (wanted === this.get(layer)) return;
+    const old = this.get(layer);
+    if (wanted === old) return;
     await keyboard.ensureUnlocked("Renaming a layer");
     const reply = vialSetLayerName.decode(await queue.request(vialSetLayerName.encode(layer, wanted)));
     if (!reply.ok) throw new LayerNameError(`the keyboard rejected the layer name (status ${reply.status})`);
@@ -52,6 +53,12 @@ export class LayerNames {
       throw new LayerNameError(`layer name did not verify: sent "${wanted}", read back "${check.name}"`);
     }
     this.values[layer] = wanted;
+    this.ctx.record({
+      label: old ? `Rename layer ${layer} from “${old}” to “${wanted}”` : `Name layer ${layer} “${wanted}”`,
+      undo: () => this.set(layer, old),
+      redo: () => this.set(layer, wanted),
+      isCurrent: () => this.get(layer) === wanted,
+    });
     this.ctx.changed();
   }
 }

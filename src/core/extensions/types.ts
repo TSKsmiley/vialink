@@ -8,6 +8,7 @@
 // needs a security design first: anything in the page has full WebHID access.
 
 import type { Keyboard } from "../keyboard.ts";
+import type { HistoryWrite } from "../history.ts";
 import type { RequestQueue } from "../transport/queue.ts";
 
 export interface ExtensionContext {
@@ -15,6 +16,12 @@ export interface ExtensionContext {
   readonly queue: RequestQueue;
   /** Tells subscribers of the keyboard that extension state changed. */
   changed(): void;
+  /**
+   * Records a write the board accepted in the keyboard's undo history. Call it
+   * after every write a user can take back, with undo/redo that go through the
+   * same write method (so validation, unlock checks and the queue apply).
+   */
+  record(write: HistoryWrite): void;
 }
 
 /** One write a .vil restore will make on behalf of an extension. */
@@ -39,6 +46,12 @@ export interface KeyboardExtension<State = unknown> {
   /** Human-readable name for the settings list. */
   readonly name: string;
   readonly description: string;
+  /**
+   * True for features of standard Vial firmware (macros, tap dance, …), which
+   * any Vial build may include; false or absent for extensions that need
+   * firmware beyond standard Vial (e.g. dynamic layer names).
+   */
+  readonly standard?: boolean;
   /** Where to get firmware that supports this extension, shown in the settings list. */
   readonly firmware?: { readonly label: string; readonly url: string };
   /**

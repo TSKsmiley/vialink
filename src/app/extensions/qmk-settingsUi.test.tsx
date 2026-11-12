@@ -90,7 +90,7 @@ describe("QMK settings panel", () => {
     expect(fw!.values.get(7)).toBe(300);
 
     fireEvent.click(screen.getByRole("button", { name: "Reset to defaults…" }));
-    expect(screen.getByText("Reset all settings to default values?")).toBeTruthy();
+    expect(screen.getByText("Reset all settings to default values? This cannot be undone.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     await waitFor(() => expect(onNotice).toHaveBeenCalled());
     expect(Object.fromEntries(fw!.values)).toEqual({ 2: 50, 7: 200, 21: 0, 22: 0 });

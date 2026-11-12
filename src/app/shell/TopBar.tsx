@@ -3,9 +3,8 @@
 // state, Undo/Redo, Layouts, Extensions and a "More" menu with the theme
 // switch and Disconnect.
 //
-// Phase 0 of the redesign: the device pill toggles the existing HID log (the
-// device side bar comes in phase 6), and Undo/Redo stay disabled until the
-// history lands in phase 1.
+// The device pill toggles the existing HID log until the device side bar
+// (redesign phase 6) replaces it.
 
 import {
   ArrowArcLeftIcon,
@@ -20,9 +19,11 @@ import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "../theme.ts";
 import { Button, DropdownMenu } from "../ui/index.ts";
+import type { HistoryControls } from "./useHistory.ts";
 
 interface Props {
   keyboard: Keyboard | null;
+  history: HistoryControls;
   /** Layout load/save menu, rendered when a keyboard is connected. */
   layouts?: ReactNode;
   showLog: boolean;
@@ -34,6 +35,7 @@ interface Props {
 
 export function TopBar({
   keyboard,
+  history,
   layouts,
   showLog,
   onToggleLog,
@@ -55,7 +57,7 @@ export function TopBar({
         </Button>
       )}
       <div className="flex-1" />
-      {keyboard && <HistoryButtons />}
+      {keyboard && <HistoryButtons controls={history} />}
       {keyboard && layouts}
       <Button onClick={onExtensions}>Extensions</Button>
       <DropdownMenu>
@@ -120,19 +122,28 @@ function DevicePill({
   );
 }
 
-/** Undo and Redo: placeholders until the history (phase 1) exists. */
-function HistoryButtons() {
+/** Undo and Redo, labelled with what they would change. */
+function HistoryButtons({ controls }: { controls: HistoryControls }) {
   return (
     <div role="group" aria-label="History" className="inline-flex items-center gap-1">
-      <Button icon={ArrowArcLeftIcon} disabled title="Nothing to undo (Ctrl+Z)">
+      <Button
+        icon={ArrowArcLeftIcon}
+        disabled={!controls.canUndo}
+        aria-label={controls.undoLabel ? `Undo: ${controls.undoLabel}` : "Undo"}
+        title={controls.undoLabel ? `Undo: ${controls.undoLabel} (Ctrl+Z)` : "Nothing to undo (Ctrl+Z)"}
+        onClick={controls.undo}
+      >
         <span className="max-sm:sr-only">Undo</span>
       </Button>
       <Button
         shape="square"
         icon={ArrowArcRightIcon}
-        disabled
-        aria-label="Redo"
-        title="Nothing to redo (Ctrl+Shift+Z)"
+        disabled={!controls.canRedo}
+        aria-label={controls.redoLabel ? `Redo: ${controls.redoLabel}` : "Redo"}
+        title={
+          controls.redoLabel ? `Redo: ${controls.redoLabel} (Ctrl+Shift+Z)` : "Nothing to redo (Ctrl+Shift+Z)"
+        }
+        onClick={controls.redo}
       />
     </div>
   );
@@ -150,7 +161,7 @@ function LockControls({ keyboard, onError }: { keyboard: Keyboard; onError: (m: 
       variant="ghost"
       icon={LockSimpleOpenIcon}
       onClick={() => void keyboard.lock().catch((e) => onError(errorMessage(e)))}
-      title="The keyboard is unlocked. Click to lock it again."
+      title="The keyboard is unlocked. Click to lock it again (not part of undo)."
     >
       Unlocked
     </Button>
@@ -159,7 +170,7 @@ function LockControls({ keyboard, onError }: { keyboard: Keyboard; onError: (m: 
       variant="ghost"
       icon={LockSimpleIcon}
       onClick={() => void keyboard.ensureUnlocked("Unlocking").catch(() => undefined)}
-      title="The keyboard is locked. Click to unlock it."
+      title="The keyboard is locked. Click to unlock it (not part of undo)."
     >
       Locked
     </Button>

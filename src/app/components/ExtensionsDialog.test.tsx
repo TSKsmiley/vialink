@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // SPDX-License-Identifier: GPL-2.0-or-later
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { useState } from "react";
@@ -48,6 +48,24 @@ async function klor() {
 }
 
 describe("Extensions dialog", () => {
+  it("lists standard Vial features apart from non-standard extensions", () => {
+    render(<Harness keyboard={null} />);
+    const standard = screen.getByRole("region", { name: "Standard Vial" });
+    const other = screen.getByRole("region", { name: "Non-standard extensions" });
+    for (const name of [
+      "Macros",
+      "Tap dance",
+      "Combos",
+      "Key overrides",
+      "Alt repeat keys",
+      "QMK settings",
+    ]) {
+      expect(within(standard).getByRole("checkbox", { name })).toBeTruthy();
+    }
+    expect(within(other).getByRole("checkbox", { name: "Layer names" })).toBeTruthy();
+    expect(within(other).queryByRole("checkbox", { name: "Macros" })).toBeNull();
+  });
+
   it("links to the firmware an extension needs", () => {
     render(<Harness keyboard={null} />);
     const link = screen.getByRole("link", { name: "Theis194/vial-qmk" });

@@ -128,7 +128,15 @@ export class Macros {
       const chunk = data.slice(off, off + BUFFER_FETCH_CHUNK);
       await this.ctx.queue.request(viaMacroSetBuffer.encode(off, chunk));
     }
-    this.data = data.slice();
+    const old = this.data;
+    const now = data.slice();
+    this.data = now;
+    this.ctx.record({
+      label: "Save macros",
+      undo: () => this.writeBuffer(old),
+      redo: () => this.writeBuffer(now),
+      isCurrent: () => equalBytes(this.data, now),
+    });
     this.ctx.changed();
   }
 
@@ -162,6 +170,7 @@ function macrosFromFile(value: unknown, macros: Macros): MacroAction[][] {
 
 export const macrosExtension: KeyboardExtension<Macros> = {
   id: "macros",
+  standard: true,
   name: "Macros",
   description: "Edit the keyboard's dynamic macros (M0, M1, ...) and keep them in .vil files.",
 

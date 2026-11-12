@@ -271,22 +271,28 @@ export function planVilRestore(kb: Keyboard, file: VilFile): RestorePlan {
   };
 }
 
-/** Applies a plan to the board, one write at a time. */
+/**
+ * Applies a plan to the board, one write at a time. ViaLink addition: the
+ * writes are one undo history entry (`label`, e.g. "Load daily.vil").
+ */
 export async function applyVilRestore(
   kb: Keyboard,
   plan: RestorePlan,
   onProgress?: (done: number, total: number) => void,
+  label = "Load layout",
 ): Promise<void> {
   const total = plan.ops.length;
   onProgress?.(0, total);
-  for (let i = 0; i < total; i++) {
-    const op = plan.ops[i];
-    if (op.kind === "key") await kb.setKey(op.layer, op.row, op.col, op.code);
-    else if (op.kind === "encoder") await kb.setEncoder(op.layer, op.index, op.direction, op.code);
-    else if (op.kind === "layoutOptions") await kb.setLayoutOptions(op.value);
-    else await op.apply();
-    onProgress?.(i + 1, total);
-  }
+  await kb.history.group(label, async () => {
+    for (let i = 0; i < total; i++) {
+      const op = plan.ops[i];
+      if (op.kind === "key") await kb.setKey(op.layer, op.row, op.col, op.code);
+      else if (op.kind === "encoder") await kb.setEncoder(op.layer, op.index, op.direction, op.code);
+      else if (op.kind === "layoutOptions") await kb.setLayoutOptions(op.value);
+      else await op.apply();
+      onProgress?.(i + 1, total);
+    }
+  });
 }
 
 function toKeycode(table: KeycodeTable, entry: unknown, unknown: Set<string>): number | null {

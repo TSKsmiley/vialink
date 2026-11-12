@@ -85,6 +85,13 @@ export class TapDance {
     const reply = vialTapDanceSet.decode(await queue.request(vialTapDanceSet.encode(idx, copy)));
     if (!reply.ok) throw new TapDanceError(`the keyboard rejected tap dance ${idx} (status ${reply.status})`);
     this.values[idx] = copy;
+    const old: TapDanceEntry = { ...current };
+    this.ctx.record({
+      label: `Tap dance TD ${idx}`,
+      undo: () => this.set(idx, old),
+      redo: () => this.set(idx, copy),
+      isCurrent: () => tapDanceEntriesEqual(this.get(idx), copy),
+    });
     this.ctx.changed();
   }
 
@@ -137,6 +144,7 @@ export class TapDance {
 /** True when the reply is the request unchanged: no handler answered it (see the header). */
 export const tapDanceExtension: KeyboardExtension<TapDance> = {
   id: "tap-dance",
+  standard: true,
   name: "Tap dance",
   description: "Keys that do different things when tapped, held, double-tapped or tapped then held (TD(n)).",
 

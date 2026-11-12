@@ -117,8 +117,16 @@ export class AltRepeatKeys {
     if (!reply.ok) {
       throw new AltRepeatKeyError(`the keyboard rejected alt repeat key ${idx + 1} (status ${reply.status})`);
     }
+    const oldVil = this.vilKeycodes[idx];
     this.values[idx] = wanted;
     this.vilKeycodes[idx] = vilKeycodes ? { ...vilKeycodes } : undefined;
+    const old = { ...current };
+    this.ctx.record({
+      label: `Alt repeat key ${idx + 1}: ${keyboard.codeName(wanted.keycode)} → ${keyboard.codeName(wanted.altKeycode)}`,
+      undo: () => this.set(idx, old, oldVil),
+      redo: () => this.set(idx, wanted, vilKeycodes),
+      isCurrent: () => altRepeatKeyEntriesEqual(this.get(idx), wanted),
+    });
     this.ctx.changed();
   }
 
@@ -172,6 +180,7 @@ export class AltRepeatKeys {
 
 export const altRepeatKeyExtension: KeyboardExtension<AltRepeatKeys> = {
   id: "alt-repeat-key",
+  standard: true,
   name: "Alt repeat keys",
   description:
     "Pairs of keys for QMK's Alt Repeat Key: after the last key, the alt repeat key sends its alternate.",

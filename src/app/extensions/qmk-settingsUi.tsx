@@ -163,7 +163,7 @@ function QmkSettingsPanel({ keyboard, onError, onNotice }: PanelProps) {
       <div className="qmk-settings-actions">
         {confirming ? (
           <>
-            <span>Reset all settings to default values?</span>
+            <span>Reset all settings to default values? This cannot be undone.</span>
             <button className="primary" onClick={() => void reset()} disabled={busy}>
               Reset
             </button>

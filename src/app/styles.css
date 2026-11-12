@@ -77,9 +77,7 @@ h3 {
 p {
   margin: 0.5em 0;
 }
-.legacy-view ul,
-.legacy-view ol,
-.dialog ul {
+:where(.legacy-view, .dialog) :where(ul, ol) {
   list-style: revert;
   padding-left: 1.5em;
 }
@@ -585,6 +583,10 @@ button.danger {
 .extension-status.on {
   color: var(--text);
 }
-.dialog-body.extension-list li:first-child {
-  border-top: none;
+.extension-group {
+  margin: 14px 0 0;
+  font-size: 0.95rem;
+}
+.extension-group + .hint {
+  margin: 2px 0 6px;
 }

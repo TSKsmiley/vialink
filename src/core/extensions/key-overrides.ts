@@ -196,12 +196,20 @@ export class KeyOverrides {
       throw new KeyOverrideError(`the keyboard rejected key override ${index + 1} (status ${reply.status})`);
     }
     this.values[index] = entry;
+    const old = { ...current };
+    this.ctx.record({
+      label: `Key override ${index + 1}: ${this.describe(entry)}`,
+      undo: () => this.set(index, old),
+      redo: () => this.set(index, entry),
+      isCurrent: () => sameKeyOverride(this.get(index), entry),
+    });
     this.ctx.changed();
   }
 }
 
 export const keyOverridesExtension: KeyboardExtension<KeyOverrides> = {
   id: "key-overrides",
+  standard: true,
   name: "Key overrides",
   description: "Replace a key while certain modifiers are held (QMK key overrides). Needs Vial protocol 5.",
 
