@@ -29,7 +29,11 @@ import { activeUi } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
+import { PasteFromText } from "./PasteFromText.tsx";
 import { PastePreview, type PasteSource } from "./PastePreview.tsx";
+import { layerSharingExtension } from "../../core/extensions/layer-sharing.ts";
+import { layerNamesExtension } from "../../core/extensions/layerNames.ts";
+import { encodeLayer, isShareText } from "../../core/layer-share.ts";
 
 type Target = NonNullable<Selection>;
 
@@ -62,10 +66,11 @@ const sameTarget = (a: Target, b: Target) =>
 interface Props {
   keyboard: Keyboard;
   onError: (message: string) => void;
+  onNotice: (message: string) => void;
   locked: boolean;
 }
 
-export function KeymapView({ keyboard, onError, locked }: Props) {
+export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
   useKeyboardVersion(keyboard);
   const [layer, setLayer] = useState(0);
   const [peek, setPeek] = useState<number | null>(null);
@@ -74,6 +79,9 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
   const busy = writing || locked;
   const [clipboard, setClipboard] = useState<PasteSource | null>(null);
   const [pasting, setPasting] = useState<{ source: PasteSource; target: number } | null>(null);
+  const [importing, setImporting] = useState<{ text: string } | null>(null);
+  const sharing = keyboard.extension(layerSharingExtension) !== null;
+  const names = keyboard.extension(layerNamesExtension);
   const [autoAdvance, setAutoAdvance] = useState(() =>
     load(ADVANCE_KEY, false, (v): v is boolean => typeof v === "boolean"),
   );
@@ -133,11 +141,31 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
     });
   };
   const pasteOnto = (l: number) => {
-    if (clipboard) setPasting({ source: clipboard, target: l });
+    if (clipboard) {
+      setImporting(null);
+      setPasting({ source: clipboard, target: l });
+    }
   };
+  const copyAsText = (l: number) =>
+    void (async () => {
+      try {
+        const text = await encodeLayer(keyboard, l, named(l));
+        await navigator.clipboard.writeText(text);
+        onNotice(
+          `Copied ${layerName(l)} as text (${text.length} characters). Send it in a chat; it pastes into ViaLink with Ctrl+V.`,
+        );
+      } catch (err) {
+        onError(`Could not copy the layer as text: ${errorMessage(err)}`);
+      }
+    })();
   const emptyLayer = firstEmptyLayer(keyboard, (l) => named(l) !== null);
   const menu = {
     onCopy: (l: number) => copy(l),
+    onCopyText: copyAsText,
+    onPasteText: () => {
+      setPasting(null);
+      setImporting({ text: "" });
+    },
     onPaste: clipboard ? pasteOnto : undefined,
     canDuplicate: emptyLayer !== null,
     onDuplicate: (l: number) =>
@@ -154,26 +182,42 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
       void run(() => applyLayerWrites(keyboard, l, planClear(keyboard, l), `Clear ${layerName(l)}`)),
   };
 
-  // Ctrl+C / Ctrl+V on the keymap: the selected keys, or the whole layer.
+  // Ctrl+C copies the selected keys, or the whole layer; Ctrl+Shift+C copies the layer as text.
   useEffect(() => {
+    if (!sharing) return;
+    const editable = (t: HTMLElement | null) =>
+      !!t &&
+      (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest('[role="dialog"]'));
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
-      const key = e.key.toLowerCase();
-      if (key !== "c" && key !== "v") return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "c") return;
+      if (editable(e.target as HTMLElement | null)) return;
+      if (window.getSelection()?.toString()) return; // copying page text
+      e.preventDefault();
+      if (e.shiftKey) copyAsText(layer);
+      else copy(layer, targets.length > 0 ? targets : undefined);
+    };
+    // Ctrl+V: shared layer text anywhere opens the import; otherwise the copied layer pastes here.
+    // The paste event carries the text without a clipboard permission prompt.
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text/plain") ?? "";
       const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      if (t?.closest('[role="dialog"]')) return;
-      if (key === "c") {
-        if (window.getSelection()?.toString()) return; // copying page text
+      if (isShareText(text)) {
+        if (t?.id && t.closest('[aria-label="Paste a layer from text"], [aria-label="Paste preview"]'))
+          return;
         e.preventDefault();
-        copy(layer, targets.length > 0 ? targets : undefined);
-      } else if (clipboard) {
+        setImporting({ text: text.trim() });
+        setPasting(null);
+      } else if (clipboard && !editable(t)) {
         e.preventDefault();
         pasteOnto(layer);
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("paste", onPaste);
+    };
   });
 
   const write = (t: Target, value: number) =>
@@ -260,14 +304,28 @@ export function KeymapView({ keyboard, onError, locked }: Props) {
           layerName={named}
           actions={actions}
           onError={onError}
-          menu={menu}
+          menu={sharing ? menu : undefined}
           copied={clipboard ? { name: clipboard.name, ...snapshotCounts(clipboard.snapshot) } : null}
           onClearCopied={() => setClipboard(null)}
           pasteTarget={pasting?.target ?? null}
         />
       </div>
 
-      {pasting ? (
+      {importing ? (
+        <PasteFromText
+          key={importing.text}
+          keyboard={keyboard}
+          initialText={importing.text}
+          defaultTarget={firstEmptyLayer(keyboard, (l) => named(l) !== null) ?? layer}
+          layerName={layerName}
+          setLayerName={names ? (l, n) => names.set(l, n) : undefined}
+          onError={onError}
+          onClose={(onto) => {
+            setImporting(null);
+            if (onto !== null) setLayer(onto);
+          }}
+        />
+      ) : pasting ? (
         <PastePreview
           keyboard={keyboard}
           source={pasting.source}

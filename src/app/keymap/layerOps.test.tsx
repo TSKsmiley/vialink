@@ -49,7 +49,7 @@ async function menuItem(layerTitle: string, item: string | RegExp) {
 describe("layer operations", () => {
   it("copies a layer and pastes it with a preview, as one undo step", async () => {
     const { sim, kb, p, q, onError } = await setup();
-    await menuItem("Nav", /^Copy layer/);
+    await menuItem("Nav", "Copy layerCtrl+C");
     expect(screen.getByText("Copied")).toBeTruthy();
     await menuItem("Raise", /Paste onto this layer/);
 
@@ -81,7 +81,7 @@ describe("layer operations", () => {
     expect(screen.getByText("1 key from Raise")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "0: Base" }));
-    fireEvent.keyDown(document.body, { key: "v", ctrlKey: true });
+    fireEvent.paste(document.body, { clipboardData: { getData: () => "" } });
     const options = await screen.findByRole("complementary", { name: "Paste options" });
     fireEvent.click(within(options).getByRole("button", { name: /^Paste 1 change$/ }));
     await waitFor(() => expect(sim.getKeycode(0, q.row, q.col)).toBe(0x05));
@@ -98,5 +98,34 @@ describe("layer operations", () => {
     // Layer 2 (Raise) is named, so the first empty one is 3; the view opens it.
     await waitFor(() => expect(sim.getKeycode(3, p.row, p.col)).toBe(0x04));
     expect(screen.getByRole("tab", { name: "3: Layer 3" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("shares a layer as text and pastes it back from Ctrl+V anywhere", async () => {
+    const { sim, kb, p } = await setup();
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (t: string) => void (copied = t) },
+    });
+    await menuItem("Nav", /^Copy layer as text/);
+    await waitFor(() => expect(copied).toMatch(/^vialink:layer:1:/));
+
+    fireEvent.paste(document.body, { clipboardData: { getData: () => copied } });
+    expect(await screen.findByText("Same keyboard.")).toBeTruthy();
+    expect(screen.getByText("Same layout options.")).toBeTruthy();
+    const options = screen.getByRole("complementary", { name: "Paste options" });
+    // Defaults: the first empty, unnamed layer (3), replace the whole layer.
+    expect((within(options).getByLabelText(/onto/) as HTMLSelectElement).value).toBe("3");
+    fireEvent.click(within(options).getByRole("button", { name: /^Paste \d+ changes?$/ }));
+    await waitFor(() => expect(sim.getKeycode(3, p.row, p.col)).toBe(0x04));
+    expect(kb.history.nextUndo?.label).toMatch(/^Paste “Nav” from the text onto Layer 3/);
+  });
+
+  it("refuses text from another keyboard", async () => {
+    await setup();
+    fireEvent.paste(document.body, {
+      clipboardData: { getData: () => "vialink:layer:1:klor:not-really" },
+    });
+    expect(await screen.findByRole("alert")).toBeTruthy();
   });
 });

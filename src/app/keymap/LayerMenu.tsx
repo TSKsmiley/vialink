@@ -13,6 +13,8 @@ export interface LayerMenuActions {
   onDuplicate(layer: number): void;
   onSwap(layer: number, other: number): void;
   onClear(layer: number): void;
+  onCopyText(layer: number): void;
+  onPasteText(): void;
   /** Whether an empty layer exists to duplicate into. */
   canDuplicate: boolean;
 }
@@ -38,6 +40,8 @@ export function LayerMenu({
   onDuplicate,
   onSwap,
   onClear,
+  onCopyText,
+  onPasteText,
   canDuplicate,
 }: Props) {
   return (
@@ -77,6 +81,12 @@ export function LayerMenu({
               ))}
           </DropdownMenu.SubContent>
         </DropdownMenu.Sub>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item onClick={() => onCopyText(layer)}>
+          Copy layer as text
+          <DropdownMenu.Shortcut>Ctrl+Shift+C</DropdownMenu.Shortcut>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item onClick={onPasteText}>Paste layer from text…</DropdownMenu.Item>
         <DropdownMenu.Separator />
         <DropdownMenu.Item variant="danger" onClick={() => onClear(layer)}>
           Clear layer ({layer === 0 ? "all empty" : "all transparent"})

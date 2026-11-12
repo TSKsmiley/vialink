@@ -46,7 +46,7 @@ export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
         ) : panel ? (
           <panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} />
         ) : (
-          <KeymapView keyboard={keyboard} onError={onError} locked={locked} />
+          <KeymapView keyboard={keyboard} onError={onError} onNotice={onNotice} locked={locked} />
         )}
       </div>
     </div>

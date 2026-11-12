@@ -88,7 +88,7 @@ describe("Extensions dialog", () => {
     fireEvent.click(macros);
     await waitFor(() => expect(kb.extension(macrosExtension)).not.toBeNull());
     // The probe order is kept, as after a fresh connect.
-    expect(kb.activeExtensions.map((a) => a.extension.id)).toEqual(["macros"]);
+    expect(kb.activeExtensions.map((a) => a.extension.id)).toEqual(["macros", "layer-sharing"]);
   });
 
   it("closes on Escape", () => {
