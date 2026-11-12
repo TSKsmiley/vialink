@@ -4,7 +4,7 @@
 // selected option variant is shifted onto variant 0's top-left, and the result
 // is normalized to start at (0, 0). Adapted from Vialite's
 // src/components/keymap/layout/layoutGeometry.ts (https://github.com/tcyeee/vialite, GPL-2.0).
-// Modified for vial-ts, November 2026.
+// Modified for ViaLink, November 2026.
 
 import type { PhysicalEncoder, PhysicalKey, PhysicalShape } from "./definition.ts";
 

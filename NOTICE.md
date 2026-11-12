@@ -1,17 +1,17 @@
 # Credits and third-party code
 
-vial-ts's own code is free software under the GNU General Public License,
+ViaLink's own code is free software under the GNU General Public License,
 version 2 or (at your option) any later version (`GPL-2.0-or-later`).
 
 The files adapted from Vialite (listed below) are under GPL version 2 only
 (`GPL-2.0-only`), because Vialite is licensed under GPL-2.0 without the
-"or any later version" option. vial-ts as a whole, including the built app, is
+"or any later version" option. ViaLink as a whole, including the built app, is
 therefore distributed under **GPL version 2**. Each file's
 `SPDX-License-Identifier` header gives its own licence. See [LICENSE](LICENSE).
 
 ## Vial — vial-gui
 
-vial-ts is a TypeScript port of the protocol and keycode logic of
+ViaLink is a TypeScript port of the protocol and keycode logic of
 [vial-gui](https://github.com/vial-kb/vial-gui), the desktop configurator of the
 [Vial](https://get.vial.today/) project (GPL-2.0-or-later). vial-gui's Python
 source is treated as the specification; ported files say which upstream file
@@ -36,9 +36,9 @@ The layer-names extension follows the `dynamic-layer-names` branch of
 ## Vialite
 
 [Vialite](https://github.com/tcyeee/vialite) by tcyeee (GPL-2.0) is a web
-configurator for Vial keyboards that also ports vial-gui to TypeScript. vial-ts
+configurator for Vial keyboards that also ports vial-gui to TypeScript. ViaLink
 adapts these parts of it; each file is `GPL-2.0-only` and notes that it was
-modified for vial-ts (November 2026):
+modified for ViaLink (November 2026):
 
 - `src/core/transport/webhid.ts`: reply-sequence tracking from `src/protocol/transport.ts`
 - `src/core/definition/kle.ts`: from `src/protocol/kleSerial.ts`

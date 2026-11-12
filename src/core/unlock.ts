@@ -6,7 +6,7 @@
 //
 // The firmware has no "cancel": stopping the polls leaves the unlock in
 // progress, and starting again resets the counter. vial-gui forces a pending
-// unlock to finish on connect; vial-ts offers it but lets the user cancel.
+// unlock to finish on connect; ViaLink offers it but lets the user cancel.
 
 import { vialGetUnlockStatus, vialUnlockPoll, vialUnlockStart } from "./protocol/commands.ts";
 import type { RequestQueue } from "./transport/queue.ts";

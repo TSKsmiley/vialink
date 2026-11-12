@@ -13,6 +13,7 @@ export interface TraceExchange {
 }
 
 export interface Trace {
+  /** Format id from the project's old name (vial-ts); kept so recorded traces stay valid. */
   format: "vial-ts-trace";
   version: 1;
   device: DeviceInfo;
@@ -38,7 +39,7 @@ export function reportFromHex(hex: string): Uint8Array {
 export function parseTrace(text: string): Trace {
   const data = JSON.parse(text) as Partial<Trace>;
   if (data.format !== "vial-ts-trace" || data.version !== 1 || !Array.isArray(data.exchanges)) {
-    throw new Error('not a vial-ts trace (expected format "vial-ts-trace", version 1)');
+    throw new Error('not a ViaLink trace (expected format "ViaLink-trace", version 1)');
   }
   for (const ex of data.exchanges) {
     if (typeof ex?.request !== "string" || typeof ex?.reply !== "string") {

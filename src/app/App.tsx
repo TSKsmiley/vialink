@@ -98,7 +98,7 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>vial-ts</h1>
+        <h1>ViaLink</h1>
         {kb && (
           <dl className="device-info">
             <dt>Keyboard</dt>

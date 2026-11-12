@@ -3,7 +3,7 @@
 // labels a configurator needs. Adapted from Vialite's src/protocol/kleSerial.ts
 // (https://github.com/tcyeee/vialite, GPL-2.0), itself ported from vial-gui's
 // kle_serial.py, which is based on https://github.com/ijprest/kle-serial.
-// Modified for vial-ts, November 2026.
+// Modified for ViaLink, November 2026.
 
 export interface KleKey {
   /** Twelve label slots in KLE's canonical order; labels[0] is top-left. */

@@ -3,7 +3,7 @@
 // save_layout()/restore_layout(). Ideas adapted from Vialite's
 // src/protocol/vilFile.ts (https://github.com/tcyeee/vialite, GPL-2.0): the uid
 // is handled as a BigInt from the raw text, and "macro" is left out on save;
-// detectSkippedFeatures() is adapted from it. Modified for vial-ts, November 2026.
+// detectSkippedFeatures() is adapted from it. Modified for ViaLink, November 2026.
 //
 // This file reads and writes the keymap fields. macro, tap_dance, combo,
 // key_override, alt_repeat_key, settings and layer_names belong to extensions
@@ -33,7 +33,7 @@ export interface VilFile {
   vialProtocol: number | null;
   /** The whole parsed object, for extensions that own other fields. */
   raw: Readonly<Record<string, unknown>>;
-  /** Fields with real data that core vial-ts does not apply; extensions may handle some. */
+  /** Fields with real data that core ViaLink does not apply; extensions may handle some. */
   unhandledFields: UnhandledField[];
 }
 
@@ -202,7 +202,7 @@ export interface RestorePlan {
   unknownKeycodes: string[];
   /** Positions in the file the board does not have (extra layers, keys or encoders). */
   ignoredEntries: number;
-  /** Features in the file that neither core vial-ts nor an active extension applies. */
+  /** Features in the file that neither core ViaLink nor an active extension applies. */
   skippedFeatures: string[];
 }
 

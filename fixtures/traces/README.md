@@ -1,6 +1,6 @@
 # HID traces
 
-Traces recorded from real keyboards go here. Record one by connecting the keyboard in vial-ts,
+Traces recorded from real keyboards go here. Record one by connecting the keyboard in ViaLink,
 opening the HID log, doing the steps below, and pressing **Export trace**. Tests replay them with
 `ReplayTransport` (see `src/core/transport/replay.ts`).
 

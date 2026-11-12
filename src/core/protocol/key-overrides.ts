@@ -10,7 +10,7 @@
 //   trigger_mods u8, negative_mod_mask u8, suppressed_mods u8, options u8.
 // - get: "BBBB" FE 0D 05 <idx> → reply byte 0 = status (0 = ok), entry at [1, 11).
 // - set: "BBBB" FE 0D 06 <idx> + entry → reply byte 0 = status.
-// vial-gui ignores the set reply; vial-ts checks its status byte (see extension).
+// vial-gui ignores the set reply; ViaLink checks its status byte (see extension).
 
 import type { Command } from "./commands.ts";
 import * as C from "./constants.ts";

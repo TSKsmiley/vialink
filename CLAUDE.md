@@ -1,4 +1,4 @@
-# vial-ts
+# ViaLink
 
 Browser-based Vial keyboard configurator: a TypeScript port of vial-gui's protocol and keycode
 logic with a React UI, talking to keyboards over WebHID.
@@ -40,7 +40,7 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
   call out deviations.
   - Strict where compatibility depends on it: bytes on the wire (command layouts, byte order,
     struct sizes, status bytes) and the `.vil` format must match vial-gui, so the firmware and
-    desktop Vial keep working with what vial-ts reads and writes.
+    desktop Vial keep working with what ViaLink reads and writes.
   - Loose above that: UI, validation, error handling, safety checks and code structure may improve
     on vial-gui when something can be better (e.g. cancellable unlock, truncating layer names at a
     character boundary). Note each such difference in the file's header comment.

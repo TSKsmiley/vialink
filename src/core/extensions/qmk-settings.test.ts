@@ -183,7 +183,7 @@ describe("QMK settings extension", () => {
     const text = saveVil(kb);
     // json.dumps({1: 0, 2: 50, ...}) writes the int keys as strings.
     expect(text).toContain('"settings": {"1": 0, "2": 50, "7": 200, "20": 5, "21": 129, "22": 0}');
-    // Same place as save_layout(): after via_protocol (and the dynamic fields vial-ts leaves out).
+    // Same place as save_layout(): after via_protocol (and the dynamic fields ViaLink leaves out).
     expect(text.indexOf('"via_protocol"')).toBeLessThan(text.indexOf('"settings"'));
     expect(text.endsWith("}}")).toBe(true);
   });

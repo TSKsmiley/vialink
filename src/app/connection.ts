@@ -120,7 +120,7 @@ export async function demoTransport(): Promise<Transport> {
   installMacroSimulator(sim, {
     count: 16,
     memory: 1024,
-    contents: new TextEncoder().encode("Hello from vial-ts\0"),
+    contents: new TextEncoder().encode("Hello from ViaLink\0"),
   });
   installTapDanceSimulator(sim, { count: 4, entries: [{ onTap: 0x29, onHold: 0x39 }] }); // Esc / Caps Lock
   installCombos(sim, { count: 8, entries: [[0x0d, 0x0e, 0, 0, 0x29]] }); // J + K = Esc

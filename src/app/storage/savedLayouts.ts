@@ -30,7 +30,7 @@ export interface SavedLayoutStore {
 export class StorageUnavailableError extends Error {
   constructor(cause?: unknown) {
     super(
-      "This browser is not letting vial-ts store data (private window or blocked site data?). " +
+      "This browser is not letting ViaLink store data (private window or blocked site data?). " +
         "Use Save .vil to keep a file instead.",
     );
     this.name = "StorageUnavailableError";
@@ -38,6 +38,7 @@ export class StorageUnavailableError extends Error {
   }
 }
 
+// Named after the project's old name, vial-ts; kept so layouts saved earlier stay readable.
 const DB_NAME = "vial-ts";
 const DB_VERSION = 1;
 const STORE = "layouts";

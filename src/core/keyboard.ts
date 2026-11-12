@@ -46,7 +46,7 @@ export class UnsupportedProtocolError extends Error {
   constructor(viaProtocol: number, vialProtocol: number, viaOnly: boolean) {
     super(
       viaOnly
-        ? `This keyboard does not run Vial firmware (VIA protocol ${viaProtocol}). vial-ts only supports Vial keyboards.`
+        ? `This keyboard does not run Vial firmware (VIA protocol ${viaProtocol}). ViaLink only supports Vial keyboards.`
         : `Unsupported protocol version: VIA ${viaProtocol}, Vial ${vialProtocol}. Update the keyboard's Vial firmware.`,
     );
     this.name = "UnsupportedProtocolError";

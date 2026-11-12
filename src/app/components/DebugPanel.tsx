@@ -61,7 +61,7 @@ export function DebugPanel({ queue }: { queue: RequestQueue | null }) {
     const note = window.prompt("Describe what this session did (optional):") ?? undefined;
     const trace = queue.exportTrace(note || undefined);
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    downloadText(`vial-ts-trace-${stamp}.json`, JSON.stringify(trace, null, 1));
+    downloadText(`vialink-trace-${stamp}.json`, JSON.stringify(trace, null, 1));
   };
 
   return (

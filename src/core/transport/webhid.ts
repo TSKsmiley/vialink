@@ -2,7 +2,7 @@
 // WebHID transport. The reply-sequence tracking is adapted from Vialite's
 // src/protocol/transport.ts (https://github.com/tcyeee/vialite, GPL-2.0);
 // retries and serialization live in RequestQueue instead of here.
-// Modified for vial-ts, November 2026.
+// Modified for ViaLink, November 2026.
 //
 // Report ID convention (same as Vialite and vial-web): the board uses report
 // ID 0, and sendReport(0, payload) / event.data carry the bare 32-byte

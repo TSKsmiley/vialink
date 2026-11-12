@@ -1,10 +1,11 @@
-# vial-ts
+# ViaLink
 
 A browser-based configurator for [Vial](https://get.vial.today/) keyboards. It talks to the
 keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera) with nothing
-to install.
+to install. Try it at https://tsksmiley.github.io/vial-ts/ (the project was called vial-ts
+before; the address follows the GitHub repo name).
 
-vial-ts is a TypeScript port of [vial-gui](https://github.com/vial-kb/vial-gui)'s protocol and
+ViaLink is a TypeScript port of [vial-gui](https://github.com/vial-kb/vial-gui)'s protocol and
 keycode logic with a new React UI, and borrows code from [Vialite](https://github.com/tcyeee/vialite).
 See [NOTICE.md](NOTICE.md) for what comes from where.
 
@@ -66,6 +67,6 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
 
 ## Licence
 
-vial-ts's own code is GPL-2.0-or-later, as vial-gui. A few files adapted from Vialite are
-GPL-2.0-only, so vial-ts as a whole is distributed under GPL version 2. See [LICENSE](LICENSE)
+ViaLink's own code is GPL-2.0-or-later, as vial-gui. A few files adapted from Vialite are
+GPL-2.0-only, so ViaLink as a whole is distributed under GPL version 2. See [LICENSE](LICENSE)
 and [NOTICE.md](NOTICE.md) for which files those are.

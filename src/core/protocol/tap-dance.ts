@@ -8,7 +8,7 @@
 // custom_tapping_term, each a little-endian u16.
 // - get: "BBBB" FE 0D 01 <idx> → reply status (0 = ok) then the 10-byte entry.
 // - set: "BBBB" FE 0D 02 <idx> + "<HHHHH" → reply status (0 = ok).
-// vial-gui ignores the set status; vial-ts decodes it so callers can check it.
+// vial-gui ignores the set status; ViaLink decodes it so callers can check it.
 
 import type { Command } from "./commands.ts";
 import * as C from "./constants.ts";

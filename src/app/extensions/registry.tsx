@@ -64,6 +64,7 @@ export function activeUi(keyboard: Keyboard): AppExtension[] {
 
 // ── Enabled/disabled setting (per browser) ──────────────────────────────────
 
+// Old project name (vial-ts), kept so existing settings carry over.
 const STORAGE_KEY = "vial-ts.disabledExtensions";
 
 export function loadDisabledExtensions(): Set<string> {
