@@ -48,6 +48,18 @@ modified for ViaLink (November 2026):
 - `src/core/vil.ts`: BigInt uid handling, macro omission and skipped-feature
   detection (`detectSkippedFeatures`) from `src/protocol/vilFile.ts`
 
+## Kumo
+
+The interface is built with [Kumo](https://github.com/cloudflare/kumo),
+Cloudflare's React component library (MIT licence, Copyright (c) Cloudflare,
+Inc.), pinned to an exact version in `package.json`. ViaLink uses it as an npm
+dependency, together with [Base UI](https://base-ui.com) (MIT, bundled by
+Kumo), [Tailwind CSS](https://tailwindcss.com) (MIT) and
+[Phosphor Icons](https://phosphoricons.com) (MIT). The components ViaLink uses
+are wrapped in `src/app/ui/`; `src/app/theme.css` overrides Kumo's colour
+tokens with ViaLink's mint accent. No Kumo source is copied into this
+repository.
+
 ## Fixtures
 
 - `fixtures/definitions/klor.vial.json`: from

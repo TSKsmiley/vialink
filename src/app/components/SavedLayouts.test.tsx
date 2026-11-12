@@ -44,11 +44,17 @@ async function setup() {
   return { sim, kb, onError, onNotice };
 }
 
+/** Opens the Layouts menu and picks an entry. */
+async function menu(item: string) {
+  fireEvent.click(screen.getByRole("button", { name: /Layouts/ }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: item }));
+}
+
 describe("saving layouts in the browser", () => {
   it("saves, then restores the board from the saved copy", async () => {
     const { sim, kb, onError, onNotice } = await setup();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save in browser" }));
+    await menu("Save in browser…");
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Daily" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onNotice).toHaveBeenCalled());
@@ -56,7 +62,7 @@ describe("saving layouts in the browser", () => {
 
     await kb.setKey(0, 0, 0, 0x14); // change KC_A to KC_Q after saving
 
-    fireEvent.click(screen.getByRole("button", { name: "Saved layouts" }));
+    await menu("Saved layouts…");
     const dialog = await screen.findByRole("dialog", { name: "Saved layouts" });
     expect(await within(dialog).findByText("This keyboard")).toBeTruthy();
     fireEvent.click(await within(dialog).findByRole("button", { name: "Load Daily" }));
@@ -70,12 +76,12 @@ describe("saving layouts in the browser", () => {
 
   it("renames and deletes saved layouts", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("button", { name: "Save in browser" }));
+    await menu("Save in browser…");
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Old name" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByLabelText("Name")).toBeNull());
 
-    fireEvent.click(screen.getByRole("button", { name: "Saved layouts" }));
+    await menu("Saved layouts…");
     fireEvent.click(await screen.findByRole("button", { name: "Rename Old name" }));
     fireEvent.change(screen.getByLabelText("New name for Old name"), { target: { value: "New name" } });
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));

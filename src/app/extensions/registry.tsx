@@ -33,6 +33,8 @@ export interface ExtensionPanel {
   id: string;
   title: string;
   Component: ComponentType<PanelProps>;
+  /** How many entries are set up, shown next to the title in the sidebar; null shows nothing. */
+  count?(keyboard: Keyboard): number | null;
 }
 
 export interface AppExtension {

@@ -11,13 +11,16 @@ import {
   webHidTransport,
   type Connection,
 } from "./connection.ts";
+import { WarningIcon } from "@phosphor-icons/react";
 import { DebugPanel } from "./components/DebugPanel.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
 import { UnlockDialog } from "./components/UnlockDialog.tsx";
+import { VilControls } from "./components/VilControls.tsx";
 import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
-import { errorMessage, useKeyboardVersion } from "./hooks.ts";
-import type { Keyboard } from "../core/keyboard.ts";
+import { errorMessage } from "./hooks.ts";
+import { TopBar } from "./shell/TopBar.tsx";
+import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 
 type Status =
   | { kind: "idle" }
@@ -30,6 +33,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  /** A layout restore from the Layouts menu is writing to the board. */
+  const [restoring, setRestoring] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
   const [disabledExtensions, setDisabledExtensions] = useState(loadDisabledExtensions);
   const [unlockRequest, setUnlockRequest] = useState<{
@@ -96,117 +101,156 @@ export function App() {
   const kb = status.kind === "connected" ? status.connection.keyboard : null;
 
   return (
-    <div className="app">
-      <header>
-        <h1>ViaLink</h1>
-        {kb && (
-          <dl className="device-info">
-            <dt>Keyboard</dt>
-            <dd>{kb.name}</dd>
-            <dt>VIA</dt>
-            <dd>{kb.viaProtocol}</dd>
-            <dt>Vial</dt>
-            <dd>{kb.vialProtocol}</dd>
-            <dt>UID</dt>
-            <dd>
-              <code>{kb.uid.toString(16).padStart(16, "0")}</code>
-            </dd>
-          </dl>
-        )}
-        <div className="header-actions">
-          {kb && <LockControls keyboard={kb} onError={setError} />}
-          <button onClick={() => setShowExtensions(true)}>Extensions</button>
-          <button onClick={() => setShowLog((s) => !s)} aria-pressed={showLog}>
-            HID log
-          </button>
-          {kb && <button onClick={() => void disconnect()}>Disconnect</button>}
-        </div>
-      </header>
-      <p className="banner warning experimental" role="note">
-        Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only been
-        tested on one keyboard, the{" "}
-        <a href="https://github.com/GEIGEIGEIST/KLOR" target="_blank" rel="noreferrer">
-          KLOR by GEIGEIGEIST
-        </a>
-        . Save a backup of your layout before changing anything.
-      </p>
-
-      {kb && unlockRequest && (
-        <UnlockDialog
+    <TooltipProvider>
+      <div className="flex min-h-screen flex-col bg-kumo-canvas text-kumo-default">
+        <TopBar
           keyboard={kb}
-          reason={unlockRequest.reason}
-          onFinish={(ok) => {
-            unlockRequest.resolve(ok);
-            setUnlockRequest(null);
-          }}
-        />
-      )}
-      {showExtensions && (
-        <ExtensionsDialog
-          disabled={disabledExtensions}
-          keyboard={kb}
+          layouts={
+            kb && (
+              <VilControls
+                keyboard={kb}
+                busy={restoring}
+                setBusy={setRestoring}
+                onError={setError}
+                onNotice={setNotice}
+              />
+            )
+          }
+          showLog={showLog}
+          onToggleLog={() => setShowLog((s) => !s)}
+          onExtensions={() => setShowExtensions(true)}
+          onDisconnect={() => void disconnect()}
           onError={setError}
-          onChange={(next) => {
-            setDisabledExtensions(next);
-            saveDisabledExtensions(next);
-          }}
-          onClose={() => setShowExtensions(false)}
         />
-      )}
-      {error && (
-        <div className="banner error" role="alert">
-          {error}
-          <button onClick={() => setError(null)} aria-label="Dismiss">
-            ×
-          </button>
-        </div>
-      )}
-      {notice && (
-        <div className="banner notice" role="status">
-          {notice}
-        </div>
-      )}
-      {kb?.isExampleUid() && (
-        <div className="banner warning" role="alert">
-          This keyboard uses an example UID from vial-qmk. Give it a unique UID before shipping it.
-        </div>
-      )}
 
-      <main>
-        {status.kind === "idle" && <ConnectScreen onConnect={(demo) => void start(demo)} />}
-        {status.kind === "connecting" && <Connecting progress={status.progress} />}
-        {status.kind === "connected" && (
-          <Editor keyboard={status.connection.keyboard} onError={setError} onNotice={setNotice} />
+        <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden md:px-5">
+          <Banner
+            variant="alert"
+            size="sm"
+            icon={<WarningIcon weight="fill" aria-hidden="true" />}
+            description={
+              <>
+                Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only
+                been tested on one keyboard, the{" "}
+                <a
+                  href="https://github.com/GEIGEIGEIST/KLOR"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  KLOR by GEIGEIGEIST
+                </a>
+                . Save a backup of your layout before changing anything.
+              </>
+            }
+            role="note"
+          />
+          {error && (
+            <Banner
+              variant="error"
+              size="sm"
+              role="alert"
+              description={error}
+              action={
+                <Button size="xs" variant="ghost" onClick={() => setError(null)} aria-label="Dismiss">
+                  ×
+                </Button>
+              }
+            />
+          )}
+          {notice && <Banner variant="default" size="sm" role="status" description={notice} />}
+          {kb?.isExampleUid() && (
+            <Banner
+              variant="alert"
+              size="sm"
+              role="alert"
+              description="This keyboard uses an example UID from vial-qmk. Give it a unique UID before shipping it."
+            />
+          )}
+        </div>
+
+        {kb && unlockRequest && (
+          <UnlockDialog
+            keyboard={kb}
+            reason={unlockRequest.reason}
+            onFinish={(ok) => {
+              unlockRequest.resolve(ok);
+              setUnlockRequest(null);
+            }}
+          />
         )}
-        {showLog && <DebugPanel queue={queue} />}
-      </main>
+        {showExtensions && (
+          <ExtensionsDialog
+            disabled={disabledExtensions}
+            keyboard={kb}
+            onError={setError}
+            onChange={(next) => {
+              setDisabledExtensions(next);
+              saveDisabledExtensions(next);
+            }}
+            onClose={() => setShowExtensions(false)}
+          />
+        )}
 
-      <footer>
-        Built on <a href="https://github.com/vial-kb/vial-gui">vial-gui</a> and{" "}
-        <a href="https://github.com/tcyeee/vialite">Vialite</a>. Licensed under GPL-2.0.
-      </footer>
-    </div>
+        <main className="flex min-h-0 flex-1 flex-col">
+          {status.kind === "idle" && <ConnectScreen onConnect={(demo) => void start(demo)} />}
+          {status.kind === "connecting" && <Connecting progress={status.progress} />}
+          {status.kind === "connected" && (
+            <Editor
+              keyboard={status.connection.keyboard}
+              onError={setError}
+              onNotice={setNotice}
+              locked={restoring}
+            />
+          )}
+          {showLog && (
+            <div className="legacy-view px-4 pb-4 md:px-5">
+              <DebugPanel queue={queue} />
+            </div>
+          )}
+        </main>
+
+        <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
+          Built on{" "}
+          <a className="underline" href="https://github.com/vial-kb/vial-gui">
+            vial-gui
+          </a>
+          ,{" "}
+          <a className="underline" href="https://github.com/tcyeee/vialite">
+            Vialite
+          </a>{" "}
+          and{" "}
+          <a className="underline" href="https://github.com/cloudflare/kumo">
+            Kumo
+          </a>
+          . Licensed under GPL-2.0.
+        </footer>
+      </div>
+    </TooltipProvider>
   );
 }
 
 function ConnectScreen({ onConnect }: { onConnect: (demo: boolean) => void }) {
   const supported = webHidSupported();
   return (
-    <section className="connect">
-      <h2>Connect a Vial keyboard</h2>
+    <section className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center">
+      <h2 className="m-0 text-xl font-semibold">Connect a Vial keyboard</h2>
       {supported ? (
-        <p>Plug in your keyboard and choose it in the browser's device list.</p>
-      ) : (
-        <p className="warning">
-          This browser does not support WebHID. Use a Chromium-based browser such as Chrome, Edge or Opera. On
-          Linux the keyboard's hidraw device also needs a udev rule that grants your user access.
+        <p className="m-0 text-kumo-subtle">
+          Plug in your keyboard and choose it in the browser's device list.
         </p>
+      ) : (
+        <Banner
+          variant="alert"
+          size="sm"
+          description="This browser does not support WebHID. Use a Chromium-based browser such as Chrome, Edge or Opera. On Linux the keyboard's hidraw device also needs a udev rule that grants your user access."
+        />
       )}
-      <div className="connect-actions">
-        <button className="primary" disabled={!supported} onClick={() => onConnect(false)}>
+      <div className="mt-2 flex flex-wrap justify-center gap-3">
+        <Button variant="primary" disabled={!supported} onClick={() => onConnect(false)}>
           Connect keyboard
-        </button>
-        <button onClick={() => onConnect(true)}>Try the demo keyboard</button>
+        </Button>
+        <Button onClick={() => onConnect(true)}>Try the demo keyboard</Button>
       </div>
     </section>
   );
@@ -214,37 +258,13 @@ function ConnectScreen({ onConnect }: { onConnect: (demo: boolean) => void }) {
 
 function Connecting({ progress }: { progress: LoadProgress | null }) {
   return (
-    <section className="connect" aria-busy="true">
-      <h2>Loading keyboard…</h2>
-      <p>
+    <section className="mx-auto my-10 flex w-full max-w-xl flex-col gap-3 px-4 text-center" aria-busy="true">
+      <h2 className="m-0 text-xl font-semibold">Loading keyboard…</h2>
+      <p className="m-0 text-kumo-subtle">
         {progress ? `Reading ${progress.stage}` : "Opening device"}
         {progress && progress.total > 1 ? ` (${progress.done}/${progress.total})` : ""}
       </p>
-      <progress max={progress?.total || 1} value={progress?.done ?? 0} />
+      <progress className="w-full accent-accent" max={progress?.total || 1} value={progress?.done ?? 0} />
     </section>
-  );
-}
-
-/** Lock state with Unlock/Lock actions (vial-gui's Security menu). */
-function LockControls({ keyboard, onError }: { keyboard: Keyboard; onError: (m: string) => void }) {
-  useKeyboardVersion(keyboard);
-  useEffect(() => {
-    if (keyboard.unlocked === null) void keyboard.isUnlocked().catch(() => undefined);
-  }, [keyboard]);
-  if (keyboard.vialProtocol < 0 || keyboard.unlocked === null) return null;
-  return keyboard.unlocked ? (
-    <button
-      onClick={() => void keyboard.lock().catch((e) => onError(errorMessage(e)))}
-      title="The keyboard is unlocked. Lock it again."
-    >
-      🔓 Lock
-    </button>
-  ) : (
-    <button
-      onClick={() => void keyboard.ensureUnlocked("Unlocking").catch(() => undefined)}
-      title="The keyboard is locked."
-    >
-      🔒 Unlock
-    </button>
   );
 }

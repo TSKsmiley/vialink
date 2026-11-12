@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Keymap editor: layer tabs, keyboard view, keycode picker and layout options.
+// The editor area: the section sidebar, and beside it the keymap (layer tabs,
+// keyboard view, keycode picker, layout options), the matrix tester or an
+// extension's view. Loading and saving layouts lives in the top bar (VilControls).
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { activeUi } from "../extensions/registry.tsx";
 import { MatrixTester } from "./MatrixTester.tsx";
@@ -9,19 +11,22 @@ import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
 import { KeyboardView, type Selection } from "./KeyboardView.tsx";
 import { KeycodePicker } from "./KeycodePicker.tsx";
 import { LayoutOptionsPanel } from "./LayoutOptionsPanel.tsx";
-import { VilControls } from "./VilControls.tsx";
+import { Sidebar, type Section } from "../shell/Sidebar.tsx";
 
 interface Props {
   keyboard: Keyboard;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  /** True while something outside the editor writes to the board (a layout restore). */
+  locked?: boolean;
 }
 
-export function Editor({ keyboard, onError, onNotice }: Props) {
+export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
   useKeyboardVersion(keyboard);
   const [layer, setLayer] = useState(0);
   const [selection, setSelection] = useState<Selection>(null);
-  const [busy, setBusy] = useState(false);
+  const [writing, setBusy] = useState(false);
+  const busy = writing || locked;
   const [view, setView] = useState("keymap");
 
   const current =
@@ -88,51 +93,33 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
   };
 
   const panels = extensionUi.flatMap((ui) => ui.panels ?? []);
-  const views = [
-    { id: "keymap", title: "Keymap" },
-    { id: "matrix", title: "Matrix tester" },
-    ...panels.map((p) => ({ id: p.id, title: p.title })),
+  const sections: Section[] = [
+    { id: "keymap", title: "Keymap", group: "edit" },
+    ...panels.map((p) => ({ id: p.id, title: p.title, group: "edit" as const, count: p.count?.(keyboard) })),
+    { id: "matrix", title: "Matrix tester", group: "tools" },
   ];
   // A view whose extension was just turned off falls back to the keymap.
-  const shown = views.some((v) => v.id === view) ? view : "keymap";
+  const shown = sections.some((v) => v.id === view) ? view : "keymap";
   const panel = panels.find((p) => p.id === shown);
 
-  const viewTabs = (
-    <nav className="views" role="tablist" aria-label="Editor views">
-      {views.map((v) => (
-        <button
-          key={v.id}
-          role="tab"
-          aria-selected={shown === v.id}
-          className={shown === v.id ? "active" : ""}
-          onClick={() => setView(v.id)}
-        >
-          {v.title}
-        </button>
-      ))}
-    </nav>
+  const frame = (content: ReactNode) => (
+    <div className="flex min-h-0 flex-1 max-md:flex-col">
+      <Sidebar sections={sections} current={shown} onSelect={setView} />
+      <div
+        role="tabpanel"
+        aria-label={sections.find((v) => v.id === shown)?.title}
+        className="editor legacy-view min-w-0 flex-1 p-4 md:p-5"
+      >
+        {content}
+      </div>
+    </div>
   );
 
-  if (shown === "matrix") {
-    return (
-      <div className="editor">
-        {viewTabs}
-        <MatrixTester keyboard={keyboard} onError={onError} />
-      </div>
-    );
-  }
-  if (panel) {
-    return (
-      <div className="editor">
-        {viewTabs}
-        <panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} />
-      </div>
-    );
-  }
+  if (shown === "matrix") return frame(<MatrixTester keyboard={keyboard} onError={onError} />);
+  if (panel) return frame(<panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} />);
 
-  return (
-    <div className="editor">
-      {viewTabs}
+  return frame(
+    <>
       <div className="toolbar">
         <div className="layers" role="tablist" aria-label="Layers">
           <span>Layer</span>
@@ -153,13 +140,6 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
             ) : null,
           )}
         </div>
-        <VilControls
-          keyboard={keyboard}
-          busy={busy}
-          setBusy={setBusy}
-          onError={onError}
-          onNotice={onNotice}
-        />
       </div>
 
       <div className="board-wrap">
@@ -175,6 +155,6 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
         current={current}
         onPick={(c) => void pick(c)}
       />
-    </div>
+    </>,
   );
 }

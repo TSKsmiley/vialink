@@ -444,5 +444,12 @@ function ActionValue({
 
 export const macrosUi: AppExtension = {
   id: macrosExtension.id,
-  panels: [{ id: "macros", title: "Macros", Component: MacrosPanel }],
+  panels: [
+    {
+      id: "macros",
+      title: "Macros",
+      Component: MacrosPanel,
+      count: (kb) => kb.extension(macrosExtension)?.pieces.filter((p) => p.length > 0).length ?? null,
+    },
+  ],
 };

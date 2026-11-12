@@ -211,5 +211,14 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
 
 export const altRepeatKeyUi: AppExtension = {
   id: altRepeatKeyExtension.id,
-  panels: [{ id: "alt-repeat-key", title: "Alt repeat key", Component: AltRepeatKeyPanel }],
+  panels: [
+    {
+      id: "alt-repeat-key",
+      title: "Alt repeat key",
+      Component: AltRepeatKeyPanel,
+      count: (kb) =>
+        kb.extension(altRepeatKeyExtension)?.entries.filter((e) => e.keycode !== 0 || e.altKeycode !== 0)
+          .length ?? null,
+    },
+  ],
 };

@@ -230,5 +230,14 @@ function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: 
 
 export const keyOverridesUi: AppExtension = {
   id: keyOverridesExtension.id,
-  panels: [{ id: "key-overrides", title: "Key overrides", Component: KeyOverridesPanel }],
+  panels: [
+    {
+      id: "key-overrides",
+      title: "Key overrides",
+      Component: KeyOverridesPanel,
+      count: (kb) =>
+        kb.extension(keyOverridesExtension)?.entries.filter((e) => e.trigger !== 0 || e.replacement !== 0)
+          .length ?? null,
+    },
+  ],
 };
