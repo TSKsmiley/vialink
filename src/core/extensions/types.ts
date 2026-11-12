@@ -39,6 +39,8 @@ export interface KeyboardExtension<State = unknown> {
   /** Human-readable name for the settings list. */
   readonly name: string;
   readonly description: string;
+  /** Where to get firmware that supports this extension, shown in the settings list. */
+  readonly firmware?: { readonly label: string; readonly url: string };
   /**
    * Runs once the keymap is loaded. Returns the extension's state when the
    * board supports it, or null when it does not (the extension is then

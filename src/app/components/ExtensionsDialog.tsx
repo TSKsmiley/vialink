@@ -40,6 +40,14 @@ export function ExtensionsDialog({ disabled, onChange, keyboard, onClose }: Prop
                 <strong>{ext.name}</strong>
               </label>
               <p className="hint">{ext.description}</p>
+              {ext.firmware && (
+                <p className="hint">
+                  Firmware:{" "}
+                  <a href={ext.firmware.url} target="_blank" rel="noreferrer">
+                    {ext.firmware.label}
+                  </a>
+                </p>
+              )}
               {keyboard && (
                 <p className="hint">
                   {active.has(ext.id)

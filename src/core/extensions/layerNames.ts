@@ -61,6 +61,7 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
   name: "Layer names",
   description:
     "Names for layers, stored on the keyboard. Needs firmware with the Theis194 dynamic-layer-names extension.",
+  firmware: { label: "Theis194/vial-qmk", url: "https://github.com/Theis194/vial-qmk" },
 
   async probe(ctx) {
     const { keyboard, queue } = ctx;
