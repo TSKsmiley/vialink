@@ -8,10 +8,11 @@
 // KC_TRNS; keycodes limited to basic ones below Vial protocol 5, as
 // keycode_filter_masked does).
 //
-// Deviations: keycodes are typed as QMK ids (validated with
-// keyboard.keycodes.parse) instead of picked from the keycode tray; there is no
-// keystroke recorder (a web page cannot capture system-wide keystrokes) and no
-// JSON text editor. Save also needs every keycode and delay to be valid, and
+// Deviations: a key is selected in the action, then filled from the regular
+// keycode picker under the editor (vial-gui opens a picker popup per key); "+"
+// also selects the key it adds. There is no keystroke recorder (a web page
+// cannot capture system-wide keystrokes) and no JSON text editor. Save also
+// needs every keycode and delay to be valid, and
 // text to be printable ASCII: vial-gui writes text as UTF-8 but reads it back
 // one byte per character (so anything else comes back mangled), bytes 1-7 would
 // be read as key actions, and QMK's send_string only types ASCII.
@@ -21,6 +22,7 @@ import { macrosExtension, type Macros } from "../../core/extensions/macros.ts";
 import { VIAL_PROTOCOL_ADVANCED_MACROS, VIAL_PROTOCOL_EXT_MACROS } from "../../core/protocol/constants.ts";
 import { equalBytes, MACRO_MAX_DELAY_UI, type MacroAction } from "../../core/protocol/macros.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
+import { KeycodePicker } from "../components/KeycodePicker.tsx";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./macros.css";
@@ -43,7 +45,22 @@ const TYPE_LABELS: Record<ActionType, string> = {
   delay: "Delay (ms)",
 };
 
-/** Error for a typed keycode, or null when it is valid for this board. */
+/** A selected key: which action, and which key in it. */
+interface KeySlot {
+  action: number;
+  key: number;
+}
+
+/** The keycode a key string stands for, or null when it does not parse. */
+function keycodeOf(keyboard: Keyboard, value: string): number | null {
+  try {
+    return keyboard.keycodes.parse(value.trim());
+  } catch {
+    return null;
+  }
+}
+
+/** Error for a keycode, or null when it is valid for this board. */
 function keycodeError(keyboard: Keyboard, value: string): string | null {
   const v = value.trim();
   if (!v) return "Enter a keycode";
@@ -108,11 +125,13 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
   const [draft, setDraft] = useState(() => toDraft(macros.macros));
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [slot, setSlot] = useState<KeySlot | null>(null);
 
   // The board's macros changed elsewhere (save, revert, .vil restore): start over from them.
   if (base !== macros.buffer) {
     setBase(macros.buffer);
     setDraft(toDraft(macros.macros));
+    setSlot(null);
   }
 
   const withDelay = keyboard.vialProtocol >= VIAL_PROTOCOL_ADVANCED_MACROS;
@@ -151,6 +170,23 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
       return out;
     });
 
+  const slotAction = slot ? current.find((a) => a.id === slot.action) : undefined;
+  const slotKey = slot && slotAction ? slotAction.keys[slot.key] : undefined;
+  const slotCode = slotKey !== undefined ? keycodeOf(keyboard, slotKey) : null;
+  const table = keyboard.keycodes;
+  const pick = (code: number) => {
+    if (!slot || !slotAction || slotKey === undefined) return;
+    // As in the keymap editor: a basic keycode picked for a masked key fills its inner key.
+    const value =
+      slotCode !== null && table.isMasked(slotCode) && table.isBasic(code)
+        ? (slotCode & 0xff00) | code
+        : code;
+    if (!table.isMasked(value) || (slotCode !== null && table.isMasked(slotCode))) setSlot(null);
+    patch(slotAction.id, {
+      keys: slotAction.keys.map((k, i) => (i === slot.key ? table.serialize(value) : k)),
+    });
+  };
+
   const run = async (fn: () => Promise<void>, notice: string) => {
     setBusy(true);
     try {
@@ -172,7 +208,10 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
             role="tab"
             aria-selected={i === selected}
             className={i === selected ? "active" : ""}
-            onClick={() => setSelected(i)}
+            onClick={() => {
+              setSelected(i);
+              setSlot(null);
+            }}
             title={modified[i] ? "Unsaved changes" : undefined}
           >
             M{i}
@@ -209,10 +248,11 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
                 <select
                   aria-label={`Action ${n} type`}
                   value={a.type}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     // A fresh action of the new type, as MacroLine.on_change_type does.
-                    patch(a.id, { type: e.target.value as ActionType, text: "", keys: [], delay: "0" })
-                  }
+                    patch(a.id, { type: e.target.value as ActionType, text: "", keys: [], delay: "0" });
+                    if (slot?.action === a.id) setSlot(null);
+                  }}
                 >
                   {(types.includes(a.type) ? types : [...types, a.type]).map((t) => (
                     <option key={t} value={t}>
@@ -225,12 +265,23 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
                   action={a}
                   n={n}
                   onChange={(change) => patch(a.id, change)}
+                  selectedKey={slot?.action === a.id ? slot.key : null}
+                  onSelectKey={(key) =>
+                    setSlot(
+                      key === null || (slot?.action === a.id && slot.key === key)
+                        ? null
+                        : { action: a.id, key },
+                    )
+                  }
                 />
                 <button
                   type="button"
                   className="macro-remove"
                   aria-label={`Remove action ${n}`}
-                  onClick={() => update((m) => m.filter((x) => x.id !== a.id))}
+                  onClick={() => {
+                    update((m) => m.filter((x) => x.id !== a.id));
+                    if (slot?.action === a.id) setSlot(null);
+                  }}
                 >
                   ×
                 </button>
@@ -250,6 +301,11 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
           </button>
         </div>
       </section>
+
+      {slot === null && (
+        <p className="hint">Select a key in a Down, Up or Tap action, then pick a keycode below.</p>
+      )}
+      <KeycodePicker table={table} disabled={slot === null || busy} current={slotCode} onPick={pick} />
 
       <footer className="macro-footer">
         <span role="status" className={over ? "error" : "hint"}>
@@ -283,11 +339,16 @@ function ActionValue({
   action,
   n,
   onChange,
+  selectedKey,
+  onSelectKey,
 }: {
   keyboard: Keyboard;
   action: DraftAction;
   n: number;
   onChange: (change: Partial<DraftAction>) => void;
+  selectedKey: number | null;
+  /** Selects key `key` (toggling it off when already selected), or clears the selection with null. */
+  onSelectKey: (key: number | null) => void;
 }) {
   if (action.type === "text") {
     const error = textError(action.text);
@@ -327,20 +388,31 @@ function ActionValue({
       {action.keys.map((key, k) => {
         const error = keycodeError(keyboard, key);
         const id = `macro-action-${action.id}-key-${k}`;
+        const code = keycodeOf(keyboard, key);
+        const label = code === null ? null : keyboard.keycodes.label(code);
+        const text =
+          label === null ? key : label.inner !== null ? `${label.text} (${label.inner})` : label.text;
         return (
           <span key={k} className="macro-key">
-            <input
-              aria-label={`Action ${n} key ${k + 1}`}
+            <button
+              type="button"
+              className={`macro-keycode${selectedKey === k ? " selected" : ""}`}
+              aria-label={`Action ${n} key ${k + 1}: ${key}`}
+              aria-pressed={selectedKey === k}
               aria-invalid={error !== null}
               aria-describedby={error ? `${id}-error` : undefined}
-              spellCheck={false}
-              value={key}
-              onChange={(e) => setKeys(action.keys.map((x, i) => (i === k ? e.target.value : x)))}
-            />
+              title={label?.tooltip ?? key}
+              onClick={() => onSelectKey(k)}
+            >
+              {text.replace(/\n/g, " ") || " "}
+            </button>
             <button
               type="button"
               aria-label={`Remove key ${k + 1} from action ${n}`}
-              onClick={() => setKeys(action.keys.filter((_, i) => i !== k))}
+              onClick={() => {
+                setKeys(action.keys.filter((_, i) => i !== k));
+                if (selectedKey !== null && selectedKey >= k) onSelectKey(null);
+              }}
             >
               ×
             </button>
@@ -355,7 +427,10 @@ function ActionValue({
       <button
         type="button"
         aria-label={`Add key to action ${n}`}
-        onClick={() => setKeys([...action.keys, "KC_TRNS"])}
+        onClick={() => {
+          setKeys([...action.keys, "KC_TRNS"]);
+          if (selectedKey !== action.keys.length) onSelectKey(action.keys.length);
+        }}
       >
         +
       </button>

@@ -14,7 +14,13 @@ import { Editor } from "../components/Editor.tsx";
 
 afterEach(cleanup);
 
-async function setup({ count = 3, memory = 64, contents = new Uint8Array(0), unlocked = true } = {}) {
+async function setup({
+  count = 3,
+  memory = 64,
+  contents = new Uint8Array(0),
+  unlocked = true,
+  vialProtocol = undefined as number | undefined,
+} = {}) {
   const sim = new SimulatedKeyboard({
     compressedDefinition: new Uint8Array(
       readFileSync(resolve(process.cwd(), "fixtures/definitions/klor.vial.json.xz")),
@@ -23,6 +29,7 @@ async function setup({ count = 3, memory = 64, contents = new Uint8Array(0), unl
     cols: 6,
     layers: 4,
     unlocked,
+    vialProtocol,
   });
   const macros = installMacroSimulator(sim, { count, memory, contents });
   await sim.open();
@@ -62,7 +69,7 @@ describe("Macros panel", () => {
 
     fireEvent.click(tabs[1]);
     expect((screen.getByLabelText("Action 1 type") as HTMLSelectElement).value).toBe("tap");
-    expect((screen.getByLabelText("Action 1 key 1") as HTMLInputElement).value).toBe("KC_A");
+    expect(screen.getByRole("button", { name: "Action 1 key 1: KC_A" })).toBeTruthy();
   });
 
   it("marks edited macros and writes them on Save", async () => {
@@ -93,18 +100,50 @@ describe("Macros panel", () => {
     fireEvent.change(screen.getByLabelText("Action 1 text"), { target: { value: "hello" } });
     expect(save.disabled).toBe(false);
 
-    fireEvent.click(screen.getByRole("tab", { name: "M1" }));
-    fireEvent.change(screen.getByLabelText("Action 1 key 1"), { target: { value: "KC_NOPE" } });
-    expect(screen.getByLabelText("Action 1 key 1").getAttribute("aria-invalid")).toBe("true");
-    expect(save.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Action 1 key 1"), { target: { value: "KC_B" } });
-
     fireEvent.click(screen.getByRole("button", { name: "Add action" }));
     fireEvent.change(screen.getByLabelText("Action 2 type"), { target: { value: "delay" } });
     fireEvent.change(screen.getByLabelText("Action 2 delay (ms)"), { target: { value: "70000" } });
     expect(save.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Action 2 delay (ms)"), { target: { value: "100" } });
     expect(save.disabled).toBe(false);
+  });
+
+  it("fills the selected key from the keycode picker", async () => {
+    const { macros, onNotice } = await setup({ contents: TWO_MACROS });
+    fireEvent.click(screen.getByRole("tab", { name: "M1" }));
+    const key = screen.getByRole("button", { name: "Action 1 key 1: KC_A" });
+    fireEvent.click(key);
+    expect(key.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "B" }));
+    expect(screen.getByRole("button", { name: "Action 1 key 1: KC_B" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+
+    // "+" adds KC_TRNS and selects it, so the next pick fills it.
+    fireEvent.click(screen.getByRole("button", { name: "Add key to action 1" }));
+    expect(screen.getByRole("button", { name: "Action 1 key 2: KC_TRNS" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "LSFT(KC_C)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    expect(screen.getByRole("button", { name: /^Action 1 key 2: LSFT\(KC_C\)$/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith("Macros saved to the keyboard."));
+    // M1 = tap KC_B (01 01 05), then LSFT(KC_C) = 0x0206 as an extended tap (01 05 06 02).
+    expect([...macros.buffer.slice(3, 11)]).toEqual([1, 1, 5, 1, 5, 6, 2, 0]);
+  });
+
+  it("flags keycodes the firmware cannot send below Vial protocol 5", async () => {
+    await setup({ contents: TWO_MACROS, vialProtocol: 4 });
+    fireEvent.click(screen.getByRole("tab", { name: "M1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Action 1 key 1: KC_A" }));
+    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "LSFT(KC_C)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const key = screen.getByRole("button", { name: /^Action 1 key 1: LSFT\(KC_C\)$/ });
+    expect(key.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText(/Only basic keycodes/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("disables Save when the macros do not fit in memory", async () => {

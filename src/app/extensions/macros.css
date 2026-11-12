@@ -57,16 +57,23 @@
   align-items: center;
   gap: 2px;
 }
-.macro-key input {
-  width: 11em;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+.macro-keycode {
+  min-width: 56px;
+  min-height: 36px;
+  background: var(--key);
+  border-color: var(--key-stroke);
+}
+.macro-keycode.selected {
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
 }
 .macro-key .error,
 .macro-value > .error {
   flex-basis: 100%;
   font-size: 0.85em;
 }
-.macros input[aria-invalid="true"] {
+.macros input[aria-invalid="true"],
+.macro-keycode[aria-invalid="true"] {
   border-color: var(--error);
 }
 .macro-add,
