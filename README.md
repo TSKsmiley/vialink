@@ -5,6 +5,11 @@ keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera
 to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
 before).
 
+> **Experimental.** ViaLink is vibe coded: most of it was written by an AI coding assistant, with
+> tests against a simulated keyboard but very little testing on real hardware. It can write wrong
+> settings to your keyboard. Save a backup of your layout (in desktop Vial, or with "Save .vil")
+> before changing anything, and report problems as issues.
+
 ViaLink is a TypeScript port of [vial-gui](https://github.com/vial-kb/vial-gui)'s protocol and
 keycode logic with a new React UI, and borrows code from [Vialite](https://github.com/tcyeee/vialite).
 See [NOTICE.md](NOTICE.md) for what comes from where.

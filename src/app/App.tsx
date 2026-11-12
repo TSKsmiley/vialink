@@ -122,6 +122,10 @@ export function App() {
           {kb && <button onClick={() => void disconnect()}>Disconnect</button>}
         </div>
       </header>
+      <p className="banner warning experimental" role="note">
+        Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and barely tested on
+        real keyboards. Save a backup of your layout before changing anything.
+      </p>
 
       {kb && unlockRequest && (
         <UnlockDialog
