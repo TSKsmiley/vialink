@@ -400,3 +400,116 @@ svg.keyboard {
 .debug-log li.reply code {
   color: var(--muted);
 }
+
+.rename-layer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.rename-layer input {
+  width: 12em;
+}
+.extension-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.extension-list li {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.extension-list label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.extension-list .hint {
+  margin: 4px 0 0 26px;
+}
+
+.views {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.dialog.wide {
+  max-width: 760px;
+}
+.board-wrap.small svg.keyboard {
+  max-height: 260px;
+}
+.unlock-progress {
+  width: 100%;
+  height: 14px;
+  margin-top: 10px;
+}
+.key.static {
+  cursor: default;
+}
+.key.target rect,
+.key.target circle {
+  fill: var(--warn-bg);
+  stroke: #c58a00;
+  stroke-width: 2.5;
+}
+.key.pressed rect,
+.key.pressed circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+.key.pressed .key-label {
+  fill: #fff;
+}
+.key.seen rect,
+.key.seen circle {
+  fill: var(--notice-bg);
+  stroke: #4c9a52;
+}
+.matrix-tester .toolbar p {
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+.saved-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.saved-layout {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.saved-meta {
+  display: flex;
+  flex-direction: column;
+}
+.saved-meta .hint {
+  margin: 0;
+}
+.saved-actions,
+.saved-layout .rename {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dialog h3 {
+  font-size: 0.95rem;
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-weight: 500;
+}
+button.danger {
+  border-color: var(--error);
+  color: var(--error);
+}

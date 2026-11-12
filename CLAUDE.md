@@ -38,5 +38,11 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
   `pnpm keycodes:dump <vial-gui checkout>`.
 - vial-gui's Python source is the spec. Ported files name their upstream file in the header and
   call out deviations.
+  - Strict where compatibility depends on it: bytes on the wire (command layouts, byte order,
+    struct sizes, status bytes) and the `.vil` format must match vial-gui, so the firmware and
+    desktop Vial keep working with what vial-ts reads and writes.
+  - Loose above that: UI, validation, error handling, safety checks and code structure may improve
+    on vial-gui when something can be better (e.g. cancellable unlock, truncating layer names at a
+    character boundary). Note each such difference in the file's header comment.
 - Licences: own code `GPL-2.0-or-later`; files adapted from Vialite are `GPL-2.0-only` and listed
   in `NOTICE.md`. Keep SPDX headers and credits accurate when borrowing more.

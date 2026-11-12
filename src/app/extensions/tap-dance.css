@@ -1,0 +1,57 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Tap dance editor tab (tap-danceUi.tsx). Uses the colour tokens of styles.css. */
+
+.tap-dance {
+  padding: 12px 16px;
+}
+.tap-dance h2 {
+  font-size: 1rem;
+  margin: 0 0 4px;
+}
+.tap-dance-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.tap-dance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+.tap-dance-card h3 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+.tap-dance-modified {
+  color: var(--muted);
+  font-weight: normal;
+}
+.tap-dance-field {
+  display: grid;
+  grid-template-columns: 8.5em minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 8px;
+}
+.tap-dance-field input {
+  min-width: 0;
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.tap-dance-field .error {
+  grid-column: 2;
+  font-size: 0.85rem;
+}
+.tap-dance-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tap-dance-card .hint {
+  margin: 0;
+}

@@ -4,9 +4,22 @@
 // simulated KLOR, so the UI can be tried without hardware.
 
 import klorDefinitionUrl from "../../fixtures/definitions/klor.vial.json.xz?url";
+import type { KeyboardExtension } from "../core/extensions/types.ts";
 import { Keyboard, type LoadProgress } from "../core/keyboard.ts";
-import { RAW_HID_USAGE, RAW_HID_USAGE_PAGE } from "../core/protocol/constants.ts";
+import {
+  CMD_VIA_VIAL_PREFIX,
+  CMD_VIAL_UNLOCK_POLL,
+  CMD_VIAL_UNLOCK_START,
+  RAW_HID_USAGE,
+  RAW_HID_USAGE_PAGE,
+} from "../core/protocol/constants.ts";
+import { installAltRepeatKey } from "../core/sim/alt-repeat-key.ts";
+import { installCombos } from "../core/sim/combos.ts";
+import { installKeyOverrides } from "../core/sim/key-overrides.ts";
+import { installMacroSimulator } from "../core/sim/macros.ts";
+import { installQmkSettings } from "../core/sim/qmk-settings.ts";
 import { SimulatedKeyboard } from "../core/sim/simulatedKeyboard.ts";
+import { installTapDanceSimulator } from "../core/sim/tap-dance.ts";
 import { RequestQueue } from "../core/transport/queue.ts";
 import type { Transport } from "../core/transport/types.ts";
 import { WebHidTransport } from "../core/transport/webhid.ts";
@@ -50,13 +63,17 @@ export async function connect(
     demo?: boolean;
     onQueue?: (q: RequestQueue) => void;
     onProgress?: (p: LoadProgress) => void;
+    extensions?: readonly KeyboardExtension<unknown>[];
   } = {},
 ): Promise<Connection> {
   await transport.open();
   const queue = new RequestQueue(transport);
   options.onQueue?.(queue);
   try {
-    const keyboard = await Keyboard.load(queue, options.onProgress);
+    const keyboard = await Keyboard.load(queue, {
+      onProgress: options.onProgress,
+      extensions: options.extensions,
+    });
     return { keyboard, queue, demo: options.demo ?? false };
   } catch (err) {
     await queue.close().catch(() => undefined);
@@ -83,7 +100,7 @@ export async function demoTransport(): Promise<Transport> {
     [0x38, 0x37, 0x36, 0x10, 0x11, 0x00],
     [0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
   ];
-  return new SimulatedKeyboard({
+  const sim = new SimulatedKeyboard({
     info: { productName: "Klor (demo)", vendorId: 0xfc32, productId: 0x0287 },
     compressedDefinition: compressed,
     rows: 8,
@@ -92,8 +109,33 @@ export async function demoTransport(): Promise<Transport> {
     keymap: [letters, letters.map((row) => row.map(() => 0x01))],
     macroCount: 16,
     macroBufferSize: 1024,
-    dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 0, featureFlags: 0b11 },
-    qmkSettings: [1, 2, 7],
+    dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 4, featureFlags: 0b11 },
     layerNames: ["Base", "Lower", "Raise", "Adjust"],
+    unlockKeys: [
+      { row: 0, col: 3 },
+      { row: 4, col: 3 },
+    ],
   });
+  // The Vial features each extension edits, with a little starter content.
+  installMacroSimulator(sim, {
+    count: 16,
+    memory: 1024,
+    contents: new TextEncoder().encode("Hello from vial-ts\0"),
+  });
+  installTapDanceSimulator(sim, { count: 4, entries: [{ onTap: 0x29, onHold: 0x39 }] }); // Esc / Caps Lock
+  installCombos(sim, { count: 8, entries: [[0x0d, 0x0e, 0, 0, 0x29]] }); // J + K = Esc
+  installKeyOverrides(sim, { count: 4 });
+  installAltRepeatKey(sim, { count: 4 });
+  installQmkSettings(sim);
+
+  // Nobody can hold the keys of a simulated board: "hold" them once an unlock
+  // starts, and let them go again when it finishes.
+  sim.handlers.push((msg, board) => {
+    if (msg[0] === CMD_VIA_VIAL_PREFIX && msg[1] === CMD_VIAL_UNLOCK_START) board.holdUnlockKeys();
+    if (msg[0] === CMD_VIA_VIAL_PREFIX && msg[1] === CMD_VIAL_UNLOCK_POLL && board.unlocked) {
+      board.holdUnlockKeys(false);
+    }
+    return false;
+  });
+  return sim;
 }
