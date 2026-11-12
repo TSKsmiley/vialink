@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { activeUi } from "../extensions/registry.tsx";
 import { MatrixTester } from "./MatrixTester.tsx";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
 import { KeyboardView, type Selection } from "./KeyboardView.tsx";
 import { KeycodePicker } from "./KeycodePicker.tsx";
 import { LayoutOptionsPanel } from "./LayoutOptionsPanel.tsx";
@@ -167,6 +167,7 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
       <LayoutOptionsPanel keyboard={keyboard} onChange={(c) => void setLayout(c)} busy={busy} />
 
       <KeycodePicker
+        layerNames={layerNamesOf(keyboard)}
         table={keyboard.keycodes}
         disabled={selection === null || busy}
         current={current}

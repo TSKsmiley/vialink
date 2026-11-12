@@ -78,4 +78,36 @@ describe("Editor", () => {
     expect(kb.layoutChoices).toEqual([2]);
     await waitFor(() => expect(screen.getAllByRole("button", { name: /^Key / }).length).not.toBe(before));
   });
+
+  it("builds layer keys in two steps, with layer names, keeping an LT key's tap key", async () => {
+    const { sim, kb, onError } = await setup();
+    const k = kb.keys[0];
+    const selectKey = () =>
+      fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Key ${k.row},${k.col}:`) })[0]);
+
+    selectKey();
+    fireEvent.click(screen.getByRole("tab", { name: "Layers" }));
+    fireEvent.click(screen.getByLabelText(/^Toggle/));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle: layer 1 (Nav)" }));
+    await waitFor(() => expect(sim.getKeycode(0, k.row, k.col)).toBe(kb.keycodes.parse("TG(1)")));
+
+    // LT: choose the layer, then the picker moves to Basic for the tap key.
+    selectKey();
+    fireEvent.click(screen.getByRole("tab", { name: "Layers" }));
+    expect(screen.getByRole("button", { name: "Toggle: layer 1 (Nav)" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    fireEvent.click(screen.getByLabelText(/^Hold, or tap for a key/));
+    fireEvent.click(screen.getByRole("button", { name: "Hold, or tap for a key: layer 2" }));
+    await waitFor(() => expect(sim.getKeycode(0, k.row, k.col)).toBe(kb.keycodes.parse("LT(2, KC_NO)")));
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    await waitFor(() => expect(sim.getKeycode(0, k.row, k.col)).toBe(kb.keycodes.parse("LT(2, KC_A)")));
+
+    // Moving it to another layer keeps the tap key.
+    selectKey();
+    fireEvent.click(screen.getByRole("tab", { name: "Layers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hold, or tap for a key: layer 1 (Nav)" }));
+    await waitFor(() => expect(sim.getKeycode(0, k.row, k.col)).toBe(kb.keycodes.parse("LT(1, KC_A)")));
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

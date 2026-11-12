@@ -8,7 +8,7 @@ import { useState } from "react";
 import { combosExtension, describeCombo } from "../../core/extensions/combos.ts";
 import { COMBO_INPUTS } from "../../core/protocol/combos.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./combos.css";
 
@@ -120,7 +120,13 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
           Editing combo {selected.combo + 1}, {slotName(selected.slot)}.
         </p>
       )}
-      <KeycodePicker table={table} disabled={selected === null || busy} current={current} onPick={pick} />
+      <KeycodePicker
+        layerNames={layerNamesOf(keyboard)}
+        table={table}
+        disabled={selected === null || busy}
+        current={current}
+        onPick={pick}
+      />
     </section>
   );
 }

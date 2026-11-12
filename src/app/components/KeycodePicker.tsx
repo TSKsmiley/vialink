@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from "react";
 import type { Keycode, KeycodeTable } from "../../core/keycodes/table.ts";
+import { LayerKeyBuilder } from "./LayerKeyBuilder.tsx";
 
 interface Props {
   table: KeycodeTable;
@@ -11,9 +12,11 @@ interface Props {
   /** Current keycode of the selected key, to show what an assignment replaces. */
   current: number | null;
   onPick: (code: number) => void;
+  /** Layer names to show in the Layers tab, when the board has them. */
+  layerNames?: readonly string[];
 }
 
-export function KeycodePicker({ table, disabled, current, onPick }: Props) {
+export function KeycodePicker({ table, disabled, current, onPick, layerNames }: Props) {
   const groups = useMemo(() => table.groups(), [table]);
   const [tab, setTab] = useState(groups[0]?.id ?? "basic");
   const [query, setQuery] = useState("");
@@ -83,20 +86,35 @@ export function KeycodePicker({ table, disabled, current, onPick }: Props) {
         </p>
       )}
 
-      <div className="keycode-grid">
-        {shown.map((kc) => (
-          <button
-            key={kc.qmk_id}
-            className="keycode"
-            disabled={disabled}
-            title={kc.tooltip ? `${kc.qmk_id}: ${kc.tooltip}` : kc.qmk_id}
-            onClick={() => onPick(kc.value)}
-          >
-            {kc.label === "" ? " " : kc.label}
-          </button>
-        ))}
-        {shown.length === 0 && <p className="hint">No keycodes match “{query}”.</p>}
-      </div>
+      {!q && tab === "layers" ? (
+        <LayerKeyBuilder
+          table={table}
+          keycodes={groups.find((g) => g.id === "layers")?.keycodes ?? []}
+          layerNames={layerNames}
+          disabled={disabled}
+          current={current}
+          onPick={(code) => {
+            onPick(code);
+            // LT(layer, kc): the tap key comes next, from the Basic tab.
+            if (table.isMasked(code) && (current === null || !table.isMasked(current))) setTab("basic");
+          }}
+        />
+      ) : (
+        <div className="keycode-grid">
+          {shown.map((kc) => (
+            <button
+              key={kc.qmk_id}
+              className="keycode"
+              disabled={disabled}
+              title={kc.tooltip ? `${kc.qmk_id}: ${kc.tooltip}` : kc.qmk_id}
+              onClick={() => onPick(kc.value)}
+            >
+              {kc.label === "" ? " " : kc.label}
+            </button>
+          ))}
+          {shown.length === 0 && <p className="hint">No keycodes match “{query}”.</p>}
+        </div>
+      )}
 
       <form
         className="any-key"

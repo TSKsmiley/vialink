@@ -17,7 +17,7 @@ import {
   type AltRepeatKeyEntry,
 } from "../../core/protocol/alt-repeat-key.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./alt-repeat-key.css";
 
@@ -198,7 +198,13 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
       </div>
 
       {slot === null && <p className="hint">Select Last key or Alt key, then pick a keycode below.</p>}
-      <KeycodePicker table={table} disabled={slot === null || busy} current={current} onPick={pick} />
+      <KeycodePicker
+        layerNames={layerNamesOf(keyboard)}
+        table={table}
+        disabled={slot === null || busy}
+        current={current}
+        onPick={pick}
+      />
     </div>
   );
 }

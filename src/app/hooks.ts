@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { useSyncExternalStore } from "react";
+import { layerNamesExtension } from "../core/extensions/layerNames.ts";
 import type { Keyboard } from "../core/keyboard.ts";
 
 /** Re-renders whenever the keyboard's state changes; returns its version counter. */
@@ -26,4 +27,9 @@ export function errorMessage(err: unknown): string {
 /** A safe .vil file name for a keyboard or layout name. */
 export function fileNameFor(name: string): string {
   return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}.vil`;
+}
+
+/** Layer names for the keycode picker, when the board has the layer-names extension. */
+export function layerNamesOf(keyboard: Keyboard): readonly string[] | undefined {
+  return keyboard.extension(layerNamesExtension)?.names;
 }
