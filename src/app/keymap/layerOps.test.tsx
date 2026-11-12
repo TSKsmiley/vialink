@@ -128,4 +128,18 @@ describe("layer operations", () => {
     });
     expect(await screen.findByRole("alert")).toBeTruthy();
   });
+
+  it("swaps two layers with their names, as one undo step", async () => {
+    const { sim, kb, p } = await setup();
+    fireEvent.click(screen.getByRole("button", { name: "Menu for Nav" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Swap with/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "2 · Raise" }));
+    await waitFor(() => expect(sim.getKeycode(1, p.row, p.col)).toBe(0x05));
+    expect(sim.getKeycode(2, p.row, p.col)).toBe(0x04);
+    await waitFor(() => expect(sim.layerNames?.slice(1, 3)).toEqual(["Raise", "Nav"]));
+    expect(kb.history.nextUndo?.label).toBe("Swap Nav and Raise");
+    await kb.history.undo();
+    expect(sim.layerNames?.slice(1, 3)).toEqual(["Nav", "Raise"]);
+    expect(sim.getKeycode(1, p.row, p.col)).toBe(0x04);
+  });
 });
