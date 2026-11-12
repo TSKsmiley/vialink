@@ -8,6 +8,7 @@ import { placeLayout } from "../../core/definition/geometry.ts";
 import { hasSecondRect } from "../../core/definition/geometry.ts";
 import type { PhysicalShape } from "../../core/definition/definition.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
+import { KC_TRNS, layerKeyOf } from "../../core/layerInfo.ts";
 import { useKeyboardVersion } from "../hooks.ts";
 
 export type Selection =
@@ -20,7 +21,15 @@ interface Props {
   keyboard: Keyboard;
   layer: number;
   selection?: Selection;
-  onSelect?: (s: Selection) => void;
+  /** Several selected keys (shift-click); overrides `selection` for drawing when given. */
+  isSelected?: (s: NonNullable<Selection>) => boolean;
+  /** `shift` is true for a shift-click or Shift+Enter, which adds to the selection. */
+  onSelect?: (s: Selection, shift: boolean) => void;
+  /**
+   * Transparent keys show the key they fall through to (the next lower layer
+   * that sets one), dimmed. ViaLink addition; vial-gui shows ▽.
+   */
+  fallthrough?: boolean;
   /** Extra CSS class per matrix position, e.g. "pressed" in the matrix tester or "target" when unlocking. */
   highlight?: (row: number, col: number) => string | null;
   /** Label for the whole view; defaults to "Layer n keymap". */
@@ -31,9 +40,11 @@ export function KeyboardView({
   keyboard,
   layer,
   selection = null,
+  isSelected,
   onSelect,
   highlight,
   label: viewLabel,
+  fallthrough = false,
 }: Props) {
   const interactive = onSelect !== undefined;
   const version = useKeyboardVersion(keyboard);
@@ -58,9 +69,27 @@ export function KeyboardView({
     >
       {placed.keys.map(({ shape: k, shiftX, shiftY }, i) => {
         const code = keyboard.getKey(layer, k.row, k.col) ?? 0;
-        const label = keyboard.keycodes.label(code);
-        const selected = selection?.kind === "key" && selection.row === k.row && selection.col === k.col;
-        const extra = highlight?.(k.row, k.col);
+        let shownCode = code;
+        let through = false;
+        if (fallthrough && code === KC_TRNS) {
+          for (let below = layer - 1; below >= 0; below--) {
+            const c = keyboard.getKey(below, k.row, k.col) ?? 0;
+            if (c !== KC_TRNS) {
+              shownCode = c;
+              through = true;
+              break;
+            }
+          }
+        }
+        const label = keyboard.keycodes.label(shownCode);
+        const sel = { kind: "key" as const, row: k.row, col: k.col };
+        const selected = isSelected
+          ? isSelected(sel)
+          : selection?.kind === "key" && selection.row === k.row && selection.col === k.col;
+        const layerKey = !through && layerKeyOf(keyboard.keycodes, keyboard.layers, code) !== null;
+        const extra = [highlight?.(k.row, k.col), through ? "through" : null, layerKey ? "layer-key" : null]
+          .filter(Boolean)
+          .join(" ");
         return (
           <g
             key={`k${i}`}
@@ -68,19 +97,19 @@ export function KeyboardView({
             transform={transform(k, shiftX, shiftY)}
             {...(interactive
               ? {
-                  onClick: () => onSelect({ kind: "key", row: k.row, col: k.col }),
+                  onClick: (e: React.MouseEvent) => onSelect(sel, e.shiftKey),
                   role: "button",
                   tabIndex: 0,
                   "aria-pressed": selected,
                   onKeyDown: (e: React.KeyboardEvent) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      onSelect({ kind: "key", row: k.row, col: k.col });
+                      onSelect(sel, e.shiftKey);
                     }
                   },
                 }
               : {})}
-            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}${extra ? ` (${extra})` : ""}`}
+            aria-label={`Key ${k.row},${k.col}: ${keyboard.keycodes.serialize(code)}${through ? ` (shows ${keyboard.keycodes.serialize(shownCode)} from below)` : ""}${highlight?.(k.row, k.col) ? ` (${highlight(k.row, k.col)})` : ""}`}
           >
             <title>{label.tooltip ?? keyboard.keycodes.serialize(code)}</title>
             {hasSecondRect(k) && (
@@ -113,8 +142,12 @@ export function KeyboardView({
       {placed.encoders.map(({ shape: e, shiftX, shiftY }, i) => {
         const code = keyboard.getEncoder(layer, e.index, e.direction) ?? 0;
         const label = keyboard.keycodes.label(code);
-        const selected =
-          selection?.kind === "encoder" && selection.index === e.index && selection.direction === e.direction;
+        const encSel = { kind: "encoder" as const, index: e.index, direction: e.direction };
+        const selected = isSelected
+          ? isSelected(encSel)
+          : selection?.kind === "encoder" &&
+            selection.index === e.index &&
+            selection.direction === e.direction;
         const cx = (e.x + e.width / 2) * U;
         const cy = (e.y + e.height / 2) * U;
         const r = (Math.min(e.width, e.height) * U) / 2 - GAP;
@@ -125,14 +158,14 @@ export function KeyboardView({
             transform={transform(e, shiftX, shiftY)}
             {...(interactive
               ? {
-                  onClick: () => onSelect({ kind: "encoder", index: e.index, direction: e.direction }),
+                  onClick: (ev: React.MouseEvent) => onSelect(encSel, ev.shiftKey),
                   role: "button",
                   tabIndex: 0,
                   "aria-pressed": selected,
                   onKeyDown: (ev: React.KeyboardEvent) => {
                     if (ev.key === "Enter" || ev.key === " ") {
                       ev.preventDefault();
-                      onSelect({ kind: "encoder", index: e.index, direction: e.direction });
+                      onSelect(encSel, ev.shiftKey);
                     }
                   },
                 }

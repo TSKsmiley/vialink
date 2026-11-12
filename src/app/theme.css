@@ -48,6 +48,9 @@
     /* The connection dot stays green. */
     --vl-connected: #16a34a;
     --vl-scroll-thumb: #d4d4d4;
+    --vl-layer-key: #f59e0b;
+    --vl-layer-key-bg: #fffbeb;
+    --vl-layer-key-text: #92400e;
     --vl-scroll-thumb-hover: #a3a3a3;
 
     /* Kumo's brand (primary buttons, selected states) and links follow the accent. */
@@ -69,6 +72,9 @@
     --vl-success-text: #93c5fd;
     --vl-connected: #22c55e;
     --vl-scroll-thumb: #404040;
+    --vl-layer-key: #db6809;
+    --vl-layer-key-bg: #2a1c09;
+    --vl-layer-key-text: #ff8904;
     --vl-scroll-thumb-hover: #525252;
 
     --color-kumo-brand: var(--vl-accent);

@@ -180,7 +180,7 @@ export class AltRepeatKeys {
 
 export const altRepeatKeyExtension: KeyboardExtension<AltRepeatKeys> = {
   id: "alt-repeat-key",
-  standard: true,
+  group: "standard",
   name: "Alt repeat keys",
   description:
     "Pairs of keys for QMK's Alt Repeat Key: after the last key, the alt repeat key sends its alternate.",

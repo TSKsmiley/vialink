@@ -144,6 +144,19 @@ svg.keyboard {
 .key:hover circle {
   stroke: var(--accent);
 }
+/* Layer keys (MO, LT, TG…) in orange, as in the design's legend. */
+.key.layer-key rect {
+  fill: var(--vl-layer-key-bg);
+  stroke: var(--vl-layer-key);
+}
+.key.layer-key .key-label,
+.key.layer-key .key-label .inner {
+  fill: var(--vl-layer-key-text);
+}
+/* Transparent keys showing the key from the layer below. */
+.key.through .key-label {
+  opacity: 0.4;
+}
 .key.selected rect,
 .key.selected circle {
   fill: var(--accent-soft);
@@ -591,14 +604,52 @@ button.danger {
   background: var(--vl-connected);
   vertical-align: 1px;
 }
-.dialog h3.extension-group {
-  margin: 18px 0 0;
-  font-size: 0.8rem;
-  font-weight: 700;
+.extension-group {
+  margin: 4px 0 14px;
+}
+.extension-group > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 8px;
+  margin: 0 -8px 6px;
+  border-radius: 8px;
+}
+.extension-group > summary::-webkit-details-marker {
+  display: none;
+}
+.extension-group > summary:hover {
+  background: var(--color-kumo-tint);
+}
+.extension-group > summary .chev {
+  color: var(--muted);
+  transition: transform 100ms;
+  flex: none;
+}
+.extension-group[open] > summary .chev {
+  transform: rotate(90deg);
+}
+.dialog .extension-group h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text);
 }
-.extension-group + .hint {
-  margin: 2px 0 8px;
+.extension-group > summary .hint {
+  margin: 0;
+  font-size: 0.75rem;
+}
+.extension-group .extension-list {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+}
+.extension-group > .hint {
+  margin: 0 0 10px;
 }
