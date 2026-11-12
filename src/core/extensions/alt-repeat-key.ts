@@ -12,6 +12,10 @@
 // - .vil: an "alt_repeat_key" list, one {"keycode", "alt_keycode",
 //   "allowed_mods", "options"} dict per entry, keycodes as QMK id strings.
 //
+// - Keycodes restored from a .vil file are written back as the file spelled
+//   them (an alias, a number or an unknown name), as AltRepeatKeyEntry keeps
+//   data["keycode"] verbatim; any later edit returns to serialize() strings.
+//
 // Deviations from vial-gui: a non-zero status in the set reply is reported as
 // an error (vial-gui ignores the reply); malformed .vil entries (missing
 // fields, allowed_mods outside 0-255) are skipped instead of aborting the load.
@@ -36,17 +40,34 @@ export class AltRepeatKeyError extends Error {
   }
 }
 
-/** One entry as vial-gui's AltRepeatKeyEntry.save() writes it to a .vil file. */
+/**
+ * One entry as vial-gui's AltRepeatKeyEntry.save() writes it to a .vil file.
+ * Keycodes are serialize() strings, or a restored file's own values.
+ */
 export interface AltRepeatKeyVilEntry {
-  keycode: string;
-  alt_keycode: string;
+  keycode: string | number;
+  alt_keycode: string | number;
   allowed_mods: number;
   options: number;
+}
+
+/** The keycodes of a restored .vil entry exactly as the file wrote them. */
+export interface AltRepeatKeyVilKeycodes {
+  keycode: string | number;
+  alt_keycode: string | number;
+}
+
+/** A parsed .vil entry: the decoded entry plus its keycodes as the file wrote them. */
+export interface AltRepeatKeyVilParse {
+  entry: AltRepeatKeyEntry;
+  raw: AltRepeatKeyVilKeycodes;
 }
 
 export class AltRepeatKeys {
   private readonly ctx: ExtensionContext;
   private readonly values: AltRepeatKeyEntry[];
+  /** Per entry, the .vil spelling of its keycodes when it was last set by a restore. */
+  private readonly vilKeycodes: (AltRepeatKeyVilKeycodes | undefined)[] = [];
 
   constructor(ctx: ExtensionContext, entries: AltRepeatKeyEntry[]) {
     this.ctx = ctx;
@@ -67,8 +88,12 @@ export class AltRepeatKeys {
     return entry;
   }
 
-  /** alt_repeat_key_set: writes the entry when it differs from the board's. */
-  async set(idx: number, entry: AltRepeatKeyEntry): Promise<void> {
+  /**
+   * alt_repeat_key_set: writes the entry when it differs from the board's.
+   * `vilKeycodes` (from a .vil restore) is what save() writes back for the
+   * keycodes, as vial-gui stores the restored entry object itself.
+   */
+  async set(idx: number, entry: AltRepeatKeyEntry, vilKeycodes?: AltRepeatKeyVilKeycodes): Promise<void> {
     const current = this.get(idx);
     for (const [name, value, max] of [
       ["keycode", entry.keycode, 0xffff],
@@ -93,15 +118,16 @@ export class AltRepeatKeys {
       throw new AltRepeatKeyError(`the keyboard rejected alt repeat key ${idx + 1} (status ${reply.status})`);
     }
     this.values[idx] = wanted;
+    this.vilKeycodes[idx] = vilKeycodes ? { ...vilKeycodes } : undefined;
     this.ctx.changed();
   }
 
   /** save_alt_repeat_key(): AltRepeatKeyEntry.save() per entry. */
   save(): AltRepeatKeyVilEntry[] {
     const kc = this.ctx.keyboard.keycodes;
-    return this.values.map((e) => ({
-      keycode: kc.serialize(e.keycode),
-      alt_keycode: kc.serialize(e.altKeycode),
+    return this.values.map((e, idx) => ({
+      keycode: this.vilKeycodes[idx]?.keycode ?? kc.serialize(e.keycode),
+      alt_keycode: this.vilKeycodes[idx]?.alt_keycode ?? kc.serialize(e.altKeycode),
       allowed_mods: e.allowedMods,
       options: e.options,
     }));
@@ -112,7 +138,7 @@ export class AltRepeatKeys {
    * malformed. Keycodes go through Keycode.deserialize, which (as in vial-gui)
    * turns anything it cannot parse into KC_NO.
    */
-  parseVilEntry(data: unknown): AltRepeatKeyEntry | null {
+  parseVilEntry(data: unknown): AltRepeatKeyVilParse | null {
     if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
     const d = data as Record<string, unknown>;
     const isKeycode = (v: unknown) => typeof v === "string" || (Number.isInteger(v) && (v as number) >= 0);
@@ -126,11 +152,14 @@ export class AltRepeatKeys {
     const altKeycode = kc.deserialize(d.alt_keycode as string | number);
     if (keycode > 0xffff || altKeycode > 0xffff) return null;
     return {
-      keycode,
-      altKeycode,
-      allowedMods: mods as number,
-      // AltRepeatKeyOptions(data["options"]) keeps bits 0-3 only.
-      options: (options as number) & AREP_OPTIONS_MASK,
+      entry: {
+        keycode,
+        altKeycode,
+        allowedMods: mods as number,
+        // AltRepeatKeyOptions(data["options"]) keeps bits 0-3 only.
+        options: (options as number) & AREP_OPTIONS_MASK,
+      },
+      raw: { keycode: d.keycode as string | number, alt_keycode: d.alt_keycode as string | number },
     };
   }
 
@@ -175,9 +204,10 @@ export const altRepeatKeyExtension: KeyboardExtension<AltRepeatKeys> = {
       if (!Array.isArray(data)) return [];
       const steps: ExtensionRestoreStep[] = [];
       for (let idx = 0; idx < Math.min(data.length, state.count); idx++) {
-        const entry = state.parseVilEntry(data[idx]);
-        if (entry === null || altRepeatKeyEntriesEqual(entry, state.get(idx))) continue;
-        steps.push({ description: state.describe(idx, entry), apply: () => state.set(idx, entry) });
+        const parsed = state.parseVilEntry(data[idx]);
+        if (parsed === null || altRepeatKeyEntriesEqual(parsed.entry, state.get(idx))) continue;
+        const { entry, raw } = parsed;
+        steps.push({ description: state.describe(idx, entry), apply: () => state.set(idx, entry, raw) });
       }
       return steps;
     },

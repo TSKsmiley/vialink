@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Tests for the alt repeat key extension against vial-gui's
+// protocol/alt_repeat_key.py and editor/alt_repeat_key.py, with the simulator
+// following vial-qmk's quantum/vial.c.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { Keyboard, UnlockRequiredError } from "../keyboard.ts";
@@ -184,6 +187,37 @@ describe("alt repeat key extension", () => {
       "Set alt repeat key 1: KC_NO → KC_R (enabled)",
     ]);
     expect(planVilRestore(kb, parseVil(text.replace(/, "alt_repeat_key": .*\}$/, "}"))).ops).toEqual([]);
+  });
+
+  it("saves restored keycodes back as the file spelled them, as vial-gui does", async () => {
+    const { kb, sim, arep } = await board({ count: 3 });
+    const entries = [
+      // Equal to the board (KC_E -> KC_R, enabled): not written, so the board's spelling stays.
+      { keycode: 8, alt_keycode: "KC_R", allowed_mods: 0, options: 8 },
+      { keycode: "KC_ENT", alt_keycode: 4, allowed_mods: 0, options: 8 },
+      { keycode: "KC_BOGUS", alt_keycode: "KC_R", allowed_mods: 0, options: 8 },
+    ];
+    const file = parseVil(
+      saveVil(kb).replace(/"alt_repeat_key": \[.*\]\}$/, `"alt_repeat_key": ${JSON.stringify(entries)}}`),
+    );
+    const plan = planVilRestore(kb, file);
+    expect(plan.ops).toHaveLength(2);
+    for (const op of plan.ops) if (op.kind === "extension") await op.apply();
+    expect(arep.entries[1]).toEqual({ keycode: 0x28, altKeycode: KC_A, allowedMods: 0, options: 8 });
+    expect(arep.entries[2]).toEqual({ keycode: 0, altKeycode: KC_R, allowedMods: 0, options: 8 });
+    expect(saveVil(kb)).toContain(
+      '"alt_repeat_key": [{"keycode": "KC_E", "alt_keycode": "KC_R", "allowed_mods": 0, "options": 8}, ' +
+        '{"keycode": "KC_ENT", "alt_keycode": 4, "allowed_mods": 0, "options": 8}, ' +
+        '{"keycode": "KC_BOGUS", "alt_keycode": "KC_R", "allowed_mods": 0, "options": 8}]',
+    );
+
+    // A later edit goes back to serialize() strings.
+    const state = kb.extension(altRepeatKeyExtension)!;
+    await state.set(1, { keycode: 0x28, altKeycode: KC_A, allowedMods: 1, options: 8 });
+    expect(saveVil(kb)).toContain(
+      '{"keycode": "KC_ENTER", "alt_keycode": "KC_A", "allowed_mods": 1, "options": 8}',
+    );
+    expect(toHex(sim.requests.at(-1)!.slice(0, 10))).toBe("fe0d0801" + "2800" + "0400" + "01" + "08");
   });
 
   it("reports the field as skipped when the board has no alt repeat keys", async () => {

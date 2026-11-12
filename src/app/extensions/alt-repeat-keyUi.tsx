@@ -7,7 +7,7 @@
 // Deviation: vial-gui's key widgets open a keycode picker in a popup; here the
 // selected key slot is filled from the regular keycode picker under the form.
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { altRepeatKeyExtension } from "../../core/extensions/alt-repeat-key.ts";
 import {
   AREP_ENABLED,
@@ -39,6 +39,7 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
   const [index, setIndex] = useState(0);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [busy, setBusy] = useState(false);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   if (!state) return null;
 
   const idx = Math.min(index, state.count - 1);
@@ -59,6 +60,34 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
 
   const toggle = (field: "options" | "allowedMods", bit: number, on: boolean) =>
     void write({ ...entry, [field]: on ? entry[field] | bit : entry[field] & ~bit });
+
+  const selectTab = (i: number) => {
+    setIndex(i);
+    setSlot(null);
+  };
+
+  // WAI-ARIA tabs: arrow keys, Home and End move between entries (roving tabindex).
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const last = state.count - 1;
+    const target =
+      e.key === "ArrowRight"
+        ? idx === last
+          ? 0
+          : idx + 1
+        : e.key === "ArrowLeft"
+          ? idx === 0
+            ? last
+            : idx - 1
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? last
+              : null;
+    if (target === null) return;
+    e.preventDefault();
+    selectTab(target);
+    tabRefs.current[target]?.focus();
+  };
 
   const current = slot ? entry[slot] : null;
   const pick = (code: number) => {
@@ -95,20 +124,25 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
         {state.entries.map((e, i) => (
           <button
             key={i}
-            role="tab"
-            aria-selected={i === idx}
-            className={`${i === idx ? "active" : ""}${e.options & AREP_ENABLED ? " arep-on" : ""}`}
-            onClick={() => {
-              setIndex(i);
-              setSlot(null);
+            ref={(el) => {
+              tabRefs.current[i] = el;
             }}
+            type="button"
+            role="tab"
+            id={`arep-tab-${i}`}
+            aria-controls="arep-panel"
+            aria-selected={i === idx}
+            tabIndex={i === idx ? 0 : -1}
+            className={`${i === idx ? "active" : ""}${e.options & AREP_ENABLED ? " arep-on" : ""}`}
+            onClick={() => selectTab(i)}
+            onKeyDown={onTabKey}
           >
             {i + 1}
           </button>
         ))}
       </div>
 
-      <div className="arep-entry" role="tabpanel" aria-label={`Alt repeat key ${n}`}>
+      <div className="arep-entry" role="tabpanel" id="arep-panel" aria-label={`Alt repeat key ${n}`}>
         <label className="arep-label" htmlFor="arep-enable">
           Enable
         </label>

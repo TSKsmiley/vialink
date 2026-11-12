@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Component tests for the alt repeat key tab, after vial-gui's
+// editor/alt_repeat_key.py on top of protocol/alt_repeat_key.py.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -47,6 +49,24 @@ describe("Alt repeat key panel", () => {
     expect((screen.getByLabelText("Enable") as HTMLInputElement).checked).toBe(true);
     expect(screen.getByRole("button", { name: "Last key for alt repeat key 1: KC_E" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Alt key for alt repeat key 1: KC_R" })).toBeTruthy();
+  });
+
+  it("wires the entry tabs as WAI-ARIA tabs with arrow-key navigation", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("tab", { name: "Alt Repeat Key" }));
+    const panel = screen.getByRole("tabpanel", { name: "Alt repeat key 1" });
+    const first = screen.getByRole("tab", { name: "1" });
+    expect(first.getAttribute("aria-controls")).toBe(panel.id);
+    expect(first.tabIndex).toBe(0);
+    expect(screen.getByRole("tab", { name: "2" }).tabIndex).toBe(-1);
+
+    fireEvent.keyDown(first, { key: "ArrowLeft" });
+    const third = screen.getByRole("tab", { name: "3" });
+    expect(third.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(third);
+    expect(screen.getByRole("tabpanel", { name: "Alt repeat key 3" })).toBeTruthy();
+    fireEvent.keyDown(third, { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "1" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("writes checkbox and keycode changes through to the board", async () => {
