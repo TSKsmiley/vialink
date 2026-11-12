@@ -3,8 +3,7 @@
 // state, Undo/Redo, Layouts, Extensions and a "More" menu with the theme
 // switch and Disconnect.
 //
-// The device pill toggles the existing HID log until the device side bar
-// (redesign phase 6) replaces it.
+// The device pill opens the device side bar with the HID log (DevicePanel).
 
 import {
   ArrowArcLeftIcon,
@@ -110,7 +109,7 @@ function DevicePill({
     <button
       type="button"
       aria-pressed={pressed}
-      title="HID log"
+      title="Device details and HID log"
       onClick={onClick}
       className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border border-kumo-line bg-kumo-control px-3 py-1.5 hover:bg-kumo-tint aria-pressed:border-accent"
     >

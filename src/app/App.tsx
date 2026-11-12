@@ -12,13 +12,13 @@ import {
   type Connection,
 } from "./connection.ts";
 import { WarningIcon } from "@phosphor-icons/react";
-import { DebugPanel } from "./components/DebugPanel.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
 import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
 import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
 import { errorMessage } from "./hooks.ts";
+import { DevicePanel } from "./shell/DevicePanel.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { useHistory } from "./shell/useHistory.ts";
@@ -209,11 +209,7 @@ export function App() {
               locked={restoring}
             />
           )}
-          {showLog && (
-            <div className="legacy-view px-4 pb-4 md:px-5">
-              <DebugPanel queue={queue} />
-            </div>
-          )}
+          {showLog && <DevicePanel queue={queue} keyboard={kb} onClose={() => setShowLog(false)} />}
         </main>
 
         <UndoToast keyboard={kb} controls={history} />
