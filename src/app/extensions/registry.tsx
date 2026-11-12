@@ -7,11 +7,12 @@ import type { ComponentType } from "react";
 import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
+import { layerNamesUi } from "./layerNamesUi.tsx";
+import { macrosUi } from "./macrosUi.tsx";
+import { tapDanceUi } from "./tap-danceUi.tsx";
 import { combosUi } from "./combosUi.tsx";
 import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { altRepeatKeyUi } from "./alt-repeat-keyUi.tsx";
-import { layerNamesUi } from "./layerNamesUi.tsx";
-import { tapDanceUi } from "./tap-danceUi.tsx";
 import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
 
 export interface LayerActionProps {
@@ -47,6 +48,7 @@ export interface AppExtension {
 
 export const APP_EXTENSIONS: readonly AppExtension[] = [
   layerNamesUi,
+  macrosUi,
   tapDanceUi,
   combosUi,
   keyOverridesUi,
