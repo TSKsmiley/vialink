@@ -162,6 +162,12 @@ export class QmkSettings {
       );
     }
     this.current.set(qsid, value);
+    this.ctx.record({
+      label: `QMK setting ${qsidLabel(qsid)}: ${old} → ${value}`,
+      undo: () => this.set(qsid, old),
+      redo: () => this.set(qsid, value),
+      isCurrent: () => this.current.get(qsid) === value,
+    });
     this.ctx.changed();
   }
 
@@ -213,6 +219,7 @@ function fileValue(value: unknown): number | null {
 
 export const qmkSettingsExtension: KeyboardExtension<QmkSettings> = {
   id: "qmk-settings",
+  standard: true,
   name: "QMK settings",
   description:
     "Tap-hold timing, Magic, Auto Shift, combos, one-shot and mouse keys settings stored on the keyboard (Vial protocol 4+).",

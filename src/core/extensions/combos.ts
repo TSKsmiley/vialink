@@ -86,7 +86,15 @@ export class Combos {
       await queue.request(vialComboSet.encode(idx, entry), { retries: RETRIES }),
     );
     if (!reply.ok) throw new ComboError(`the keyboard rejected combo ${idx + 1} (status ${reply.status})`);
-    this.values[idx] = [...entry] as ComboEntry;
+    const old = [...current] as ComboEntry;
+    const now = [...entry] as ComboEntry;
+    this.values[idx] = now;
+    this.ctx.record({
+      label: `Combo ${idx + 1}: ${describeCombo(keyboard.keycodes, now)}`,
+      undo: () => this.set(idx, old),
+      redo: () => this.set(idx, now),
+      isCurrent: () => this.get(idx).every((code, i) => code === now[i]),
+    });
     this.ctx.changed();
   }
 
@@ -101,6 +109,7 @@ export class Combos {
 
 export const combosExtension: KeyboardExtension<Combos> = {
   id: "combos",
+  standard: true,
   name: "Combos",
   description: "Press up to four keys together to send another key. Needs Vial firmware with combos enabled.",
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Layouts saved in this browser: load onto the board, download as .vil,
-// rename or delete. Layouts from this keyboard (same UID) are listed first.
+// rename or delete (undoable from the dialog: the delete puts the record
+// back). Layouts from this keyboard (same UID) are listed first.
 
 import { useEffect, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
@@ -19,6 +20,8 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
   const [failure, setFailure] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  /** The layout deleted last, kept so the delete can be undone. */
+  const [deleted, setDeleted] = useState<SavedLayout | null>(null);
 
   const [reload, setReload] = useState(0);
   const refresh = () => setReload((n) => n + 1);
@@ -106,7 +109,12 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
             {confirmDelete === l.id ? (
               <button
                 className="danger"
-                onClick={() => void act(async () => layoutStore().delete(l.id))}
+                onClick={() =>
+                  void act(async () => {
+                    await layoutStore().delete(l.id);
+                    setDeleted(l);
+                  })
+                }
                 aria-label={`Confirm delete ${l.name}`}
               >
                 Really delete?
@@ -135,6 +143,21 @@ export function SavedLayoutsDialog({ keyboard, onLoad, onError, onClose }: Props
         {failure && (
           <p className="error" role="alert">
             {failure}
+          </p>
+        )}
+        {deleted && (
+          <p className="saved-undo" role="status">
+            Deleted “{deleted.name}”.{" "}
+            <button
+              onClick={() =>
+                void act(async () => {
+                  await layoutStore().put(deleted);
+                  setDeleted(null);
+                })
+              }
+            >
+              Undo
+            </button>
           </p>
         )}
         {layouts === null && !failure && <p className="hint">Loading…</p>}

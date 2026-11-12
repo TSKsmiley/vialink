@@ -67,7 +67,12 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
     setPending(null);
     setBusy(true);
     try {
-      await applyVilRestore(keyboard, plan, (done, total) => setProgress({ done, total }));
+      await applyVilRestore(
+        keyboard,
+        plan,
+        (done, total) => setProgress({ done, total }),
+        `Load ${pending.name}`,
+      );
       onNotice(
         plan.ops.length === 0
           ? "The board already matches this layout."

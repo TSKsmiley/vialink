@@ -20,6 +20,8 @@ import { VilControls } from "./components/VilControls.tsx";
 import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
 import { errorMessage } from "./hooks.ts";
 import { TopBar } from "./shell/TopBar.tsx";
+import { UndoToast } from "./shell/UndoToast.tsx";
+import { useHistory } from "./shell/useHistory.ts";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 
 type Status =
@@ -99,12 +101,14 @@ export function App() {
   }, [notice]);
 
   const kb = status.kind === "connected" ? status.connection.keyboard : null;
+  const history = useHistory(kb, setError);
 
   return (
     <TooltipProvider>
       <div className="flex min-h-screen flex-col bg-kumo-canvas text-kumo-default">
         <TopBar
           keyboard={kb}
+          history={history}
           layouts={
             kb && (
               <VilControls
@@ -209,6 +213,8 @@ export function App() {
             </div>
           )}
         </main>
+
+        <UndoToast keyboard={kb} controls={history} />
 
         <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
           Built on{" "}

@@ -90,5 +90,10 @@ describe("saving layouts in the browser", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete New name" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm delete New name" }));
     await screen.findByText(/Nothing saved in this browser yet/);
+
+    // Deleting can be undone.
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("New name")).toBeTruthy();
+    expect(screen.queryByText(/Deleted/)).toBeNull();
   });
 });

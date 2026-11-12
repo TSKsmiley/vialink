@@ -14,6 +14,7 @@ import {
 } from "./definition/definition.ts";
 import { packLayoutOptions, unpackLayoutOptions, type LayoutLabel } from "./definition/layoutOptions.ts";
 import { BUILTIN_EXTENSIONS } from "./extensions/index.ts";
+import { History } from "./history.ts";
 import type { ActiveExtension, ExtensionContext, KeyboardExtension } from "./extensions/types.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
@@ -130,6 +131,8 @@ export class Keyboard {
   unlockHandler: UnlockHandler | null = null;
   /** Last known lock state; null until first checked. Updated by every status check, unlock and lock. */
   unlocked: boolean | null = null;
+  /** Undo/redo of every write made through this object; ends with it (on disconnect). */
+  readonly history = new History();
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
@@ -214,9 +217,16 @@ export class Keyboard {
     const id = keyId(layer, row, col);
     if (!this.keymap.has(id)) throw new Error(`no key at layer ${layer}, row ${row}, col ${col}`);
     if (this.keymap.get(id) === code) return;
+    const old = this.keymap.get(id)!;
     await this.ensureUnlockedFor(code);
     await this.queue.request(viaSetKeycode.encode(layer, row, col, code));
     this.keymap.set(id, code);
+    this.history.record({
+      label: `Layer ${layer}, key (${row}, ${col}): ${this.codeName(old)} → ${this.codeName(code)}`,
+      undo: () => this.setKey(layer, row, col, old),
+      redo: () => this.setKey(layer, row, col, code),
+      isCurrent: () => this.keymap.get(id) === code,
+    });
     this.changed();
   }
 
@@ -224,23 +234,48 @@ export class Keyboard {
     const id = encId(layer, index, direction);
     if (!this.encoderMap.has(id)) throw new Error(`no encoder ${index} on layer ${layer}`);
     if (this.encoderMap.get(id) === code) return;
+    const old = this.encoderMap.get(id)!;
     await this.ensureUnlockedFor(code);
     await this.queue.request(vialSetEncoder.encode(layer, index, direction, code));
     this.encoderMap.set(id, code);
+    const turn = direction === 0 ? "clockwise" : "counter-clockwise";
+    this.history.record({
+      label: `Layer ${layer}, encoder ${index} ${turn}: ${this.codeName(old)} → ${this.codeName(code)}`,
+      undo: () => this.setEncoder(layer, index, direction, old),
+      redo: () => this.setEncoder(layer, index, direction, code),
+      isCurrent: () => this.encoderMap.get(id) === code,
+    });
     this.changed();
   }
 
   /** Writes a packed layout-options value (no-op when unchanged or unsupported). */
   async setLayoutOptions(options: number): Promise<void> {
     if (this.layoutOptions === -1 || this.layoutOptions === options) return;
-    await this.queue.request(viaSetLayoutOptions.encode(options >>> 0));
-    this.layoutOptions = options >>> 0;
+    const old = this.layoutOptions;
+    const value = options >>> 0;
+    await this.queue.request(viaSetLayoutOptions.encode(value));
+    this.layoutOptions = value;
+    this.history.record({
+      label: "Layout options",
+      undo: () => this.setLayoutOptions(old),
+      redo: () => this.setLayoutOptions(value),
+      isCurrent: () => this.layoutOptions === value,
+    });
     this.changed();
   }
 
   async setLayoutChoices(choices: number[]): Promise<void> {
     if (!this.layoutLabels) return;
     await this.setLayoutOptions(packLayoutOptions(choices, this.layoutLabels));
+  }
+
+  /** A keycode as vial-gui writes it (KC_A, LT(1,KC_SPACE)), for history labels. */
+  codeName(code: number): string {
+    try {
+      return this.keycodes.serialize(code);
+    } catch {
+      return `0x${code.toString(16).padStart(4, "0")}`;
+    }
   }
 
   async isUnlocked(): Promise<boolean> {
@@ -314,7 +349,7 @@ export class Keyboard {
       return false;
     }
     if (this.active.has(ext.id)) return true;
-    const ctx: ExtensionContext = { keyboard: this, queue: this.queue, changed: () => this.changed() };
+    const ctx = this.extensionContext();
     const state = await ext.probe(ctx);
     if (state === null) return false;
     // Keep probe order, so activeExtensions stays the same as after a fresh connect.
@@ -332,7 +367,7 @@ export class Keyboard {
     extensions: readonly KeyboardExtension<unknown>[],
     onProgress?: (p: LoadProgress) => void,
   ): Promise<void> {
-    const ctx: ExtensionContext = { keyboard: this, queue: this.queue, changed: () => this.changed() };
+    const ctx = this.extensionContext();
     for (let i = 0; i < extensions.length; i++) {
       onProgress?.({ stage: "extensions", done: i, total: extensions.length });
       const ext = extensions[i];
@@ -340,6 +375,15 @@ export class Keyboard {
       if (state !== null) this.active.set(ext.id, { extension: ext, state });
     }
     this.changed();
+  }
+
+  private extensionContext(): ExtensionContext {
+    return {
+      keyboard: this,
+      queue: this.queue,
+      changed: () => this.changed(),
+      record: (write) => this.history.record(write),
+    };
   }
 
   private changed(): void {
