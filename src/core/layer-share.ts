@@ -107,7 +107,9 @@ function layoutOf(kb: Keyboard): [string, string | number][] {
 /** "Polydactyl" or "Split backspace on" for messages. */
 export function describeLayout(layout: readonly [string, string | number][]): string {
   if (layout.length === 0) return "no layout options";
-  return layout.map(([label, v]) => (typeof v === "string" ? v : `${label} ${v ? "on" : "off"}`)).join(", ");
+  return layout
+    .map(([label, v]) => (typeof v === "string" ? v.trim() : `${label.trim()} ${v ? "on" : "off"}`))
+    .join(", ");
 }
 
 // ── encode ──────────────────────────────────────────────────────────────────
