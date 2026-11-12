@@ -123,8 +123,12 @@ export function App() {
         </div>
       </header>
       <p className="banner warning experimental" role="note">
-        Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and barely tested on
-        real keyboards. Save a backup of your layout before changing anything.
+        Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only been
+        tested on one keyboard, the{" "}
+        <a href="https://github.com/GEIGEIGEIST/KLOR" target="_blank" rel="noreferrer">
+          KLOR by GEIGEIGEIST
+        </a>
+        . Save a backup of your layout before changing anything.
       </p>
 
       {kb && unlockRequest && (

@@ -5,8 +5,9 @@ keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera
 to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
 before).
 
-> **Experimental.** ViaLink is vibe coded: most of it was written by an AI coding assistant, with
-> tests against a simulated keyboard but very little testing on real hardware. It can write wrong
+> **Experimental.** ViaLink is vibe coded: most of it was written by an AI coding assistant, and it
+> has only been tested on one real keyboard, the [KLOR](https://github.com/GEIGEIGEIST/KLOR) by
+> GEIGEIGEIST (plus a simulated keyboard in the test suite). It can write wrong
 > settings to your keyboard. Save a backup of your layout (in desktop Vial, or with "Save .vil")
 > before changing anything, and report problems as issues.
 

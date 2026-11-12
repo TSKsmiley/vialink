@@ -161,6 +161,12 @@ footer a {
   padding: 8px 12px;
   border-radius: 6px;
 }
+.banner.experimental {
+  display: block;
+}
+.banner.experimental a {
+  color: inherit;
+}
 .banner.notice {
   background: var(--notice-bg);
 }
