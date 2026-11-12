@@ -144,7 +144,7 @@ export class TapDance {
 /** True when the reply is the request unchanged: no handler answered it (see the header). */
 export const tapDanceExtension: KeyboardExtension<TapDance> = {
   id: "tap-dance",
-  standard: true,
+  group: "standard",
   name: "Tap dance",
   description: "Keys that do different things when tapped, held, double-tapped or tapped then held (TD(n)).",
 

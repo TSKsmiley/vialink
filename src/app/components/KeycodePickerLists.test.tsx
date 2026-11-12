@@ -35,6 +35,8 @@ async function setup() {
   render(<Editor keyboard={kb} onError={onError} onNotice={() => undefined} />);
   const k = kb.keys[0];
   fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Key ${k.row},${k.col}:`) })[0]);
+  // The tabbed picker lives in the key inspector's "All keys" tab.
+  fireEvent.click(screen.getByRole("tab", { name: "All keys" }));
   return { sim, kb, k, onError };
 }
 

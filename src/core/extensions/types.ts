@@ -40,6 +40,8 @@ export interface ExtensionVilSupport<State> {
   restore(state: State, file: Readonly<Record<string, unknown>>): ExtensionRestoreStep[];
 }
 
+export type ExtensionGroup = "standard" | "compatible" | "nonstandard";
+
 export interface KeyboardExtension<State = unknown> {
   /** Stable identifier, used for settings and lookups. */
   readonly id: string;
@@ -47,11 +49,13 @@ export interface KeyboardExtension<State = unknown> {
   readonly name: string;
   readonly description: string;
   /**
-   * True for features of standard Vial firmware (macros, tap dance, …), which
-   * any Vial build may include; false or absent for extensions that need
-   * firmware beyond standard Vial (e.g. dynamic layer names).
+   * Where the Extensions dialog lists it: "standard" for features of standard
+   * Vial firmware (macros, tap dance, …); "compatible" for ViaLink extras that
+   * work with standard Vial firmware but desktop Vial lacks; "nonstandard"
+   * (the default) for extensions that need firmware beyond standard Vial
+   * (e.g. dynamic layer names).
    */
-  readonly standard?: boolean;
+  readonly group?: ExtensionGroup;
   /** Where to get firmware that supports this extension, shown in the settings list. */
   readonly firmware?: { readonly label: string; readonly url: string };
   /**

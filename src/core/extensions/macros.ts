@@ -170,7 +170,7 @@ function macrosFromFile(value: unknown, macros: Macros): MacroAction[][] {
 
 export const macrosExtension: KeyboardExtension<Macros> = {
   id: "macros",
-  standard: true,
+  group: "standard",
   name: "Macros",
   description: "Edit the keyboard's dynamic macros (M0, M1, ...) and keep them in .vil files.",
 

@@ -209,7 +209,7 @@ export class KeyOverrides {
 
 export const keyOverridesExtension: KeyboardExtension<KeyOverrides> = {
   id: "key-overrides",
-  standard: true,
+  group: "standard",
   name: "Key overrides",
   description: "Replace a key while certain modifiers are held (QMK key overrides). Needs Vial protocol 5.",
 

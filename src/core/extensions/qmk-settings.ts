@@ -219,7 +219,7 @@ function fileValue(value: unknown): number | null {
 
 export const qmkSettingsExtension: KeyboardExtension<QmkSettings> = {
   id: "qmk-settings",
-  standard: true,
+  group: "standard",
   name: "QMK settings",
   description:
     "Tap-hold timing, Magic, Auto Shift, combos, one-shot and mouse keys settings stored on the keyboard (Vial protocol 4+).",

@@ -32,7 +32,9 @@ async function setup(tapDance = 3, entries: Partial<TapDanceEntry>[] = [{ onTap:
 }
 
 function openTab() {
-  fireEvent.click(screen.getByRole("tab", { name: "Tap dance" }));
+  fireEvent.click(
+    within(screen.getByRole("tablist", { name: "Edit" })).getByRole("tab", { name: "Tap dance" }),
+  );
   return screen.getByRole("region", { name: "Tap dance" });
 }
 

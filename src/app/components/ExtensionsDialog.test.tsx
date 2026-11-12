@@ -50,8 +50,10 @@ async function klor() {
 describe("Extensions dialog", () => {
   it("lists standard Vial features apart from non-standard extensions", () => {
     render(<Harness keyboard={null} />);
-    const standard = screen.getByRole("region", { name: "Standard Vial" });
-    const other = screen.getByRole("region", { name: "Non-standard extensions" });
+    const standard = screen.getByRole("group", { name: "Standard Vial" });
+    const other = screen.getByRole("group", { name: "Non-standard Vial" });
+    expect(standard.hasAttribute("open")).toBe(false); // folded at first
+    expect(within(standard).getByText("6 of 6 on")).toBeTruthy();
     for (const name of [
       "Macros",
       "Tap dance",

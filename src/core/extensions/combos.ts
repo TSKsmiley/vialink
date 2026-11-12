@@ -109,7 +109,7 @@ export class Combos {
 
 export const combosExtension: KeyboardExtension<Combos> = {
   id: "combos",
-  standard: true,
+  group: "standard",
   name: "Combos",
   description: "Press up to four keys together to send another key. Needs Vial firmware with combos enabled.",
 
