@@ -139,3 +139,18 @@ html:root {
 html:root[data-mode="dark"] {
   --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), white 12%);
 }
+
+/*
+ * Contrast fixes for light mode (WCAG 4.5:1 for body text, measured in the
+ * phase 7 audit): Kumo's subtle grey was 4.46:1 on elevated panels and its
+ * warning text 3.89:1 on the warning banner. Primary buttons mix the brand
+ * colour with white (Kumo's gradient), which leaves white text near 4.3:1 on
+ * mint, so their brand is a darker teal in light mode.
+ */
+html:root:not([data-mode="dark"]) {
+  --text-color-kumo-subtle: oklch(50% 0 0);
+  --text-color-kumo-warning: oklch(50% 0.13 57.5);
+}
+html:root:not([data-mode="dark"]) .vl-on-accent {
+  --color-kumo-brand: #115e59;
+}
