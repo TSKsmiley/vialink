@@ -1,0 +1,62 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* Alt repeat key tab (alt-repeat-keyUi.tsx); uses the theme tokens of styles.css. */
+.arep {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.arep-tabs button.arep-on:not(.active) {
+  border-color: var(--accent);
+}
+.arep-entry {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px 16px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.arep-label {
+  color: var(--muted);
+}
+.arep-key {
+  min-width: 72px;
+  min-height: 44px;
+  background: var(--key);
+  border-color: var(--key-stroke);
+}
+.arep-key.selected {
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+.arep-mods {
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  gap: 4px 14px;
+}
+.arep-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.arep-mods label,
+.arep-options label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+@media (max-width: 520px) {
+  .arep-entry {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .arep-mods {
+    grid-template-columns: repeat(2, max-content);
+  }
+  .arep-mods label {
+    grid-row: auto !important;
+    grid-column: auto !important;
+  }
+}
