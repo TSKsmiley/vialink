@@ -93,7 +93,9 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
     { id: "matrix", title: "Matrix tester" },
     ...panels.map((p) => ({ id: p.id, title: p.title })),
   ];
-  const panel = panels.find((p) => p.id === view);
+  // A view whose extension was just turned off falls back to the keymap.
+  const shown = views.some((v) => v.id === view) ? view : "keymap";
+  const panel = panels.find((p) => p.id === shown);
 
   const viewTabs = (
     <nav className="views" role="tablist" aria-label="Editor views">
@@ -101,8 +103,8 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
         <button
           key={v.id}
           role="tab"
-          aria-selected={view === v.id}
-          className={view === v.id ? "active" : ""}
+          aria-selected={shown === v.id}
+          className={shown === v.id ? "active" : ""}
           onClick={() => setView(v.id)}
         >
           {v.title}
@@ -111,7 +113,7 @@ export function Editor({ keyboard, onError, onNotice }: Props) {
     </nav>
   );
 
-  if (view === "matrix") {
+  if (shown === "matrix") {
     return (
       <div className="editor">
         {viewTabs}

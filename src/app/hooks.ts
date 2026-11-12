@@ -6,10 +6,10 @@ import type { Keyboard } from "../core/keyboard.ts";
 import type { PickerInfo } from "./components/KeycodePicker.tsx";
 
 /** Re-renders whenever the keyboard's state changes; returns its version counter. */
-export function useKeyboardVersion(kb: Keyboard): number {
+export function useKeyboardVersion(kb: Keyboard | null): number {
   return useSyncExternalStore(
-    (cb) => kb.subscribe(cb),
-    () => kb.version,
+    (cb) => (kb ? kb.subscribe(cb) : () => undefined),
+    () => kb?.version ?? 0,
   );
 }
 

@@ -662,3 +662,28 @@ button.danger {
   align-items: center;
   gap: 8px;
 }
+
+/* A dialog whose title and buttons stay put while its body scrolls. */
+.dialog.dialog-scroll {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dialog-scroll .dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -20px;
+  padding: 0 20px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.dialog-scroll .dialog-head .hint {
+  margin-bottom: 10px;
+}
+.extension-status.on {
+  color: var(--text);
+}
+.dialog-body.extension-list li:first-child {
+  border-top: none;
+}

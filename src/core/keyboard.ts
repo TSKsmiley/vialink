@@ -303,6 +303,31 @@ export class Keyboard {
     }
   }
 
+  /**
+   * Turns an extension on or off for the connected board without reconnecting:
+   * off drops its state, on probes the board for it. Resolves whether the
+   * extension is active afterwards (on can still be false: the board lacks it).
+   */
+  async setExtensionEnabled(ext: KeyboardExtension<unknown>, enabled: boolean): Promise<boolean> {
+    if (!enabled) {
+      if (this.active.delete(ext.id)) this.changed();
+      return false;
+    }
+    if (this.active.has(ext.id)) return true;
+    const ctx: ExtensionContext = { keyboard: this, queue: this.queue, changed: () => this.changed() };
+    const state = await ext.probe(ctx);
+    if (state === null) return false;
+    // Keep probe order, so activeExtensions stays the same as after a fresh connect.
+    const entries = [...this.active.values(), { extension: ext, state }];
+    const order = BUILTIN_EXTENSIONS.map((e) => e.id);
+    const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+    entries.sort((a, b) => rank(a.extension.id) - rank(b.extension.id));
+    this.active.clear();
+    for (const entry of entries) this.active.set(entry.extension.id, entry);
+    this.changed();
+    return true;
+  }
+
   private async probeExtensions(
     extensions: readonly KeyboardExtension<unknown>[],
     onProgress?: (p: LoadProgress) => void,

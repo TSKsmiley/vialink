@@ -145,6 +145,7 @@ export function App() {
         <ExtensionsDialog
           disabled={disabledExtensions}
           keyboard={kb}
+          onError={setError}
           onChange={(next) => {
             setDisabledExtensions(next);
             saveDisabledExtensions(next);
