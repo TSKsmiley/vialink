@@ -1,0 +1,130 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * ViaLink's stylesheet entry: Kumo's tokens and Tailwind v4, the mint accent,
+ * and the pre-redesign styles in a "legacy" cascade layer.
+ *
+ * Layer order: legacy sits between Tailwind's base (preflight) and its
+ * utilities, so the old views keep their look over the reset while Kumo's
+ * utility classes still win wherever both apply. styles.css shrinks view by
+ * view as later phases replace those views.
+ *
+ * Light and dark: Kumo switches on `data-mode="dark"` on <html>. src/app/theme.ts
+ * sets it from the system setting or the manual choice (index.html sets it
+ * before first paint to avoid a flash).
+ */
+@layer theme, base, legacy, components, utilities;
+
+@source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+@import "./styles.css" layer(legacy);
+
+/* ViaLink colours as Tailwind tokens: bg-accent, text-accent-link, border-success… */
+@theme inline {
+  --color-accent: var(--vl-accent);
+  --color-accent-tint: var(--vl-accent-tint);
+  --color-accent-ring: var(--vl-accent-ring);
+  --color-accent-link: var(--vl-accent-link);
+  --color-on-accent: var(--vl-on-accent);
+  --color-success: var(--vl-success);
+  --color-success-tint: var(--vl-success-tint);
+  --color-success-text: var(--vl-success-text);
+  --color-connected: var(--vl-connected);
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  :root {
+    /* Mint, light. */
+    --vl-accent: #0f766e;
+    --vl-accent-tint: #ecfdfa;
+    --vl-accent-ring: rgb(15 118 110 / 0.18);
+    --vl-accent-link: #115e59;
+    --vl-on-accent: #ffffff;
+    /* Success and "matched" are blue so they never read as the accent. */
+    --vl-success: #2563eb;
+    --vl-success-tint: #eff6ff;
+    --vl-success-text: #1d4ed8;
+    /* The connection dot stays green. */
+    --vl-connected: #16a34a;
+    --vl-scroll-thumb: #d4d4d4;
+    --vl-scroll-thumb-hover: #a3a3a3;
+
+    /* Kumo's brand (primary buttons, selected states) and links follow the accent. */
+    --color-kumo-brand: var(--vl-accent);
+    --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), black 12%);
+    --text-color-kumo-link: var(--vl-accent-link);
+    /* Focus rings in the accent. */
+    --color-kumo-focus: var(--vl-accent);
+  }
+
+  :root[data-mode="dark"] {
+    --vl-accent: #2dd4bf;
+    --vl-accent-tint: #0b2623;
+    --vl-accent-ring: rgb(45 212 191 / 0.28);
+    --vl-accent-link: #5eead4;
+    --vl-on-accent: #04201c;
+    --vl-success: #3b82f6;
+    --vl-success-tint: #142240;
+    --vl-success-text: #93c5fd;
+    --vl-connected: #22c55e;
+    --vl-scroll-thumb: #404040;
+    --vl-scroll-thumb-hover: #525252;
+
+    --color-kumo-brand: var(--vl-accent);
+    --color-kumo-brand-hover: color-mix(in oklch, var(--vl-accent), white 12%);
+    --text-color-kumo-link: var(--vl-accent-link);
+    --color-kumo-focus: var(--vl-accent);
+  }
+
+  html,
+  body {
+    background: var(--color-kumo-canvas);
+    color: var(--text-color-kumo-default);
+  }
+  body {
+    font-family:
+      Inter,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      sans-serif;
+    font-size: 14px;
+  }
+
+  /* Scrollbars follow the theme. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vl-scroll-thumb) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--vl-scroll-thumb);
+    border-radius: 999px;
+    border: 2px solid var(--color-kumo-canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--vl-scroll-thumb-hover);
+  }
+
+  /* Focus rings follow the theme everywhere, Kumo or not. */
+  :focus-visible {
+    outline: 2px solid var(--vl-accent);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Kumo's primary button forces white text (!text-white, an important
+   * utility). Text on mint must be dark in dark mode; an important rule in an
+   * earlier layer beats an important one in a later layer.
+   */
+  .vl-on-accent {
+    color: var(--vl-on-accent) !important;
+  }
+}

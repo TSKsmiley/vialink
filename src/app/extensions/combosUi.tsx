@@ -134,5 +134,13 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
 
 export const combosUi: AppExtension = {
   id: combosExtension.id,
-  panels: [{ id: "combos", title: "Combos", Component: CombosPanel }],
+  panels: [
+    {
+      id: "combos",
+      title: "Combos",
+      Component: CombosPanel,
+      count: (kb) =>
+        kb.extension(combosExtension)?.entries.filter((e) => e.some((c) => c !== 0)).length ?? null,
+    },
+  ],
 };

@@ -2,12 +2,15 @@
 // Save the current layout as a .vil file or in the browser, and load either
 // back onto the board with progress, after a confirmation that names a UID
 // mismatch and anything the layout holds that this version does not apply.
+// Shown as the "Layouts" menu in the top bar.
 
 import { useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { applyVilRestore, parseVil, planVilRestore, saveVil, type RestorePlan } from "../../core/vil.ts";
 import { downloadText, errorMessage, fileNameFor } from "../hooks.ts";
 import { defaultLayoutName, layoutStore, newLayoutId, requestPersistence } from "../storage/savedLayouts.ts";
+import { Button, DropdownMenu } from "../ui/index.ts";
+import { CaretDownIcon } from "@phosphor-icons/react";
 import { SavedLayoutsDialog } from "./SavedLayoutsDialog.tsx";
 
 interface Props {
@@ -83,18 +86,24 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
 
   return (
     <div className="vil-controls">
-      <button onClick={() => setSaveName(defaultLayoutName(keyboard.name))} disabled={busy}>
-        Save in browser
-      </button>
-      <button onClick={() => setShowSaved(true)} disabled={busy}>
-        Saved layouts
-      </button>
-      <button onClick={download} disabled={busy}>
-        Save .vil
-      </button>
-      <button onClick={() => input.current?.click()} disabled={busy}>
-        Load .vil
-      </button>
+      <DropdownMenu>
+        <DropdownMenu.Trigger
+          render={
+            <Button disabled={busy}>
+              Layouts <CaretDownIcon aria-hidden="true" />
+            </Button>
+          }
+        />
+        <DropdownMenu.Content>
+          <DropdownMenu.Item onClick={() => setShowSaved(true)}>Saved layouts…</DropdownMenu.Item>
+          <DropdownMenu.Item onClick={() => setSaveName(defaultLayoutName(keyboard.name))}>
+            Save in browser…
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item onClick={download}>Save .vil file</DropdownMenu.Item>
+          <DropdownMenu.Item onClick={() => input.current?.click()}>Load .vil file…</DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu>
       <input
         ref={input}
         type="file"

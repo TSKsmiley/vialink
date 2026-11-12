@@ -212,5 +212,14 @@ export function TapDancePanel({ keyboard, onError }: PanelProps) {
 
 export const tapDanceUi: AppExtension = {
   id: tapDanceExtension.id,
-  panels: [{ id: "tap-dance", title: "Tap dance", Component: TapDancePanel }],
+  panels: [
+    {
+      id: "tap-dance",
+      title: "Tap dance",
+      Component: TapDancePanel,
+      count: (kb) =>
+        kb.extension(tapDanceExtension)?.entries.filter((e) => TAP_DANCE_KEY_FIELDS.some((f) => e[f] !== 0))
+          .length ?? null,
+    },
+  ],
 };
