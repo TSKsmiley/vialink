@@ -4,6 +4,7 @@ import { keyOverridesExtension } from "./key-overrides.ts";
 import { altRepeatKeyExtension } from "./alt-repeat-key.ts";
 import { layerNamesExtension } from "./layerNames.ts";
 import { tapDanceExtension } from "./tap-dance.ts";
+import { qmkSettingsExtension } from "./qmk-settings.ts";
 import type { KeyboardExtension } from "./types.ts";
 
 export type { ActiveExtension, ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
@@ -15,4 +16,5 @@ export const BUILTIN_EXTENSIONS: readonly KeyboardExtension<unknown>[] = [
   combosExtension as KeyboardExtension<unknown>,
   keyOverridesExtension as KeyboardExtension<unknown>,
   altRepeatKeyExtension as KeyboardExtension<unknown>,
+  qmkSettingsExtension as KeyboardExtension<unknown>,
 ];

@@ -12,6 +12,7 @@ import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { altRepeatKeyUi } from "./alt-repeat-keyUi.tsx";
 import { layerNamesUi } from "./layerNamesUi.tsx";
 import { tapDanceUi } from "./tap-danceUi.tsx";
+import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
 
 export interface LayerActionProps {
   keyboard: Keyboard;
@@ -50,6 +51,7 @@ export const APP_EXTENSIONS: readonly AppExtension[] = [
   combosUi,
   keyOverridesUi,
   altRepeatKeyUi,
+  qmkSettingsUi,
 ];
 
 /** UI entries whose core extension is active on this keyboard. */
