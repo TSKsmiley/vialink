@@ -580,13 +580,25 @@ button.danger {
 .dialog-scroll .dialog-head .hint {
   margin-bottom: 10px;
 }
-.extension-status.on {
+/* Status lines stay quiet so the group headings stand out; a dot marks active ones. */
+.extension-status.on::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--vl-connected);
+  vertical-align: 1px;
+}
+.dialog h3.extension-group {
+  margin: 18px 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text);
 }
-.extension-group {
-  margin: 14px 0 0;
-  font-size: 0.95rem;
-}
 .extension-group + .hint {
-  margin: 2px 0 6px;
+  margin: 2px 0 8px;
 }
