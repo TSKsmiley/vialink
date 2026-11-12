@@ -607,3 +607,49 @@ button.danger {
 .layer-others .keycode {
   min-width: 64px;
 }
+.layer-more {
+  align-self: center;
+}
+
+/* Tap Dance tab of the keycode picker (TapDancePicker) */
+.td-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.td-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+.td-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--key);
+  border-color: var(--key-stroke);
+}
+.td-option.current {
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+.td-name {
+  font-weight: 600;
+}
+.td-summary {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.td-free {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

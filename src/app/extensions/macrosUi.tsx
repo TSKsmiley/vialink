@@ -23,7 +23,7 @@ import { VIAL_PROTOCOL_ADVANCED_MACROS, VIAL_PROTOCOL_EXT_MACROS } from "../../c
 import { equalBytes, MACRO_MAX_DELAY_UI, type MacroAction } from "../../core/protocol/macros.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./macros.css";
 
@@ -306,7 +306,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
         <p className="hint">Select a key in a Down, Up or Tap action, then pick a keycode below.</p>
       )}
       <KeycodePicker
-        layerNames={layerNamesOf(keyboard)}
+        info={pickerInfoOf(keyboard)}
         table={table}
         disabled={slot === null || busy}
         current={slotCode}

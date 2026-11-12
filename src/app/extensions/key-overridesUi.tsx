@@ -20,7 +20,7 @@ import {
   type KeyOverrideEntry,
 } from "../../core/protocol/key-overrides.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./key-overrides.css";
 
@@ -95,7 +95,7 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
             : "Select a trigger or replacement key above, then pick a keycode."}
         </p>
         <KeycodePicker
-          layerNames={layerNamesOf(keyboard)}
+          info={pickerInfoOf(keyboard)}
           table={keyboard.keycodes}
           disabled={selection === null}
           current={current}

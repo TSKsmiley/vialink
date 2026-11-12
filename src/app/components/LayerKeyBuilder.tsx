@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import type { Keycode, KeycodeTable } from "../../core/keycodes/table.ts";
+import type { PickerInfo } from "./KeycodePicker.tsx";
 
 interface LayerAction {
   /** Keycode id prefix: MO for MO(1), LT for LT1(kc). */
@@ -66,14 +67,17 @@ interface Props {
   table: KeycodeTable;
   /** The "layers" group's keycodes, as the picker got them. */
   keycodes: readonly Keycode[];
-  /** Names of the layers, when the board has them (layer-names extension). */
-  layerNames?: readonly string[];
+  info?: PickerInfo;
   disabled: boolean;
   current: number | null;
   onPick: (code: number) => void;
 }
 
-export function LayerKeyBuilder({ table, keycodes, layerNames, disabled, current, onPick }: Props) {
+/** Boards with at most this many layers show every layer as a button. */
+const SHOW_ALL_LAYERS = 6;
+
+export function LayerKeyBuilder({ table, keycodes, info, disabled, current, onPick }: Props) {
+  const layerNames = info?.layerNames;
   const actions = byAction(keycodes);
   const available = ACTIONS.filter((a) => actions.has(a.kind));
   const others = keycodes.filter((kc) => !LT_RE.test(kc.qmk_id) && !LAYER_RE.test(kc.qmk_id));
@@ -104,6 +108,14 @@ export function LayerKeyBuilder({ table, keycodes, layerNames, disabled, current
   const kind = chosen ?? currentKind ?? available[0]?.kind ?? null;
   const action = available.find((a) => a.kind === kind) ?? null;
   const layers = kind ? [...(actions.get(kind) ?? new Map<number, Keycode>()).entries()] : [];
+  // Buttons for the layers worth showing: in use, named, or the selected key's
+  // target. The rest are one dropdown away, so 16 or 32 layers stay short.
+  const named = (layer: number) => !!layerNames?.[layer]?.trim();
+  const shown =
+    !info?.usedLayers || layers.length <= SHOW_ALL_LAYERS
+      ? layers
+      : layers.filter(([l]) => l === 0 || info.usedLayers?.has(l) || named(l) || l === currentLayer);
+  const hidden = layers.filter((entry) => !shown.includes(entry));
 
   const pickLayer = (kc: Keycode) => {
     // Moving an LT key to another layer keeps its tap key.
@@ -136,7 +148,7 @@ export function LayerKeyBuilder({ table, keycodes, layerNames, disabled, current
       <fieldset className="layer-targets">
         <legend>2. Which layer?</legend>
         <div className="layer-target-list">
-          {layers.map(([layer, kc]) => {
+          {shown.map(([layer, kc]) => {
             const name = layerNames?.[layer]?.trim();
             const isCurrent = kind === currentKind && layer === currentLayer;
             return (
@@ -155,6 +167,27 @@ export function LayerKeyBuilder({ table, keycodes, layerNames, disabled, current
               </button>
             );
           })}
+          {hidden.length > 0 && (
+            <select
+              className="layer-more"
+              aria-label="Other layer"
+              disabled={disabled}
+              value=""
+              onChange={(e) => {
+                const entry = hidden.find(([l]) => String(l) === e.target.value);
+                if (entry) pickLayer(entry[1]);
+              }}
+            >
+              <option value="" disabled>
+                Other layer…
+              </option>
+              {hidden.map(([layer]) => (
+                <option key={layer} value={layer}>
+                  Layer {layer} (empty)
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         {kind === "LT" && (
           <p className="hint">After choosing the layer, pick the key to send on tap from the Basic tab.</p>

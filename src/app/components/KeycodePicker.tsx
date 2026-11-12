@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import type { Keycode, KeycodeTable } from "../../core/keycodes/table.ts";
 import { LayerKeyBuilder } from "./LayerKeyBuilder.tsx";
+import { TapDancePicker } from "./TapDancePicker.tsx";
 
 interface Props {
   table: KeycodeTable;
@@ -12,11 +13,20 @@ interface Props {
   /** Current keycode of the selected key, to show what an assignment replaces. */
   current: number | null;
   onPick: (code: number) => void;
-  /** Layer names to show in the Layers tab, when the board has them. */
-  layerNames?: readonly string[];
+  /** What the board can tell the picker beyond keycodes (see pickerInfoOf). */
+  info?: PickerInfo;
 }
 
-export function KeycodePicker({ table, disabled, current, onPick, layerNames }: Props) {
+export interface PickerInfo {
+  /** Layer names, when the board has the layer-names extension. */
+  layerNames?: readonly string[];
+  /** Layers with at least one key or encoder that is not KC_NO or KC_TRNS. */
+  usedLayers?: ReadonlySet<number>;
+  /** Per tap dance: a short summary of what it does, or null when it is not set up. */
+  tapDances?: readonly (string | null)[];
+}
+
+export function KeycodePicker({ table, disabled, current, onPick, info }: Props) {
   const groups = useMemo(() => table.groups(), [table]);
   const [tab, setTab] = useState(groups[0]?.id ?? "basic");
   const [query, setQuery] = useState("");
@@ -90,7 +100,7 @@ export function KeycodePicker({ table, disabled, current, onPick, layerNames }: 
         <LayerKeyBuilder
           table={table}
           keycodes={groups.find((g) => g.id === "layers")?.keycodes ?? []}
-          layerNames={layerNames}
+          info={info}
           disabled={disabled}
           current={current}
           onPick={(code) => {
@@ -98,6 +108,14 @@ export function KeycodePicker({ table, disabled, current, onPick, layerNames }: 
             // LT(layer, kc): the tap key comes next, from the Basic tab.
             if (table.isMasked(code) && (current === null || !table.isMasked(current))) setTab("basic");
           }}
+        />
+      ) : !q && tab === "tapdance" && info?.tapDances ? (
+        <TapDancePicker
+          keycodes={groups.find((g) => g.id === "tapdance")?.keycodes ?? []}
+          summaries={info.tapDances}
+          disabled={disabled}
+          current={current}
+          onPick={onPick}
         />
       ) : (
         <div className="keycode-grid">

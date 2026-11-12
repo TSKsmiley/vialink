@@ -8,7 +8,7 @@ import { useState } from "react";
 import { combosExtension, describeCombo } from "../../core/extensions/combos.ts";
 import { COMBO_INPUTS } from "../../core/protocol/combos.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion, layerNamesOf } from "../hooks.ts";
+import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
 import type { AppExtension, PanelProps } from "./registry.tsx";
 import "./combos.css";
 
@@ -121,7 +121,7 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
         </p>
       )}
       <KeycodePicker
-        layerNames={layerNamesOf(keyboard)}
+        info={pickerInfoOf(keyboard)}
         table={table}
         disabled={selected === null || busy}
         current={current}
