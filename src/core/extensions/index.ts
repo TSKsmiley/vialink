@@ -6,6 +6,7 @@ import { combosExtension } from "./combos.ts";
 import { keyOverridesExtension } from "./key-overrides.ts";
 import { altRepeatKeyExtension } from "./alt-repeat-key.ts";
 import { qmkSettingsExtension } from "./qmk-settings.ts";
+import { layerSharingExtension } from "./layer-sharing.ts";
 import type { KeyboardExtension } from "./types.ts";
 
 export type { ActiveExtension, ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
@@ -19,4 +20,5 @@ export const BUILTIN_EXTENSIONS: readonly KeyboardExtension<unknown>[] = [
   keyOverridesExtension as KeyboardExtension<unknown>,
   altRepeatKeyExtension as KeyboardExtension<unknown>,
   qmkSettingsExtension as KeyboardExtension<unknown>,
+  layerSharingExtension as KeyboardExtension<unknown>,
 ];

@@ -4,7 +4,7 @@
 // until Paste; the paste is one undo step. Renders two grid children
 // (board and inspector areas of KeymapView).
 
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import {
   applyLayerWrites,
@@ -22,6 +22,12 @@ export interface PasteSource {
   snapshot: LayerSnapshot;
   /** "Nav", "2 keys from Nav", "Nav from a shared text". */
   name: string;
+  /** Keys with no spot on this layout (shared text from another layout option), to place by hand. */
+  unplaced?: { row: number; col: number; code: number; from: string }[];
+  /** Offer to name the target layer after the paste (layer names extension). */
+  rename?: string;
+  /** Prefer this mode at first. */
+  mode?: PasteMode;
 }
 
 interface Props {
@@ -32,24 +38,45 @@ interface Props {
   layerName: (layer: number) => string;
   onClose: (pastedOnto: number | null) => void;
   onError: (message: string) => void;
+  /** Shown above the preview keyboard (the share text and its checks). */
+  before?: ReactNode;
+  /** Sets a layer's name inside the paste's undo step; absent without the layer names extension. */
+  setLayerName?: (layer: number, name: string) => Promise<void>;
 }
 
-export function PastePreview({ keyboard, source, target, onTarget, layerName, onClose, onError }: Props) {
+export function PastePreview({
+  keyboard,
+  source,
+  target,
+  onTarget,
+  layerName,
+  onClose,
+  onError,
+  before,
+  setLayerName,
+}: Props) {
   const ids = useId();
   const counts = snapshotCounts(source.snapshot);
-  const someKeys = source.snapshot.keys.size < keyboard.matrixPositions.length;
-  const [mode, setMode] = useState<PasteMode>(someKeys ? "replace" : "overlay");
+  const someKeys =
+    source.snapshot.layer !== null && source.snapshot.keys.size < keyboard.matrixPositions.length;
+  const [mode, setMode] = useState<PasteMode>(source.mode ?? (someKeys ? "replace" : "overlay"));
+  // Keys without a spot, placed by hand: pick one, then click a key in the preview.
+  const unplaced = source.unplaced ?? [];
+  const [placing, setPlacing] = useState<number | null>(null);
+  const [placed, setPlaced] = useState<ReadonlyMap<string, number>>(new Map());
+  const [rename, setRename] = useState(!!source.rename);
   const hasEncoders = source.snapshot.encoders.size > 0 && keyboard.encoderIndices.length > 0;
   const [encoders, setEncoders] = useState(true);
   const [busy, setBusy] = useState(false);
   const table = keyboard.keycodes;
 
-  const plan = useMemo(
-    () => planPaste(keyboard, source.snapshot, target, mode, encoders),
+  const plan = useMemo(() => {
+    const keys = new Map(source.snapshot.keys);
+    for (const [id, code] of placed) keys.set(id, code);
+    return planPaste(keyboard, { ...source.snapshot, keys }, target, mode, encoders);
     // keyboard.version: re-plan when the board changes underneath.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keyboard, keyboard.version, source, target, mode, encoders],
-  );
+  }, [keyboard, keyboard.version, source, target, mode, encoders, placed]);
   const changed = new Map(
     plan.writes.flatMap((w) => (w.kind === "key" ? [[`${w.row},${w.col}`, w] as const] : [])),
   );
@@ -80,7 +107,11 @@ export function PastePreview({ keyboard, source, target, onTarget, layerName, on
   const paste = async () => {
     setBusy(true);
     try {
-      await applyLayerWrites(keyboard, target, plan.writes, `Paste ${source.name} onto ${targetName}`);
+      const label = `Paste ${source.name} onto ${targetName}`;
+      await keyboard.history.group(label, async () => {
+        await applyLayerWrites(keyboard, target, plan.writes, label);
+        if (rename && source.rename && setLayerName) await setLayerName(target, source.rename);
+      });
       onClose(target);
     } catch (err) {
       onError(errorMessage(err));
@@ -91,6 +122,7 @@ export function PastePreview({ keyboard, source, target, onTarget, layerName, on
   return (
     <>
       <section aria-label="Paste preview" className="flex min-w-0 flex-col gap-3 [grid-area:board]">
+        {before}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="m-0 text-xl font-semibold">
             Paste {source.name} onto {targetName}
@@ -106,9 +138,59 @@ export function PastePreview({ keyboard, source, target, onTarget, layerName, on
             highlight={(r, c) => (changed.has(`${r},${c}`) ? "changed" : null)}
             note={(r, c) => {
               const w = changed.get(`${r},${c}`);
-              return w ? `was ${table.serialize(w.from)}` : null;
+              if (!w) return null;
+              return `${placed.has(`${r},${c}`) ? "placed by you, " : ""}was ${table.serialize(w.from)}`;
             }}
+            onSelect={
+              placing === null
+                ? undefined
+                : (sel) => {
+                    if (sel?.kind !== "key") return;
+                    const u = unplaced[placing];
+                    setPlaced((prev) => new Map(prev).set(`${sel.row},${sel.col}`, u.code));
+                    setPlacing(null);
+                  }
+            }
           />
+          {unplaced.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2 border-t border-kumo-line pt-3">
+              <span className="text-sm">
+                <strong>
+                  {unplaced.length} {unplaced.length === 1 ? "key" : "keys"} from the text{" "}
+                  {unplaced.length === 1 ? "has" : "have"} no spot on your layout.
+                </strong>{" "}
+                <span className="text-kumo-subtle">
+                  {placing === null
+                    ? "Click one, then click a key above to place it, or leave it out."
+                    : "Now click the key above where it should go."}
+                </span>
+              </span>
+              <div role="group" aria-label="Keys with no spot" className="flex flex-wrap gap-2">
+                {unplaced.map((u, i) => {
+                  const used = [...placed.values()].includes(u.code);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      aria-pressed={placing === i}
+                      onClick={() => setPlacing(placing === i ? null : i)}
+                      className={
+                        "flex min-h-10 cursor-pointer flex-col items-start rounded-lg border border-dashed px-2.5 py-1 text-left " +
+                        (placing === i
+                          ? "border-accent bg-accent-tint"
+                          : used
+                            ? "border-kumo-line opacity-60"
+                            : "border-(--vl-layer-key) bg-(--vl-layer-key-bg)")
+                      }
+                    >
+                      <strong className="text-sm">{keyText(table, u.code)}</strong>
+                      <span className="text-[11px] text-kumo-subtle">{used ? "placed" : u.from}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
           <span className="inline-flex items-center gap-1.5">
@@ -149,6 +231,18 @@ export function PastePreview({ keyboard, source, target, onTarget, layerName, on
               : ""}
           </span>
         </div>
+
+        {source.rename && setLayerName && (
+          <label className="-mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={rename}
+              onChange={(e) => setRename(e.target.checked)}
+              className="size-4 accent-accent"
+            />
+            Name it “{source.rename}”
+          </label>
+        )}
 
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-2 text-sm font-semibold">How to paste</legend>

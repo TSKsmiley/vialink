@@ -41,7 +41,8 @@ describe("layer names extension", () => {
     expect((await board()).kb.extension(layerNamesExtension)?.names).toEqual(["Base", "Nav"]);
     const stock = await board({ layerNames: null });
     expect(stock.kb.extension(layerNamesExtension)).toBeNull();
-    expect(stock.kb.activeExtensions).toEqual([]);
+    // Only the device-free layer sharing extra is active on stock Vial here.
+    expect(stock.kb.activeExtensions.map((a) => a.extension.id)).toEqual(["layer-sharing"]);
   });
 
   it("can be turned off", async () => {

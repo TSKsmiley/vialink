@@ -22,8 +22,8 @@ export interface LayerRailProps {
   /** Per-layer controls from extensions, shown on the current card. */
   actions: { id: string; Component: ComponentType<LayerActionProps> }[];
   onError: (message: string) => void;
-  /** Layer menu entries (copy, paste, duplicate, swap, clear); drag-and-drop swaps too. */
-  menu: LayerMenuActions;
+  /** Layer menu entries (copy, paste, duplicate, swap, clear); drag-and-drop swaps too. Absent when layer sharing is off. */
+  menu?: LayerMenuActions;
   /** What is copied, shown above the cards; null when nothing is. */
   copied: { name: string; keys: number; encoders: number } | null;
   onClearCopied: () => void;
@@ -138,7 +138,7 @@ export function LayerRail({
                     ? "border-accent bg-accent-tint"
                     : "border-kumo-line bg-kumo-base hover:bg-kumo-tint")
               }
-              draggable
+              draggable={!!menu}
               onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_TYPE, String(l));
                 e.dataTransfer.effectAllowed = "move";
@@ -152,9 +152,10 @@ export function LayerRail({
               onDrop={(e) => {
                 setDropOn(null);
                 const from = Number(e.dataTransfer.getData(DRAG_TYPE));
-                if (Number.isInteger(from) && from !== l) menu.onSwap(from, l);
+                if (menu && Number.isInteger(from) && from !== l) menu.onSwap(from, l);
               }}
               onContextMenu={(e) => {
+                if (!menu) return;
                 e.preventDefault();
                 setMenuFor(l);
               }}
@@ -185,15 +186,17 @@ export function LayerRail({
                     {detail}
                   </span>
                 </button>
-                <LayerMenu
-                  layer={l}
-                  title={title}
-                  layerCount={keyboard.layers}
-                  layerName={nameOf}
-                  open={menuFor === l}
-                  onOpenChange={(o) => setMenuFor(o ? l : null)}
-                  {...menu}
-                />
+                {menu && (
+                  <LayerMenu
+                    layer={l}
+                    title={title}
+                    layerCount={keyboard.layers}
+                    layerName={nameOf}
+                    open={menuFor === l}
+                    onOpenChange={(o) => setMenuFor(o ? l : null)}
+                    {...menu}
+                  />
+                )}
               </div>
               {current && actions.length > 0 && (
                 <div className="legacy-view mt-2 flex flex-wrap items-center gap-2 text-sm [&_button]:text-sm">
