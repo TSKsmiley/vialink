@@ -121,6 +121,7 @@ export function CombosPanel({ keyboard, onError }: PanelProps) {
         </p>
       )}
       <KeycodePicker
+        hint="Select a trigger or output key of a combo above, then pick a keycode."
         info={pickerInfoOf(keyboard)}
         table={table}
         disabled={selected === null || busy}

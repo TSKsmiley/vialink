@@ -38,12 +38,12 @@ async function setup(count = 3) {
 describe("Alt repeat key panel", () => {
   it("has no tab on boards without alt repeat keys", async () => {
     await setup(0);
-    expect(screen.queryByRole("tab", { name: "Alt Repeat Key" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Alt repeat key" })).toBeNull();
   });
 
   it("shows one tab per entry with the board's values", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt Repeat Key" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
     const entries = screen.getByRole("tablist", { name: "Alt repeat key entries" });
     expect(entries.querySelectorAll('[role="tab"]')).toHaveLength(3);
     expect((screen.getByLabelText("Enable") as HTMLInputElement).checked).toBe(true);
@@ -53,7 +53,7 @@ describe("Alt repeat key panel", () => {
 
   it("wires the entry tabs as WAI-ARIA tabs with arrow-key navigation", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt Repeat Key" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
     const panel = screen.getByRole("tabpanel", { name: "Alt repeat key 1" });
     const first = screen.getByRole("tab", { name: "1" });
     expect(first.getAttribute("aria-controls")).toBe(panel.id);
@@ -71,7 +71,7 @@ describe("Alt repeat key panel", () => {
 
   it("writes checkbox and keycode changes through to the board", async () => {
     const { arep } = await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt Repeat Key" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
     fireEvent.click(screen.getByRole("tab", { name: "2" }));
 
     fireEvent.click(screen.getByLabelText("Enable"));
@@ -95,7 +95,7 @@ describe("Alt repeat key panel", () => {
 
   it("reports errors, e.g. QK_BOOT on a locked board", async () => {
     const { arep, onError } = await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt Repeat Key" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
     fireEvent.click(screen.getByRole("button", { name: /^Alt key for alt repeat key 1/ }));
     fireEvent.change(screen.getByLabelText("Any"), { target: { value: "QK_BOOT" } });
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));

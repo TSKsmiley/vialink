@@ -302,10 +302,8 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
         </div>
       </section>
 
-      {slot === null && (
-        <p className="hint">Select a key in a Down, Up or Tap action, then pick a keycode below.</p>
-      )}
       <KeycodePicker
+        hint="Select a key in a Down, Up or Tap action above, then pick a keycode."
         info={pickerInfoOf(keyboard)}
         table={table}
         disabled={slot === null || busy}

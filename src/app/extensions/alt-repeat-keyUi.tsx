@@ -197,8 +197,8 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
         </div>
       </div>
 
-      {slot === null && <p className="hint">Select Last key or Alt key, then pick a keycode below.</p>}
       <KeycodePicker
+        hint="Select Last key or Alt key above, then pick a keycode."
         info={pickerInfoOf(keyboard)}
         table={table}
         disabled={slot === null || busy}
@@ -211,5 +211,5 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
 
 export const altRepeatKeyUi: AppExtension = {
   id: altRepeatKeyExtension.id,
-  panels: [{ id: "alt-repeat-key", title: "Alt Repeat Key", Component: AltRepeatKeyPanel }],
+  panels: [{ id: "alt-repeat-key", title: "Alt repeat key", Component: AltRepeatKeyPanel }],
 };

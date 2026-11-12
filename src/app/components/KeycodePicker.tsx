@@ -13,6 +13,8 @@ interface Props {
   /** Current keycode of the selected key, to show what an assignment replaces. */
   current: number | null;
   onPick: (code: number) => void;
+  /** Shown while nothing is selected; says what to select in this view. */
+  hint?: string;
   /** What the board can tell the picker beyond keycodes (see pickerInfoOf). */
   info?: PickerInfo;
 }
@@ -26,7 +28,7 @@ export interface PickerInfo {
   tapDances?: readonly (string | null)[];
 }
 
-export function KeycodePicker({ table, disabled, current, onPick, info }: Props) {
+export function KeycodePicker({ table, disabled, current, onPick, info, hint }: Props) {
   const groups = useMemo(() => table.groups(), [table]);
   const [tab, setTab] = useState(groups[0]?.id ?? "basic");
   const [query, setQuery] = useState("");
@@ -88,7 +90,7 @@ export function KeycodePicker({ table, disabled, current, onPick, info }: Props)
         />
       </div>
 
-      {disabled && <p className="hint">Select a key or encoder direction to assign a keycode.</p>}
+      {disabled && <p className="hint">{hint ?? "Select a key or encoder direction to assign a keycode."}</p>}
       {!disabled && current !== null && (
         <p className="hint">
           Selected key: <code>{table.serialize(current)}</code>

@@ -89,12 +89,13 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
         ))}
       </div>
       <div className="ko-picker">
-        <p className="hint" aria-live="polite">
-          {selection
-            ? `Assigning the ${FIELD_NAMES[selection.field].toLowerCase()} of key override ${selection.index + 1}.`
-            : "Select a trigger or replacement key above, then pick a keycode."}
-        </p>
+        {selection && (
+          <p className="hint" aria-live="polite">
+            Assigning the {FIELD_NAMES[selection.field].toLowerCase()} of key override {selection.index + 1}.
+          </p>
+        )}
         <KeycodePicker
+          hint="Select a trigger or replacement key above, then pick a keycode."
           info={pickerInfoOf(keyboard)}
           table={keyboard.keycodes}
           disabled={selection === null}
