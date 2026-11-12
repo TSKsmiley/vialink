@@ -39,12 +39,14 @@ export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
       <div
         role="tabpanel"
         aria-label={sections.find((v) => v.id === shown)?.title}
-        className={"editor min-w-0 flex-1 p-4 md:p-5" + (shown === "keymap" ? "" : " legacy-view")}
+        className={
+          "editor min-w-0 flex-1 p-4 md:p-5" + (shown === "keymap" || panel?.modern ? "" : " legacy-view")
+        }
       >
         {shown === "matrix" ? (
           <MatrixTester keyboard={keyboard} onError={onError} />
         ) : panel ? (
-          <panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} />
+          <panel.Component keyboard={keyboard} onError={onError} onNotice={onNotice} onOpen={setView} />
         ) : (
           <KeymapView keyboard={keyboard} onError={onError} onNotice={onNotice} locked={locked} />
         )}

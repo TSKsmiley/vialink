@@ -35,19 +35,29 @@ function openTab() {
   fireEvent.click(
     within(screen.getByRole("tablist", { name: "Edit" })).getByRole("tab", { name: "Tap dance" }),
   );
-  return screen.getByRole("region", { name: "Tap dance" });
 }
+const detail = (n: number) => screen.getByRole("region", { name: `TD ${n}` });
+const choose = (label: string, text: string) => {
+  const box = screen.getByLabelText(label);
+  fireEvent.change(box, { target: { value: text } });
+  fireEvent.keyDown(box, { key: "Enter" });
+};
 
-describe("Tap dance panel", () => {
-  it("shows one card per TD(n) with the stored entry", async () => {
+describe("Tap dance view", () => {
+  it("lists the tap dances that are set up and shows one in detail", async () => {
     await setup();
-    const panel = openTab();
-    const cards = within(panel).getAllByRole("form");
-    expect(cards.map((c) => c.getAttribute("aria-labelledby"))).toHaveLength(3);
-    const first = within(panel).getByRole("form", { name: "TD(0)" });
-    expect((within(first).getByLabelText("On tap") as HTMLInputElement).value).toBe("KC_A");
-    expect((within(first).getByLabelText("On hold") as HTMLInputElement).value).toBe("KC_NO");
-    expect((within(first).getByLabelText("Tapping term (ms)") as HTMLInputElement).value).toBe("200");
+    openTab();
+    const list = screen.getByRole("list", { name: "Tap dance entries" });
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([expect.stringContaining("TD 0")]);
+    expect(within(list).getByText("Tap A")).toBeTruthy();
+    expect(screen.getByText("1 of 3 used")).toBeTruthy();
+    expect(within(detail(0)).getByRole("button", { name: "Tap: KC_A" })).toBeTruthy();
+    expect(within(detail(0)).getByRole("button", { name: "Hold: not set" })).toBeTruthy();
+    expect((within(detail(0)).getByLabelText("Tapping term") as HTMLInputElement).value).toBe("200");
   });
 
   it("is absent on boards without tap dance", async () => {
@@ -55,64 +65,48 @@ describe("Tap dance panel", () => {
     expect(screen.queryByRole("tab", { name: "Tap dance" })).toBeNull();
   });
 
-  it("writes an edited entry on save", async () => {
-    const { td, onError } = await setup();
-    const card = within(openTab()).getByRole("form", { name: "TD(1)" });
-    const save = within(card).getByRole("button", { name: "Save TD(1)" }) as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
+  it("writes each change at once: a new tap dance, its keys and its term", async () => {
+    const { td, kb, onError } = await setup();
+    openTab();
+    fireEvent.click(screen.getByRole("button", { name: "New tap dance" }));
+    // The new one opens on its Tap slot.
+    choose("Tap: choose a key", "esc");
+    await waitFor(() => expect(td.entries[1].onTap).toBe(0x29));
+    fireEvent.click(within(detail(1)).getByRole("button", { name: "Hold: not set" }));
+    choose("Hold: choose a key", "ctrl+c");
+    await waitFor(() => expect(td.entries[1].onHold).toBe(kb.keycodes.parse("LCTL(KC_C)")));
 
-    fireEvent.change(within(card).getByLabelText("On tap"), { target: { value: "LCTL(KC_C)" } });
-    fireEvent.change(within(card).getByLabelText("On hold"), { target: { value: "MO(1)" } });
-    fireEvent.change(within(card).getByLabelText("Tapping term (ms)"), { target: { value: "180" } });
-    expect(save.disabled).toBe(false);
-    fireEvent.click(save);
-
-    await waitFor(() =>
-      expect(td.entries[1]).toEqual({
-        onTap: 0x0106,
-        onHold: 0x5221,
-        onDoubleTap: 0,
-        onTapHold: 0,
-        tappingTerm: 180,
-      }),
-    );
-    expect(onError).not.toHaveBeenCalled();
-    const after = screen.getByRole("form", { name: "TD(1)" });
-    await waitFor(() =>
-      expect((within(after).getByRole("button", { name: "Save TD(1)" }) as HTMLButtonElement).disabled).toBe(
-        true,
-      ),
-    );
-  });
-
-  it("clamps a stored tapping term above 10000 like vial-gui's QSpinBox and lets the card save", async () => {
-    const { td, onError } = await setup(1, [{ onTap: 0x04, tappingTerm: 15000 }]);
-    const card = within(openTab()).getByRole("form", { name: /^TD\(0\)/ });
-    expect((within(card).getByLabelText("Tapping term (ms)") as HTMLInputElement).value).toBe("10000");
-    expect(within(card).getByText("(modified)")).toBeTruthy();
-
-    fireEvent.change(within(card).getByLabelText("On hold"), { target: { value: "KC_LCTL" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Save TD(0)" }));
-    await waitFor(() =>
-      expect(td.entries[0]).toMatchObject({ onTap: 0x04, onHold: 0xe0, tappingTerm: 10000 }),
-    );
+    const term = within(detail(1)).getByLabelText("Tapping term");
+    fireEvent.change(term, { target: { value: "250" } });
+    fireEvent.blur(term);
+    await waitFor(() => expect(td.entries[1].tappingTerm).toBe(250));
+    expect(kb.history.nextUndo?.label).toBe("Tap dance TD 1");
+    await kb.history.undo();
+    expect(td.entries[1].tappingTerm).toBe(200);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid keycodes and tapping terms without writing", async () => {
-    const { sim } = await setup();
-    const card = within(openTab()).getByRole("form", { name: "TD(0)" });
-    fireEvent.change(within(card).getByLabelText("On double tap"), { target: { value: "KC_NOPE" } });
-    fireEvent.change(within(card).getByLabelText("Tapping term (ms)"), { target: { value: "20000" } });
-    const sent = sim.requests.length;
-    fireEvent.click(within(card).getByRole("button", { name: "Save TD(0)" }));
-    expect(await within(card).findAllByRole("alert")).toHaveLength(2);
-    expect(within(card).getByLabelText("On double tap").getAttribute("aria-invalid")).toBe("true");
-    expect(sim.requests.length).toBe(sent);
+  it("shows a stored tapping term above 10000 as 10000, like vial-gui's QSpinBox", async () => {
+    await setup(3, [{ onTap: 0x04, tappingTerm: 20000 }]);
+    openTab();
+    expect((within(detail(0)).getByLabelText("Tapping term") as HTMLInputElement).value).toBe("10000");
+  });
 
-    fireEvent.click(within(card).getByRole("button", { name: "Revert TD(0)" }));
-    expect((within(card).getByLabelText("On double tap") as HTMLInputElement).value).toBe("KC_NO");
-    expect(within(card).queryAllByRole("alert")).toHaveLength(0);
+  it("rejects invalid tapping terms without writing", async () => {
+    const { td } = await setup();
+    openTab();
+    const term = within(detail(0)).getByLabelText("Tapping term");
+    fireEvent.change(term, { target: { value: "10001" } });
+    fireEvent.blur(term);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(td.entries[0].tappingTerm).toBe(200);
+  });
+
+  it("clears a tap dance", async () => {
+    const { td } = await setup();
+    openTab();
+    fireEvent.click(within(detail(0)).getByRole("button", { name: "Clear" }));
+    await waitFor(() => expect(td.entries[0].onTap).toBe(0));
   });
 
   it("reports a rejected write through onError", async () => {
@@ -124,11 +118,10 @@ describe("Tap dance panel", () => {
       }
       return false;
     });
-    const card = within(openTab()).getByRole("form", { name: "TD(2)" });
-    fireEvent.change(within(card).getByLabelText("On tap"), { target: { value: "KC_B" } });
-    fireEvent.click(within(card).getByRole("button", { name: "Save TD(2)" }));
-    await waitFor(() =>
-      expect(onError).toHaveBeenCalledWith("the keyboard rejected tap dance 2 (status 255)"),
-    );
+    openTab();
+    fireEvent.click(within(detail(0)).getByRole("button", { name: "Hold: not set" }));
+    choose("Hold: choose a key", "b");
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(onError).toHaveBeenCalledWith("TD 0: the keyboard rejected tap dance 0 (status 255)");
   });
 });

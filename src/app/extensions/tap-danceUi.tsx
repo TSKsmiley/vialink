@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Tap dance editor tab, following vial-gui's editor/tap_dance.py: one entry per
-// TD(n) with On tap, On hold, On double tap, On tap + hold and Tapping term
-// (ms, 0–10000 as in its QSpinBox).
+// Tap dance view (design board 2), following vial-gui's editor/tap_dance.py:
+// each TD(n) has On tap, On hold, On double tap, On tap + hold and a tapping
+// term (ms, 0–10000 as in its QSpinBox).
 //
-// Deviations: entries are cards on one page instead of numbered tabs; keycodes
-// are typed as QMK ids (parsed by keyboard.keycodes.parse) instead of picked
-// from the keycode tabs; every change, including the tapping term, is written
-// with the card's Save button (vial-gui writes key changes at once and the
-// tapping term on Save). Revert resets the card to the board's stored entry.
-// A stored tapping term above 10000 is clamped to 10000 when the card loads,
-// as QSpinBox.setValue does, and the card shows as modified until it is saved
-// (vial-gui marks the tab modified the same way and writes 10000 on Save).
+// Deviations from vial-gui:
+// - A list of the tap dances that are set up, with what they do, and one in
+//   detail; "New tap dance" opens the first unused one (vial-gui: a tab per TD).
+// - Each action is a slot: click it, then find a key by name, shortcut or
+//   keycode expression. Every change is written at once and is one undo step
+//   (vial-gui writes keys at once and the tapping term on Save).
+// - A stored tapping term above 10000 shows as 10000, as QSpinBox.setValue
+//   clamps it; it is written only when the term is changed.
 
 import { useId, useState } from "react";
-import { TapDance, tapDanceExtension } from "../../core/extensions/tap-dance.ts";
+import { tapDanceExtension, type TapDance } from "../../core/extensions/tap-dance.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import {
   TAP_DANCE_KEY_FIELDS,
@@ -21,192 +21,251 @@ import {
   type TapDanceKeyField,
 } from "../../core/protocol/tap-dance.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { KeySearch, keyText } from "../keymap/KeySearch.tsx";
+import { Button } from "../ui/index.ts";
+import {
+  DetailCard,
+  EntryList,
+  FeatureLayout,
+  SlotButton,
+  placedText,
+  placementsOf,
+} from "./featureLayout.tsx";
 import type { AppExtension, PanelProps } from "./registry.tsx";
-import "./tap-dance.css";
 
-const FIELD_LABELS: Record<TapDanceKeyField, string> = {
-  onTap: "On tap",
-  onHold: "On hold",
-  onDoubleTap: "On double tap",
-  onTapHold: "On tap + hold",
+const SLOTS: Record<TapDanceKeyField, { title: string; hint: string }> = {
+  onTap: { title: "Tap", hint: "A quick press" },
+  onHold: { title: "Hold", hint: "Press and hold" },
+  onDoubleTap: { title: "Double tap", hint: "Two quick presses" },
+  onTapHold: { title: "Tap, then hold", hint: "Press, release, press and hold" },
 };
 
 /** vial-gui's QSpinBox range for the tapping term. */
 const TAPPING_TERM_MAX = 10000;
 
-interface Draft {
-  keys: Record<TapDanceKeyField, string>;
-  term: string;
-}
+const isSet = (e: Readonly<TapDanceEntry>) => TAP_DANCE_KEY_FIELDS.some((f) => e[f] !== 0);
 
-function toDraft(keyboard: Keyboard, entry: Readonly<TapDanceEntry>): Draft {
-  const keys = {} as Record<TapDanceKeyField, string>;
-  for (const f of TAP_DANCE_KEY_FIELDS) keys[f] = keyboard.keycodes.serialize(entry[f]);
-  // QSpinBox.setValue clamps to its range (0..10000).
-  return { keys, term: String(Math.min(entry.tappingTerm, TAPPING_TERM_MAX)) };
-}
-
-/** Parses a draft; returns the entry or a message per invalid field. */
-function parseDraft(
-  keyboard: Keyboard,
-  draft: Draft,
-): { entry: TapDanceEntry | null; errors: Partial<Record<TapDanceKeyField | "term", string>> } {
-  const errors: Partial<Record<TapDanceKeyField | "term", string>> = {};
-  const entry = { tappingTerm: 0 } as TapDanceEntry;
-  for (const f of TAP_DANCE_KEY_FIELDS) {
-    const text = draft.keys[f].trim();
-    try {
-      entry[f] = keyboard.keycodes.parse(text === "" ? "KC_NO" : text);
-    } catch (err) {
-      errors[f] = errorMessage(err);
-    }
-  }
-  const term = draft.term.trim();
-  if (!/^\d+$/.test(term) || Number(term) > TAPPING_TERM_MAX) {
-    errors.term = `Enter a whole number from 0 to ${TAPPING_TERM_MAX}.`;
-  } else {
-    entry.tappingTerm = Number(term);
-  }
-  return { entry: Object.keys(errors).length ? null : entry, errors };
-}
-
-interface CardProps {
-  keyboard: Keyboard;
-  state: TapDance;
-  idx: number;
-  onError: (message: string) => void;
-}
-
-function TapDanceCard({ keyboard, state, idx, onError }: CardProps) {
-  const stored = state.get(idx);
-  const [draft, setDraft] = useState<Draft>(() => toDraft(keyboard, stored));
-  const [busy, setBusy] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
-
-  const { entry, errors } = parseDraft(keyboard, draft);
-  const original = toDraft(keyboard, stored);
-  // Compare with the stored term, not the clamped one, so a clamped term counts as a change.
-  const edited =
-    draft.term !== String(stored.tappingTerm) ||
-    TAP_DANCE_KEY_FIELDS.some((f) => draft.keys[f] !== original.keys[f]);
-  const idBase = `${useId()}-td${idx}`;
-  const headingId = `${idBase}-title`;
-
-  const save = async () => {
-    setShowErrors(true);
-    if (!entry) return;
-    setBusy(true);
-    try {
-      // Write-through: TapDance.set sends nothing when the entry is unchanged.
-      await state.set(idx, entry);
-      setDraft(toDraft(keyboard, state.get(idx)));
-      setShowErrors(false);
-    } catch (err) {
-      onError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const fieldError = (field: TapDanceKeyField | "term") =>
-    showErrors && errors[field] ? (
-      <span className="error" role="alert" id={`${idBase}-${field}-error`}>
-        {errors[field]}
-      </span>
-    ) : null;
-
-  return (
-    <form
-      className="tap-dance-card"
-      noValidate
-      aria-labelledby={headingId}
-      onSubmit={(e) => {
-        e.preventDefault();
-        void save();
-      }}
-    >
-      <h3 id={headingId}>
-        TD({idx}){edited ? <span className="tap-dance-modified"> (modified)</span> : null}
-      </h3>
-      {TAP_DANCE_KEY_FIELDS.map((f) => (
-        <div key={f} className="tap-dance-field">
-          <label htmlFor={`${idBase}-${f}`}>{FIELD_LABELS[f]}</label>
-          <input
-            id={`${idBase}-${f}`}
-            value={draft.keys[f]}
-            disabled={busy}
-            spellCheck={false}
-            autoComplete="off"
-            aria-invalid={showErrors && errors[f] ? true : undefined}
-            aria-describedby={showErrors && errors[f] ? `${idBase}-${f}-error` : undefined}
-            onChange={(e) => setDraft({ ...draft, keys: { ...draft.keys, [f]: e.target.value } })}
-          />
-          {fieldError(f)}
-        </div>
-      ))}
-      <div className="tap-dance-field">
-        <label htmlFor={`${idBase}-term`}>Tapping term (ms)</label>
-        <input
-          id={`${idBase}-term`}
-          type="number"
-          min={0}
-          max={TAPPING_TERM_MAX}
-          step={1}
-          value={draft.term}
-          disabled={busy}
-          aria-invalid={showErrors && errors.term ? true : undefined}
-          aria-describedby={showErrors && errors.term ? `${idBase}-term-error` : undefined}
-          onChange={(e) => setDraft({ ...draft, term: e.target.value })}
-        />
-        {fieldError("term")}
-      </div>
-      <div className="tap-dance-actions">
-        <button type="submit" className="primary" disabled={busy || !edited}>
-          Save TD({idx})
-        </button>
-        <button
-          type="button"
-          disabled={busy || !edited}
-          onClick={() => {
-            setDraft(original);
-            setShowErrors(false);
-          }}
-        >
-          Revert TD({idx})
-        </button>
-      </div>
-      <p className="hint">
-        Use <code>TD({idx})</code> to set up this action in the keymap.
-      </p>
-    </form>
+/** "Tap Esc · Hold Caps Lock". */
+export function tapDanceSummary(keyboard: Keyboard, e: Readonly<TapDanceEntry>): string {
+  const parts = TAP_DANCE_KEY_FIELDS.filter((f) => e[f] !== 0).map(
+    (f) => `${SLOTS[f].title} ${keyText(keyboard.keycodes, e[f])}`,
   );
+  return parts.length ? parts.join(" · ") : "Not set up";
 }
 
 export function TapDancePanel({ keyboard, onError }: PanelProps) {
   useKeyboardVersion(keyboard);
   const state = keyboard.extension(tapDanceExtension);
+  const used = state ? state.entries.flatMap((e, i) => (isSet(e) ? [i] : [])) : [];
+  const [selected, setSelected] = useState<number>(used[0] ?? 0);
+  const [slot, setSlot] = useState<TapDanceKeyField | null>(null);
   if (!state) return null;
 
+  const shown = used.includes(selected) ? used : [...used, selected].sort((a, b) => a - b);
+  const free = state.entries.findIndex((e, i) => !isSet(e) && i !== selected);
+  const tdCode = (i: number) => keyboard.keycodes.parse(`TD(${i})`);
+
   return (
-    <section className="tap-dance" aria-label="Tap dance">
-      <h2>Tap dance</h2>
-      <p className="hint">
-        Type QMK keycodes such as <code>KC_A</code>, <code>LCTL(KC_C)</code> or <code>MO(1)</code>; leave a
-        field empty for <code>KC_NO</code>.
-      </p>
-      <div className="tap-dance-list">
-        {state.entries.map((entry, idx) => (
-          // Remount when the stored entry changes (e.g. after a .vil restore) so the draft follows it.
-          <TapDanceCard
-            key={`${idx}:${Object.values(entry).join(",")}`}
-            keyboard={keyboard}
-            state={state}
-            idx={idx}
-            onError={onError}
+    <FeatureLayout
+      list={
+        <EntryList
+          title="Tap dance"
+          used={`${used.length} of ${state.count} used`}
+          description="One key, up to four actions: tap, hold, double tap, or tap then hold."
+          items={shown.map((i) => ({
+            id: i,
+            title: `TD ${i}`,
+            meta: placedText(placementsOf(keyboard, tdCode(i))),
+            summary: tapDanceSummary(keyboard, state.get(i)),
+          }))}
+          selected={selected}
+          onSelect={(i) => {
+            setSelected(i);
+            setSlot(null);
+          }}
+          newLabel="New tap dance"
+          onNew={
+            free === -1
+              ? undefined
+              : () => {
+                  setSelected(free);
+                  setSlot("onTap");
+                }
+          }
+        />
+      }
+      detail={
+        <TapDanceDetail
+          key={selected}
+          keyboard={keyboard}
+          state={state}
+          idx={selected}
+          slot={slot}
+          onSlot={setSlot}
+          onError={onError}
+        />
+      }
+    />
+  );
+}
+
+function TapDanceDetail({
+  keyboard,
+  state,
+  idx,
+  slot,
+  onSlot,
+  onError,
+}: {
+  keyboard: Keyboard;
+  state: TapDance;
+  idx: number;
+  slot: TapDanceKeyField | null;
+  onSlot: (s: TapDanceKeyField | null) => void;
+  onError: (m: string) => void;
+}) {
+  const id = useId();
+  const entry = state.get(idx);
+  const table = keyboard.keycodes;
+  const places = placementsOf(keyboard, table.parse(`TD(${idx})`));
+  const shownTerm = String(Math.min(entry.tappingTerm, TAPPING_TERM_MAX));
+  const [term, setTerm] = useState(shownTerm);
+  const [termError, setTermError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const write = async (next: TapDanceEntry) => {
+    setBusy(true);
+    try {
+      await state.set(idx, next);
+    } catch (err) {
+      onError(`TD ${idx}: ${errorMessage(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const commitTerm = (text = term) => {
+    const t = text.trim();
+    if (!/^\d+$/.test(t) || Number(t) > TAPPING_TERM_MAX) {
+      setTermError(`Enter a whole number from 0 to ${TAPPING_TERM_MAX}.`);
+      return;
+    }
+    setTermError(null);
+    if (t !== shownTerm) void write({ ...entry, tappingTerm: Number(t) });
+  };
+
+  return (
+    <DetailCard label={`TD ${idx}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="m-0 text-lg font-semibold">TD {idx}</h2>
+        <span className="text-sm text-kumo-subtle">
+          {places.length
+            ? `Placed on ${places.join("; ")}`
+            : "Not on any key yet: use the Tap dance tab of the key inspector"}
+        </span>
+        <div className="flex-1" />
+        <Button
+          variant="secondary-destructive"
+          disabled={busy || !isSet(entry)}
+          onClick={() =>
+            void write({ onTap: 0, onHold: 0, onDoubleTap: 0, onTapHold: 0, tappingTerm: entry.tappingTerm })
+          }
+        >
+          Clear
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {TAP_DANCE_KEY_FIELDS.map((f) => (
+          <SlotButton
+            key={f}
+            title={SLOTS[f].title}
+            hint={
+              slot === f ? "Choosing a key below" : entry[f] ? SLOTS[f].hint : `${SLOTS[f].hint}: not set`
+            }
+            cap={keyText(table, entry[f])}
+            selected={slot === f}
+            empty={entry[f] === 0}
+            label={`${SLOTS[f].title}: ${entry[f] ? table.serialize(entry[f]) : "not set"}`}
+            onClick={() => onSlot(slot === f ? null : f)}
           />
         ))}
       </div>
-    </section>
+
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor={`${id}-term`} className="font-semibold">
+            Tapping term
+          </label>
+          <span className="inline-flex items-center gap-1.5">
+            <input
+              id={`${id}-term`}
+              type="number"
+              min={0}
+              max={TAPPING_TERM_MAX}
+              value={term}
+              disabled={busy}
+              aria-invalid={termError ? true : undefined}
+              onChange={(e) => setTerm(e.target.value)}
+              onBlur={() => commitTerm()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTerm();
+              }}
+              className="w-24 rounded-md border border-kumo-line bg-kumo-control px-2 py-1 text-right font-mono"
+            />
+            <span className="text-sm text-kumo-subtle">ms</span>
+          </span>
+        </div>
+        <input
+          type="range"
+          aria-label="Tapping term slider"
+          min={50}
+          max={1000}
+          step={10}
+          value={Math.min(Math.max(Number(term) || 0, 50), 1000)}
+          disabled={busy}
+          onChange={(e) => setTerm(e.target.value)}
+          onPointerUp={(e) => commitTerm((e.target as HTMLInputElement).value)}
+          onKeyUp={(e) => commitTerm((e.target as HTMLInputElement).value)}
+          className="w-full accent-accent"
+        />
+        <div className="flex justify-between text-xs text-kumo-subtle">
+          <span>Faster: taps register sooner</span>
+          <span>Slower: easier to double tap</span>
+        </div>
+        {termError && (
+          <span role="alert" className="text-sm text-kumo-danger">
+            {termError}
+          </span>
+        )}
+      </div>
+
+      {slot && (
+        <div className="flex flex-col gap-2 border-t border-kumo-line pt-4">
+          <KeySearch
+            table={table}
+            label={`${SLOTS[slot].title}: choose a key`}
+            disabled={busy}
+            onPick={(code) => {
+              void write({ ...entry, [slot]: code });
+              onSlot(null);
+            }}
+          />
+          {entry[slot] !== 0 && (
+            <button
+              type="button"
+              className="self-start text-sm text-accent-link underline"
+              onClick={() => {
+                void write({ ...entry, [slot]: 0 });
+                onSlot(null);
+              }}
+            >
+              Clear {SLOTS[slot].title.toLowerCase()}
+            </button>
+          )}
+        </div>
+      )}
+    </DetailCard>
   );
 }
 
@@ -215,11 +274,10 @@ export const tapDanceUi: AppExtension = {
   panels: [
     {
       id: "tap-dance",
+      modern: true,
       title: "Tap dance",
       Component: TapDancePanel,
-      count: (kb) =>
-        kb.extension(tapDanceExtension)?.entries.filter((e) => TAP_DANCE_KEY_FIELDS.some((f) => e[f] !== 0))
-          .length ?? null,
+      count: (kb) => kb.extension(tapDanceExtension)?.entries.filter(isSet).length ?? null,
     },
   ],
 };
