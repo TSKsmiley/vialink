@@ -8,6 +8,7 @@
 // definition (all layout options), so a copy carries keys that the current
 // layout option hides.
 
+import { defineHook } from "./extensions/hooks.ts";
 import type { Keyboard } from "./keyboard.ts";
 import { KC_NO, KC_TRNS, keyCount, layerKeyOf } from "./layerInfo.ts";
 
@@ -173,40 +174,55 @@ export function planClear(kb: Keyboard, layer: number): LayerWrite[] {
   return writes;
 }
 
-/**
- * Clears a layer as one undo entry: every key and encoder transparent (empty on
- * layer 0), then each active extension's `layers.clear` hook (e.g. layer names).
- */
-export async function clearLayer(kb: Keyboard, layer: number, label: string): Promise<void> {
-  const writes = planClear(kb, layer);
-  await kb.history.group(label, async () => {
-    for (const w of writes) {
-      if (w.kind === "key") await kb.setKey(layer, w.row, w.col, w.to);
-      else await kb.setEncoder(layer, w.index, w.direction, w.to);
-    }
-    for (const { extension, state } of kb.activeExtensions) {
-      await extension.layers?.clear?.(state, layer);
-    }
-  });
+/** "Clear layer": every key and encoder of `layer` becomes transparent (empty on layer 0). */
+export interface LayerClearEvent {
+  readonly layer: number;
 }
 
-/** Swaps two layers' keys and encoders, as one undo entry. */
+/** "Swap layers": layers `a` and `b` trade keys and encoders. */
+export interface LayerSwapEvent {
+  readonly a: number;
+  readonly b: number;
+}
+
+/** The writes a swap makes, per layer. */
+export interface LayerSwapPlan {
+  readonly toA: readonly LayerWrite[];
+  readonly toB: readonly LayerWrite[];
+}
+
+/** Core hook point: after handlers clear their own per-layer data (e.g. layer names removes the name). */
+export const layerClear = defineHook<LayerClearEvent, readonly LayerWrite[]>("layer.clear");
+/** Core hook point: after handlers move their own per-layer data along (e.g. layer names swaps the names). */
+export const layerSwap = defineHook<LayerSwapEvent, LayerSwapPlan>("layer.swap");
+
+async function writeAll(kb: Keyboard, layer: number, writes: readonly LayerWrite[]): Promise<void> {
+  for (const w of writes) {
+    if (w.kind === "key") await kb.setKey(layer, w.row, w.col, w.to);
+    else await kb.setEncoder(layer, w.index, w.direction, w.to);
+  }
+}
+
+/**
+ * Clears a layer as one undo entry, through the {@link layerClear} hook point:
+ * extensions may veto or ask first, and their after handlers join the entry.
+ */
+export async function clearLayer(kb: Keyboard, layer: number, label: string): Promise<void> {
+  await kb.runOperation(layerClear, { layer }, planClear(kb, layer), label, (writes) =>
+    writeAll(kb, layer, writes),
+  );
+}
+
+/** Swaps two layers' keys and encoders as one undo entry, through the {@link layerSwap} hook point. */
 export async function swapLayers(kb: Keyboard, a: number, b: number, label: string): Promise<void> {
   if (a === b) return;
-  const sa = snapshotLayer(kb, a);
-  const sb = snapshotLayer(kb, b);
-  const toA = exactWrites(kb, sb, a);
-  const toB = exactWrites(kb, sa, b);
-  await kb.history.group(label, async () => {
-    for (const [layer, writes] of [
-      [a, toA],
-      [b, toB],
-    ] as const) {
-      for (const w of writes) {
-        if (w.kind === "key") await kb.setKey(layer, w.row, w.col, w.to);
-        else await kb.setEncoder(layer, w.index, w.direction, w.to);
-      }
-    }
+  const plan: LayerSwapPlan = {
+    toA: exactWrites(kb, snapshotLayer(kb, b), a),
+    toB: exactWrites(kb, snapshotLayer(kb, a), b),
+  };
+  await kb.runOperation(layerSwap, { a, b }, plan, label, async ({ toA, toB }) => {
+    await writeAll(kb, a, toA);
+    await writeAll(kb, b, toB);
   });
 }
 

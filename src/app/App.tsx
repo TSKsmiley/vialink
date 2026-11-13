@@ -13,6 +13,7 @@ import {
 } from "./connection.ts";
 import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
+import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
 import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
@@ -46,6 +47,10 @@ export function App() {
   const [restoring, setRestoring] = useState(false);
   const [showExtensions, setShowExtensions] = useState(false);
   const [disabledExtensions, setDisabledExtensions] = useState(loadDisabledExtensions);
+  const [confirmRequest, setConfirmRequest] = useState<{
+    messages: readonly string[];
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const [unlockRequest, setUnlockRequest] = useState<{
     reason: string;
     resolve: (ok: boolean) => void;
@@ -68,6 +73,8 @@ export function App() {
         });
         const kb = connection.keyboard;
         kb.notifyHandler = (kind, message) => (kind === "error" ? setError(message) : setNotice(message));
+        kb.confirmHandler = (messages) =>
+          new Promise<boolean>((resolve) => setConfirmRequest({ messages, resolve }));
         kb.unlockHandler = (reason) =>
           new Promise<boolean>((resolve) => setUnlockRequest({ reason, resolve }));
         setStatus({ kind: "connected", connection });
@@ -204,6 +211,15 @@ export function App() {
             onFinish={(ok) => {
               unlockRequest.resolve(ok);
               setUnlockRequest(null);
+            }}
+          />
+        )}
+        {confirmRequest && (
+          <ConfirmDialog
+            messages={confirmRequest.messages}
+            onAnswer={(ok) => {
+              confirmRequest.resolve(ok);
+              setConfirmRequest(null);
             }}
           />
         )}

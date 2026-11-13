@@ -17,6 +17,7 @@ import type { HistoryWrite } from "../history.ts";
 import type { KeycodeTable } from "../keycodes/table.ts";
 import type { Capabilities } from "../keyboard.ts";
 import type { TaskHandle, TaskOptions } from "../scheduler.ts";
+import type { HookHandler } from "./hooks.ts";
 import type { StateHandle, StateOptions } from "./state.ts";
 import type { RequestOptions } from "../transport/queue.ts";
 import type { ExtensionPoint } from "./manifest.ts";
@@ -155,17 +156,6 @@ export interface ExtensionVilSupport<State> {
   restore(state: State, file: Readonly<Record<string, unknown>>): ExtensionRestoreStep[];
 }
 
-/**
- * Hooks into layer operations, so per-layer data an extension keeps follows
- * the keys. Each hook is awaited inside the operation's undo group: writes it
- * records (via ExtensionContext.record) join the same undo step, and an error
- * stops the operation and is shown to the user.
- */
-export interface ExtensionLayerHooks<State> {
-  /** "Clear layer": reset this extension's data for `layer` (e.g. remove its name). */
-  clear?(state: State, layer: number): Promise<void>;
-}
-
 export type ExtensionGroup = "standard" | "compatible" | "nonstandard";
 
 interface ExtensionBase<State> {
@@ -177,7 +167,8 @@ interface ExtensionBase<State> {
   /** Where to get firmware that supports this extension, shown in the settings list. */
   readonly firmware?: { readonly label: string; readonly url: string };
   readonly vil?: ExtensionVilSupport<State>;
-  readonly layers?: ExtensionLayerHooks<State>;
+  /** Handlers for hook points (core's, like layer.clear, or other extensions'); see hooks.ts. */
+  readonly hooks?: readonly HookHandler[];
   /**
    * Extensions (by id) that must run on the keyboard for this one to run. They
    * probe first; without them this one stays off and the Extensions dialog

@@ -26,6 +26,15 @@ import {
 } from "./extensions/types.ts";
 import { isStandardCommand, startsWith } from "./protocol/standard.ts";
 import { Scheduler } from "./scheduler.ts";
+import { describeRequest } from "./protocol/describe.ts";
+import {
+  HookPhaseError,
+  OperationCancelledError,
+  OperationVetoedError,
+  type BeforeEvent,
+  type HookPoint,
+  type Phase,
+} from "./extensions/hooks.ts";
 import { ExtensionStates, memoryStorage, type BrowserStorage, type Versioned } from "./extensions/state.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
@@ -147,6 +156,12 @@ export class Keyboard {
   keycodes!: KeycodeTable;
   /** Set by the app to show an extension's notices and errors (ctx.notify). */
   notifyHandler: ((kind: "info" | "error", message: string) => void) | null = null;
+  /**
+   * Set by the app to ask the user the questions of an operation's before
+   * handlers (requireConfirm), all at once; resolves true to go on. Without
+   * one, such operations are cancelled.
+   */
+  confirmHandler: ((messages: readonly string[]) => Promise<boolean>) | null = null;
   /** Set by the app to show the unlock dialog when an operation needs it. */
   unlockHandler: UnlockHandler | null = null;
   /** Last known lock state; null until first checked. Updated by every status check, unlock and lock. */
@@ -161,6 +176,8 @@ export class Keyboard {
   readonly scheduler: Scheduler;
   /** Extensions' ctx.state; layout state stays for the whole connection, also while an extension is off. */
   private readonly states: ExtensionStates;
+  /** The extension whose before/filter handler is running; its writes throw meanwhile. */
+  private readOnlyFor: string | null = null;
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
@@ -178,8 +195,17 @@ export class Keyboard {
   private constructor(queue: RequestQueue, options: LoadOptions = {}) {
     this.queue = queue;
     this.recency = options.recency ?? (() => 0);
-    this.states = new ExtensionStates(options.browserStorage ?? memoryStorage(), this.history, () =>
-      this.changed(),
+    this.states = new ExtensionStates(
+      options.browserStorage ?? memoryStorage(),
+      this.history,
+      () => this.changed(),
+      (owner, name) => {
+        if (this.readOnlyFor === owner.id) {
+          throw new HookPhaseError(
+            `${owner.name} tried to change its state "${name}" while checking an operation; only after handlers may write.`,
+          );
+        }
+      },
     );
     this.scheduler = new Scheduler({ busy: () => queue.busy });
     this.history.subscribe(() => {
@@ -424,6 +450,80 @@ export class Keyboard {
     await this.refreshExtensions();
   }
 
+  /**
+   * Runs an operation with a hook point in four phases (core/extensions/hooks.ts):
+   * before handlers may veto or ask; filters adjust `plan`; `write` writes it;
+   * after handlers add their own writes. Write and after phases are one undo
+   * step, all or nothing (History.atomic). Throws OperationVetoedError with
+   * every reason, or OperationCancelledError when the user declines.
+   */
+  async runOperation<Event extends object, Plan>(
+    hook: HookPoint<Event, Plan>,
+    event: Event,
+    plan: Plan,
+    label: string,
+    write: (plan: Plan) => Promise<void>,
+  ): Promise<void> {
+    const handlers = (phase: Phase) =>
+      this.activeExtensions.flatMap(({ extension, state }) =>
+        (extension.hooks ?? [])
+          .filter((h) => h.hook === hook.id && h.phase === phase)
+          .map((handler) => ({ extension, state, handler, ctx: this.extensionContext(extension) })),
+      );
+
+    // 1. Before: everyone gets a say, and nobody writes.
+    const vetoes: string[] = [];
+    const confirms: string[] = [];
+    for (const { extension, state, handler, ctx } of handlers("before")) {
+      if (handler.phase !== "before") continue;
+      const e = Object.assign(Object.create(null) as object, event, {
+        preventDefault: (reason: string) => vetoes.push(`${extension.name}: ${reason}`),
+        requireConfirm: (message: string) => confirms.push(message),
+      });
+      await this.readOnly(extension.id, () => handler.run(e as BeforeEvent<unknown>, ctx, state));
+    }
+    if (vetoes.length > 0) throw new OperationVetoedError(vetoes);
+    if (confirms.length > 0 && !(await this.confirmHandler?.(confirms))) throw new OperationCancelledError();
+
+    // 2. Filter: adjust the plan; warnings go to the user.
+    const warnings: string[] = [];
+    for (const { extension, state, handler, ctx } of handlers("filter")) {
+      if (handler.phase !== "filter") continue;
+      const result = await this.readOnly(extension.id, async () => handler.run(plan, event, ctx, state));
+      if (result && typeof result === "object" && "plan" in result && "warnings" in result) {
+        plan = (result as { plan: Plan }).plan;
+        for (const w of (result as { warnings: readonly string[] }).warnings)
+          warnings.push(`${extension.name}: ${w}`);
+      } else plan = result as Plan;
+    }
+
+    // 3 and 4. Write, then after handlers, as one undo step.
+    await this.history.atomic(label, async () => {
+      await write(plan);
+      for (const { extension, state, handler, ctx } of handlers("after")) {
+        if (handler.phase !== "after") continue;
+        try {
+          await handler.run(event, ctx, state);
+        } catch (err) {
+          throw new Error(`${extension.name} failed: ${err instanceof Error ? err.message : String(err)}`, {
+            cause: err,
+          });
+        }
+      }
+    });
+    for (const w of warnings) this.notifyHandler?.("info", w);
+  }
+
+  /** Runs a before or filter handler of `extensionId`, during which its writes throw. */
+  private async readOnly<T>(extensionId: string, run: () => T | Promise<T>): Promise<T> {
+    this.readOnlyFor = extensionId;
+    try {
+      return await run();
+    } finally {
+      this.readOnlyFor = null;
+    }
+  }
+
   /** Every extension's "layout" state (ctx.state), for saving into a layout file. */
   extensionLayoutState(): Record<string, Record<string, Versioned>> {
     return this.states.layoutSnapshot();
@@ -511,16 +611,33 @@ export class Keyboard {
    * declared custom commands for "nonstandard").
    */
   private extensionContext(ext: KeyboardExtension<unknown>): DeviceContext {
+    /** Throws while this extension's before or filter handler runs (those may not write). */
+    const writable = (what: string) => {
+      if (this.readOnlyFor === ext.id) {
+        throw new HookPhaseError(
+          `${ext.name} tried to ${what} while checking an operation; only after handlers may write.`,
+        );
+      }
+    };
     const host: HostContext = {
       board: this.boardView,
       keymap: {
         get: (layer, row, col) => this.getKey(layer, row, col),
-        set: (layer, row, col, code) => this.setKey(layer, row, col, code),
+        set: async (layer, row, col, code) => {
+          writable("set a key");
+          return this.setKey(layer, row, col, code);
+        },
         getEncoder: (layer, index, direction) => this.getEncoder(layer, index, direction),
-        setEncoder: (layer, index, direction, code) => this.setEncoder(layer, index, direction, code),
+        setEncoder: async (layer, index, direction, code) => {
+          writable("set an encoder");
+          return this.setEncoder(layer, index, direction, code);
+        },
       },
       history: {
-        record: (write) => this.history.record(write),
+        record: (write) => {
+          writable("record a write");
+          this.history.record(write);
+        },
         group: (label, action) => this.history.group(label, action),
       },
       notify: {
@@ -543,6 +660,13 @@ export class Keyboard {
       ...host,
       device: {
         request: (data, options) => {
+          if (describeRequest(data, undefined, custom).kind === "write") {
+            try {
+              writable("write to the keyboard");
+            } catch (err) {
+              return Promise.reject(err);
+            }
+          }
           if (!isStandardCommand(data) && !custom.some((c) => startsWith(data, c.bytes))) {
             const head = [...data.slice(0, 3)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
             return Promise.reject(

@@ -71,6 +71,8 @@ export class ExtensionStates {
     private readonly storage: BrowserStorage,
     private readonly history: History,
     private readonly changed: () => void,
+    /** Throws when `owner` may not write right now (during its before/filter hook handlers). */
+    private readonly guard: (owner: { id: string; name: string }, name: string) => void = () => undefined,
   ) {}
 
   /** The handle for `owner`'s state `name`; the same handle on every call (options from the first). */
@@ -78,10 +80,17 @@ export class ExtensionStates {
     const key = `${owner.id}\u0000${name}`;
     const known = this.handles.get(key);
     if (known) return known as StateHandle<T>;
-    const handle =
+    const inner =
       options.persist === "browser"
         ? this.browser(owner.id, name, options)
         : this.layoutState(owner, name, options);
+    const handle: StateHandle<T> = {
+      get: () => inner.get(),
+      set: (value) => {
+        this.guard(owner, name);
+        inner.set(value);
+      },
+    };
     this.handles.set(key, handle as StateHandle<unknown>);
     return handle;
   }

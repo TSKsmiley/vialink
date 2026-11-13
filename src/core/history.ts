@@ -57,6 +57,18 @@ export type StaleHandler = (entry: HistoryEntry, action: "undo" | "redo") => Pro
 /** How many entries each stack keeps; the oldest drop off. */
 export const HISTORY_LIMIT = 200;
 
+/** An operation failed, and putting back what it had written failed as well. */
+export class RollbackError extends Error {
+  constructor(
+    readonly cause: unknown,
+    readonly rollback: unknown,
+  ) {
+    const text = (e: unknown) => (e instanceof Error ? e.message : String(e));
+    super(`${text(cause)}; putting it back also failed: ${text(rollback)}. Undo can try again.`);
+    this.name = "RollbackError";
+  }
+}
+
 interface OpenGroup {
   label: string;
   writes: HistoryWrite[];
@@ -146,6 +158,48 @@ export class History {
         if (parent) parent.writes.push(...group.writes);
         else this.push({ label, writes: group.writes });
       }
+    }
+  }
+
+  /**
+   * Like group(), but all or nothing: when `action` fails, the writes it made
+   * are undone (newest first) and nothing is recorded, then the error is
+   * rethrown. If putting them back fails too, the half-done entry stays on
+   * the undo stack so Undo can try again, and a {@link RollbackError} names
+   * both failures.
+   */
+  async atomic<T>(label: string, action: () => Promise<T>): Promise<T> {
+    const group: OpenGroup = { label, writes: [] };
+    this.groups.push(group);
+    if (this.groups.length === 1) this.emit(null);
+    let failed = false;
+    try {
+      return await action();
+    } catch (err) {
+      failed = true;
+      const undone: HistoryWrite[] = [];
+      this.replaying = true;
+      try {
+        for (const write of [...group.writes].reverse()) {
+          await write.undo();
+          undone.push(write);
+        }
+      } catch (undoErr) {
+        group.writes = group.writes.filter((w) => !undone.includes(w));
+        failed = false; // keep what is left undoable
+        throw new RollbackError(err, undoErr);
+      } finally {
+        this.replaying = false;
+      }
+      throw err;
+    } finally {
+      this.groups = this.groups.filter((g) => g !== group);
+      if (!failed && group.writes.length > 0) {
+        const parent = this.groups.at(-1);
+        if (parent) parent.writes.push(...group.writes);
+        else this.push({ label, writes: group.writes });
+      }
+      if (this.groups.length === 0) this.emit(null);
     }
   }
 
