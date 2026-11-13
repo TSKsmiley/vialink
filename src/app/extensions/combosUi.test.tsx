@@ -9,7 +9,7 @@ import { installCombos } from "../../core/sim/combos.ts";
 import { SimulatedKeyboard } from "../../core/sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../../core/transport/queue.ts";
 import { Editor } from "../components/Editor.tsx";
-import { CombosPanel } from "./combosUi.tsx";
+import { ExtensionView } from "./ExtensionView.tsx";
 
 afterEach(cleanup);
 
@@ -57,7 +57,8 @@ describe("Combos view", () => {
   it("adds triggers from the keyboard, packed, and sets the output by search", async () => {
     const { kb, combos } = await setup();
     const onError = vi.fn();
-    render(<CombosPanel keyboard={kb} onError={onError} onNotice={() => undefined} />);
+    kb.notifyHandler = (kind, message) => kind === "error" && onError(message);
+    render(<ExtensionView keyboard={kb} view="combos" />);
     fireEvent.click(screen.getByRole("button", { name: "New combo" }));
     fireEvent.click(baseKey(2)); // C
     await waitFor(() => expect(combos.entries[1]).toEqual([0x06, 0, 0, 0, 0]));
@@ -75,7 +76,7 @@ describe("Combos view", () => {
 
   it("deletes a combo", async () => {
     const { kb, combos } = await setup();
-    render(<CombosPanel keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
+    render(<ExtensionView keyboard={kb} view="combos" />);
     fireEvent.click(within(detail(1)).getByRole("button", { name: "Delete combo" }));
     await waitFor(() => expect(combos.entries[0]).toEqual([0, 0, 0, 0, 0]));
   });
@@ -83,7 +84,8 @@ describe("Combos view", () => {
   it("reports a refused unlock through onError", async () => {
     const { kb, combos } = await setup();
     const onError = vi.fn();
-    render(<CombosPanel keyboard={kb} onError={onError} onNotice={() => undefined} />);
+    kb.notifyHandler = (kind, message) => kind === "error" && onError(message);
+    render(<ExtensionView keyboard={kb} view="combos" />);
     choose("Output key", "QK_BOOT");
     await waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0][0]).toMatch(/^Combo 1: .*unlocked/);

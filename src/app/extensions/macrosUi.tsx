@@ -25,12 +25,13 @@ import { useEffect, useState } from "react";
 import { macrosExtension, type Macros } from "../../core/extensions/macros.ts";
 import { VIAL_PROTOCOL_ADVANCED_MACROS, VIAL_PROTOCOL_EXT_MACROS } from "../../core/protocol/constants.ts";
 import { equalBytes, MACRO_MAX_DELAY_UI, type MacroAction } from "../../core/protocol/macros.ts";
-import type { Keyboard } from "../../core/keyboard.ts";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import type { BoardView, DeviceContext } from "../../core/extensions/types.ts";
+import { errorMessage } from "../hooks.ts";
 import { KeySearch, keyText } from "../keymap/KeySearch.tsx";
 import { Button } from "../ui/index.ts";
-import { DetailCard, EntryList, FeatureLayout, placedText, placementsOf } from "./featureLayout.tsx";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import { DetailCard, EntryList, FeatureLayout, placedText } from "./featureLayout.tsx";
+import type { PanelKit } from "./kit.tsx";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 
 type ActionType = MacroAction["type"];
 
@@ -49,25 +50,25 @@ interface KeySlot {
 }
 
 /** The keycode a key string stands for, or null when it does not parse. */
-function keycodeOf(keyboard: Keyboard, value: string): number | null {
+function keycodeOf(board: BoardView, value: string): number | null {
   try {
-    return keyboard.keycodes.parse(value.trim());
+    return board.keycodes.parse(value.trim());
   } catch {
     return null;
   }
 }
 
 /** Error for a keycode, or null when it is valid for this board. */
-function keycodeError(keyboard: Keyboard, value: string): string | null {
+function keycodeError(board: BoardView, value: string): string | null {
   const v = value.trim();
   if (!v) return "Enter a keycode";
   let code: number;
   try {
-    code = keyboard.keycodes.parse(v);
+    code = board.keycodes.parse(v);
   } catch (err) {
     return errorMessage(err);
   }
-  if (keyboard.vialProtocol < VIAL_PROTOCOL_EXT_MACROS && !keyboard.keycodes.isBasic(code)) {
+  if (board.vialProtocol < VIAL_PROTOCOL_EXT_MACROS && !board.keycodes.isBasic(code)) {
     return "Only basic keycodes work in macros on this firmware (Vial protocol below 5)";
   }
   return null;
@@ -110,29 +111,26 @@ function toAction(d: DraftAction): MacroAction {
   return { type: d.type, keys: d.keys.map((k) => k.trim()) };
 }
 
-function MacrosPanel({ keyboard, onError, onNotice }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const macros = keyboard.extension(macrosExtension);
-  if (!macros) return null;
-  return <MacroEditor keyboard={keyboard} macros={macros} onError={onError} onNotice={onNotice} />;
+function MacrosPanel({ ctx, state, ui }: PanelProps<Macros>) {
+  return <MacroEditor ctx={ctx} ui={ui} macros={state} />;
 }
 
 /** A step in words: "Type “hi”", "Tap Ctrl + C", "Hold Shift", "Wait 100 ms". */
-function stepWords(keyboard: Keyboard, a: MacroAction): string {
+function stepWords(board: BoardView, a: MacroAction): string {
   if (a.type === "text") return `type “${a.text}”`;
   if (a.type === "delay") return `wait ${a.delay} ms`;
   const keys = a.keys
     .map((k) => {
-      const code = typeof k === "number" ? k : keycodeOf(keyboard, k);
-      return code === null ? String(k) : keyText(keyboard.keycodes, code);
+      const code = typeof k === "number" ? k : keycodeOf(board, k);
+      return code === null ? String(k) : keyText(board.keycodes, code);
     })
     .join(" + ");
   return a.type === "tap" ? keys : `${a.type === "down" ? "hold" : "release"} ${keys}`;
 }
 
 /** The whole macro in words: "Home, hold Shift, End, release Shift, Ctrl + C". */
-function playsAs(keyboard: Keyboard, actions: readonly MacroAction[]): string {
-  return actions.length ? actions.map((a) => stepWords(keyboard, a)).join(", ") : "Nothing yet";
+function playsAs(board: BoardView, actions: readonly MacroAction[]): string {
+  return actions.length ? actions.map((a) => stepWords(board, a)).join(", ") : "Nothing yet";
 }
 
 const VERBS: Record<ActionType, string> = {
@@ -146,7 +144,9 @@ const VERBS: Record<ActionType, string> = {
 /** How many draft states the step-level undo keeps. */
 const STEP_UNDO_LIMIT = 100;
 
-function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { macros: Macros }) {
+function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; macros: Macros }) {
+  const board = ctx.board;
+  const { error: onError, info: onNotice } = ctx.notify;
   const [base, setBase] = useState(macros.buffer);
   const [draft, setDraftState] = useState(() => toDraft(macros.macros));
   const [past, setPast] = useState<DraftAction[][][]>([]);
@@ -196,7 +196,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
     setSlot(null);
   };
 
-  const withDelay = keyboard.vialProtocol >= VIAL_PROTOCOL_ADVANCED_MACROS;
+  const withDelay = board.vialProtocol >= VIAL_PROTOCOL_ADVANCED_MACROS;
   const types: ActionType[] = withDelay
     ? ["text", "tap", "down", "up", "delay"]
     : ["text", "tap", "down", "up"];
@@ -211,7 +211,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
         ? delayError(a.delay) !== null
         : a.type === "text"
           ? textError(a.text) !== null
-          : a.keys.some((k) => keycodeError(keyboard, k) !== null),
+          : a.keys.some((k) => keycodeError(board, k) !== null),
     ),
   );
   const over = data.length > macros.memory;
@@ -255,7 +255,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
 
   const slotAction = slot ? current.find((a) => a.id === slot.action) : undefined;
   const slotKey = slot && slotAction ? slotAction.keys[slot.key] : undefined;
-  const table = keyboard.keycodes;
+  const table = board.keycodes;
   const pick = (code: number) => {
     if (!slot || !slotAction || slotKey === undefined) return;
     patch(slotAction.id, {
@@ -286,7 +286,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
       return -1;
     }
   };
-  const places = placementsOf(keyboard, macroCode(selected));
+  const places = ui.placementsOf(macroCode(selected));
   const percent = Math.min(100, Math.round((data.length / macros.memory) * 100));
 
   return (
@@ -313,8 +313,8 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
           items={shown.map((i) => ({
             id: i,
             title: `M${i}${modified[i] ? "*" : ""}`,
-            meta: modified[i] ? "unsaved" : placedText(placementsOf(keyboard, macroCode(i))),
-            summary: playsAs(keyboard, actions[i]),
+            meta: modified[i] ? "unsaved" : placedText(ui.placementsOf(macroCode(i))),
+            summary: playsAs(board, actions[i]),
           }))}
           selected={selected}
           onSelect={(i) => {
@@ -448,7 +448,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
                       ))}
                     </select>
                     <ActionValue
-                      keyboard={keyboard}
+                      board={board}
                       action={a}
                       n={n}
                       onChange={(change) => patch(a.id, change)}
@@ -484,7 +484,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
               table={table}
               label={`Choose key ${slot.key + 1} of step ${current.indexOf(slotAction) + 1}`}
               disabled={busy}
-              basicOnly={keyboard.vialProtocol < VIAL_PROTOCOL_EXT_MACROS}
+              basicOnly={board.vialProtocol < VIAL_PROTOCOL_EXT_MACROS}
               onPick={pick}
             />
           )}
@@ -535,7 +535,7 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
 
           <div className="flex flex-wrap items-baseline gap-2 rounded-lg bg-kumo-tint px-3 py-2 text-sm">
             <span className="text-kumo-subtle">Plays as</span>
-            <span>{playsAs(keyboard, actions[selected] ?? [])}</span>
+            <span>{playsAs(board, actions[selected] ?? [])}</span>
           </div>
         </DetailCard>
       }
@@ -544,14 +544,14 @@ function MacroEditor({ keyboard, macros, onError, onNotice }: PanelProps & { mac
 }
 
 function ActionValue({
-  keyboard,
+  board,
   action,
   n,
   onChange,
   selectedKey,
   onSelectKey,
 }: {
-  keyboard: Keyboard;
+  board: BoardView;
   action: DraftAction;
   n: number;
   onChange: (change: Partial<DraftAction>) => void;
@@ -598,10 +598,10 @@ function ActionValue({
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {action.keys.map((key, k) => {
-        const error = keycodeError(keyboard, key);
+        const error = keycodeError(board, key);
         const id = `macro-action-${action.id}-key-${k}`;
-        const code = keycodeOf(keyboard, key);
-        const text = code === null ? key : keyText(keyboard.keycodes, code);
+        const code = keycodeOf(board, key);
+        const text = code === null ? key : keyText(board.keycodes, code);
         return (
           <span key={k} className="inline-flex items-center gap-0.5">
             {k > 0 && <span className="px-0.5 text-kumo-subtle">+</span>}
@@ -611,7 +611,7 @@ function ActionValue({
               aria-pressed={selectedKey === k}
               aria-invalid={error !== null}
               aria-describedby={error ? `${id}-error` : undefined}
-              title={code === null ? key : (keyboard.keycodes.label(code).tooltip ?? key)}
+              title={code === null ? key : (board.keycodes.label(code).tooltip ?? key)}
               onClick={() => onSelectKey(k)}
               className={
                 "min-h-8 cursor-pointer rounded-md border px-2 text-sm " +
@@ -661,12 +661,12 @@ function ActionValue({
 export const macrosUi: AppExtension = {
   id: macrosExtension.id,
   panels: [
-    {
+    panel<Macros>({
       id: "macros",
       modern: true,
       title: "Macros",
       Component: MacrosPanel,
-      count: (kb) => kb.extension(macrosExtension)?.pieces.filter((p) => p.length > 0).length ?? null,
-    },
+      count: (macros) => macros.pieces.filter((p) => p.length > 0).length,
+    }),
   ],
 };

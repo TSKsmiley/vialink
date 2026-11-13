@@ -14,24 +14,19 @@
 
 import { useId, useState } from "react";
 import { tapDanceExtension, type TapDance } from "../../core/extensions/tap-dance.ts";
-import type { Keyboard } from "../../core/keyboard.ts";
+import type { DeviceContext } from "../../core/extensions/types.ts";
+import type { KeycodeTable } from "../../core/keycodes/table.ts";
 import {
   TAP_DANCE_KEY_FIELDS,
   type TapDanceEntry,
   type TapDanceKeyField,
 } from "../../core/protocol/tap-dance.ts";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { errorMessage } from "../hooks.ts";
 import { KeySearch, keyText } from "../keymap/KeySearch.tsx";
 import { Button } from "../ui/index.ts";
-import {
-  DetailCard,
-  EntryList,
-  FeatureLayout,
-  SlotButton,
-  placedText,
-  placementsOf,
-} from "./featureLayout.tsx";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import { DetailCard, EntryList, FeatureLayout, SlotButton, placedText } from "./featureLayout.tsx";
+import type { PanelKit } from "./kit.tsx";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 
 const SLOTS: Record<TapDanceKeyField, { title: string; hint: string }> = {
   onTap: { title: "Tap", hint: "A quick press" },
@@ -46,24 +41,21 @@ const TAPPING_TERM_MAX = 10000;
 const isSet = (e: Readonly<TapDanceEntry>) => TAP_DANCE_KEY_FIELDS.some((f) => e[f] !== 0);
 
 /** "Tap Esc · Hold Caps Lock". */
-export function tapDanceSummary(keyboard: Keyboard, e: Readonly<TapDanceEntry>): string {
+export function tapDanceSummary(table: KeycodeTable, e: Readonly<TapDanceEntry>): string {
   const parts = TAP_DANCE_KEY_FIELDS.filter((f) => e[f] !== 0).map(
-    (f) => `${SLOTS[f].title} ${keyText(keyboard.keycodes, e[f])}`,
+    (f) => `${SLOTS[f].title} ${keyText(table, e[f])}`,
   );
   return parts.length ? parts.join(" · ") : "Not set up";
 }
 
-export function TapDancePanel({ keyboard, onError }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const state = keyboard.extension(tapDanceExtension);
-  const used = state ? state.entries.flatMap((e, i) => (isSet(e) ? [i] : [])) : [];
+export function TapDancePanel({ ctx, state, ui }: PanelProps<TapDance>) {
+  const used = state.entries.flatMap((e, i) => (isSet(e) ? [i] : []));
   const [selected, setSelected] = useState<number>(used[0] ?? 0);
   const [slot, setSlot] = useState<TapDanceKeyField | null>(null);
-  if (!state) return null;
 
   const shown = used.includes(selected) ? used : [...used, selected].sort((a, b) => a - b);
   const free = state.entries.findIndex((e, i) => !isSet(e) && i !== selected);
-  const tdCode = (i: number) => keyboard.keycodes.parse(`TD(${i})`);
+  const tdCode = (i: number) => ctx.board.keycodes.parse(`TD(${i})`);
 
   return (
     <FeatureLayout
@@ -75,8 +67,8 @@ export function TapDancePanel({ keyboard, onError }: PanelProps) {
           items={shown.map((i) => ({
             id: i,
             title: `TD ${i}`,
-            meta: placedText(placementsOf(keyboard, tdCode(i))),
-            summary: tapDanceSummary(keyboard, state.get(i)),
+            meta: placedText(ui.placementsOf(tdCode(i))),
+            summary: tapDanceSummary(ctx.board.keycodes, state.get(i)),
           }))}
           selected={selected}
           onSelect={(i) => {
@@ -97,12 +89,12 @@ export function TapDancePanel({ keyboard, onError }: PanelProps) {
       detail={
         <TapDanceDetail
           key={selected}
-          keyboard={keyboard}
+          ctx={ctx}
+          ui={ui}
           state={state}
           idx={selected}
           slot={slot}
           onSlot={setSlot}
-          onError={onError}
         />
       }
     />
@@ -110,24 +102,25 @@ export function TapDancePanel({ keyboard, onError }: PanelProps) {
 }
 
 function TapDanceDetail({
-  keyboard,
+  ctx,
+  ui,
   state,
   idx,
   slot,
   onSlot,
-  onError,
 }: {
-  keyboard: Keyboard;
+  ctx: DeviceContext;
+  ui: PanelKit;
   state: TapDance;
   idx: number;
   slot: TapDanceKeyField | null;
   onSlot: (s: TapDanceKeyField | null) => void;
-  onError: (m: string) => void;
 }) {
+  const onError = ctx.notify.error;
   const id = useId();
   const entry = state.get(idx);
-  const table = keyboard.keycodes;
-  const places = placementsOf(keyboard, table.parse(`TD(${idx})`));
+  const table = ctx.board.keycodes;
+  const places = ui.placementsOf(table.parse(`TD(${idx})`));
   const shownTerm = String(Math.min(entry.tappingTerm, TAPPING_TERM_MAX));
   const [term, setTerm] = useState(shownTerm);
   const [termError, setTermError] = useState<string | null>(null);
@@ -272,12 +265,12 @@ function TapDanceDetail({
 export const tapDanceUi: AppExtension = {
   id: tapDanceExtension.id,
   panels: [
-    {
+    panel<TapDance>({
       id: "tap-dance",
       modern: true,
       title: "Tap dance",
       Component: TapDancePanel,
-      count: (kb) => kb.extension(tapDanceExtension)?.entries.filter(isSet).length ?? null,
-    },
+      count: (td) => td.entries.filter(isSet).length,
+    }),
   ],
 };

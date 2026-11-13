@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { keyOverridesExtension, type KeyOverrides } from "../../core/extensions/key-overrides.ts";
-import type { Keyboard } from "../../core/keyboard.ts";
+import type { BoardView } from "../../core/extensions/types.ts";
 import {
   KO_ENABLED,
   KO_OPTION_ACTIVATION_NEGATIVE_MOD_UP,
@@ -20,8 +20,8 @@ import {
   type KeyOverrideEntry,
 } from "../../core/protocol/key-overrides.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import { errorMessage } from "../hooks.ts";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 import "./key-overrides.css";
 
 type KeyField = "trigger" | "replacement";
@@ -47,14 +47,12 @@ const OPTIONS: [bit: number, label: string][] = [
 
 const FIELD_NAMES: Record<KeyField, string> = { trigger: "Trigger", replacement: "Replacement" };
 
-function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const ko = keyboard.extension(keyOverridesExtension);
+function KeyOverridesPanel({ ctx, state: ko, ui }: PanelProps<KeyOverrides>) {
+  const board = ctx.board;
   const [selection, setSelection] = useState<Selection | null>(null);
-  if (!ko) return null;
 
   const run = (job: Promise<void>) => {
-    job.catch((err: unknown) => onError(errorMessage(err)));
+    job.catch((err: unknown) => ctx.notify.error(errorMessage(err)));
   };
 
   const current = selection ? ko.get(selection.index)[selection.field] : null;
@@ -62,7 +60,7 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
   /** As the keymap editor: a basic keycode picked for a masked one (e.g. LSFT(kc)) fills its inner key. */
   const pick = (code: number) => {
     if (!selection) return;
-    const table = keyboard.keycodes;
+    const table = board.keycodes;
     const value =
       current !== null && table.isMasked(current) && table.isBasic(code) ? (current & 0xff00) | code : code;
     const { index, field } = selection;
@@ -78,7 +76,7 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
         {ko.entries.map((entry, index) => (
           <OverrideCard
             key={index}
-            keyboard={keyboard}
+            board={board}
             ko={ko}
             index={index}
             entry={entry}
@@ -96,8 +94,8 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
         )}
         <KeycodePicker
           hint="Select a trigger or replacement key above, then pick a keycode."
-          info={pickerInfoOf(keyboard)}
-          table={keyboard.keycodes}
+          info={ui.pickerInfo()}
+          table={board.keycodes}
           disabled={selection === null}
           current={current}
           onPick={pick}
@@ -108,7 +106,7 @@ function KeyOverridesPanel({ keyboard, onError }: PanelProps) {
 }
 
 interface CardProps {
-  keyboard: Keyboard;
+  board: BoardView;
   ko: KeyOverrides;
   index: number;
   entry: Readonly<KeyOverrideEntry>;
@@ -117,7 +115,7 @@ interface CardProps {
   run: (job: Promise<void>) => void;
 }
 
-function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: CardProps) {
+function OverrideCard({ board, ko, index, entry, selection, onSelect, run }: CardProps) {
   const n = index + 1;
   const enabled = (entry.options & KO_ENABLED) !== 0;
   const setBit = (field: MaskField, bit: number, on: boolean) =>
@@ -125,7 +123,7 @@ function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: 
 
   const keyButton = (field: KeyField) => {
     const code = entry[field];
-    const label = keyboard.keycodes.label(code);
+    const label = board.keycodes.label(code);
     const text = label.inner ? `${label.text} ${label.inner}` : label.text;
     const selected = selection?.index === index && selection.field === field;
     return (
@@ -135,7 +133,7 @@ function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: 
           type="button"
           className={selected ? "ko-key active" : "ko-key"}
           aria-pressed={selected}
-          aria-label={`${FIELD_NAMES[field]} of key override ${n}: ${keyboard.keycodes.serialize(code)}`}
+          aria-label={`${FIELD_NAMES[field]} of key override ${n}: ${board.keycodes.serialize(code)}`}
           title={label.tooltip ?? undefined}
           onClick={() => onSelect(selected ? null : { index, field })}
         >
@@ -184,8 +182,8 @@ function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: 
           {Array.from({ length: LAYER_BITS }, (_, layer) => (
             <label
               key={layer}
-              className={layer >= keyboard.layers ? "beyond" : undefined}
-              title={layer >= keyboard.layers ? `This keyboard has ${keyboard.layers} layers` : undefined}
+              className={layer >= board.layers ? "beyond" : undefined}
+              title={layer >= board.layers ? `This keyboard has ${board.layers} layers` : undefined}
             >
               <input
                 type="checkbox"
@@ -231,13 +229,11 @@ function OverrideCard({ keyboard, ko, index, entry, selection, onSelect, run }: 
 export const keyOverridesUi: AppExtension = {
   id: keyOverridesExtension.id,
   panels: [
-    {
+    panel<KeyOverrides>({
       id: "key-overrides",
       title: "Key overrides",
       Component: KeyOverridesPanel,
-      count: (kb) =>
-        kb.extension(keyOverridesExtension)?.entries.filter((e) => e.trigger !== 0 || e.replacement !== 0)
-          .length ?? null,
-    },
+      count: (ko) => ko.entries.filter((e) => e.trigger !== 0 || e.replacement !== 0).length,
+    }),
   ],
 };

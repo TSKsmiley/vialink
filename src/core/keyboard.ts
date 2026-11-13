@@ -586,6 +586,16 @@ export class Keyboard {
     return this.states.layoutSnapshot();
   }
 
+  /** Sets {@link notifyHandler} (for React code, which may not assign to a prop). */
+  setNotifyHandler(handler: ((kind: "info" | "error", message: string) => void) | null): void {
+    this.notifyHandler = handler;
+  }
+
+  /** The context the app hands an extension's own UI (its views); the same powers its core code has. */
+  contextOf(ext: KeyboardExtension<unknown>): DeviceContext {
+    return this.extensionContext(ext);
+  }
+
   /** Why an extension does or does not run on this board. */
   extensionStatus(id: string): ExtensionStatus {
     return this.statuses.get(id) ?? { kind: "off" };
@@ -702,8 +712,8 @@ export class Keyboard {
         group: (label, action) => this.history.group(label, action),
       },
       notify: {
-        info: (message) => this.notifyHandler?.("info", `${ext.name}: ${message}`),
-        error: (message) => this.notifyHandler?.("error", `${ext.name}: ${message}`),
+        info: (message) => this.notifyHandler?.("info", message),
+        error: (message) => this.notifyHandler?.("error", message),
       },
       schedule: {
         every: (ms, fn, options) => this.scheduler.every(ms, fn, { ...options, owner: ext.id }),

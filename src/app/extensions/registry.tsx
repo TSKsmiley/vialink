@@ -6,7 +6,8 @@
 import type { ComponentType } from "react";
 import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { BrowserStorage } from "../../core/extensions/state.ts";
-import type { KeyboardExtension } from "../../core/extensions/types.ts";
+import type { DeviceContext, KeyboardExtension } from "../../core/extensions/types.ts";
+import type { PanelKit } from "./kit.tsx";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { layerNamesUi } from "./layerNamesUi.tsx";
 import { macrosUi } from "./macrosUi.tsx";
@@ -16,24 +17,35 @@ import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { altRepeatKeyUi } from "./alt-repeat-keyUi.tsx";
 import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
 
-export interface PanelProps {
-  keyboard: Keyboard;
-  onError: (message: string) => void;
-  onNotice: (message: string) => void;
-  /** Opens another view of the editor by id ("keymap", "qmk-settings", …); absent outside the editor. */
+/**
+ * What an extension's view gets: its own context (ctx: board, keymap, history,
+ * notify, state, device by group), its own state (what its probe returned) and
+ * ViaLink's components bound to this keyboard (ui). Panels never touch the
+ * Keyboard (plan doc, Extension API, "User interface"; user, 13 Nov).
+ */
+export interface PanelProps<State = unknown> {
+  ctx: DeviceContext;
+  state: State;
+  ui: PanelKit;
+  /** Opens another view of the editor by id ("keymap", "qmk-settings", …). */
   onOpen?: (view: string) => void;
 }
 
 /** A whole editor view, shown as a tab next to Keymap and Matrix tester. */
-export interface ExtensionPanel {
+export interface ExtensionPanel<State = unknown> {
   /** Unique within the app, e.g. "macros". */
   id: string;
   title: string;
-  Component: ComponentType<PanelProps>;
+  Component: ComponentType<PanelProps<State>>;
   /** True when the view uses only the new styles, so the pre-redesign styles stay off it. */
   modern?: boolean;
   /** How many entries are set up, shown next to the title in the sidebar; null shows nothing. */
-  count?(keyboard: Keyboard): number | null;
+  count?(state: State): number | null;
+}
+
+/** Types a panel for its extension's state, for AppExtension.panels. */
+export function panel<State>(p: ExtensionPanel<State>): ExtensionPanel {
+  return p as unknown as ExtensionPanel;
 }
 
 export interface AppExtension {
@@ -59,6 +71,14 @@ export const APP_EXTENSIONS: readonly AppExtension[] = [
 export function activeUi(keyboard: Keyboard): AppExtension[] {
   const active = new Set(keyboard.activeExtensions.map((a) => a.extension.id));
   return APP_EXTENSIONS.filter((ui) => active.has(ui.id));
+}
+
+/** The views of the extensions running on `keyboard`, each with its extension. */
+export function activePanels(keyboard: Keyboard) {
+  const running = new Map(keyboard.activeExtensions.map((a) => [a.extension.id, a]));
+  return activeUi(keyboard).flatMap((ui) =>
+    (ui.panels ?? []).map((panel) => ({ panel, owner: running.get(ui.id)! })),
+  );
 }
 
 // ── Enabled/disabled setting (per browser) ──────────────────────────────────

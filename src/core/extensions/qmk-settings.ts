@@ -35,6 +35,7 @@ import {
   vialQmkSettingsSet,
 } from "../protocol/qmk-settings.ts";
 import defs from "./data/qmk_settings.json";
+import { defineService, provide } from "./services.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 // ── The settings description (QmkSettings.initialize) ───────────────────────
@@ -217,8 +218,16 @@ function fileValue(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
+/** QMK settings' current values, for other extensions (combos shows the combo term). */
+export interface QmkSettingValues {
+  /** A setting's value, or undefined when the keyboard doesn't have it. */
+  get(qsid: number): number | undefined;
+}
+export const qmkSettingValues = defineService<QmkSettingValues>("qmk-settings.values");
+
 export const qmkSettingsExtension: KeyboardExtension<QmkSettings> = {
   id: "qmk-settings",
+  provides: [provide(qmkSettingValues, (settings: QmkSettings) => ({ get: (qsid) => settings.get(qsid) }))],
   group: "standard",
   name: "QMK settings",
   description:
