@@ -130,35 +130,50 @@ export class ExtensionStates {
     name: string,
     options: StateOptions<T>,
   ): StateHandle<T> {
-    let states = this.layout.get(owner.id);
-    if (!states) this.layout.set(owner.id, (states = new Map()));
     const version = options.version ?? 1;
+    const states = () => {
+      let map = this.layout.get(owner.id);
+      if (!map) this.layout.set(owner.id, (map = new Map()));
+      return map;
+    };
+    // Read from the map each time, so a loaded layout file shows up in handles made earlier.
+    const get = () => restore(states().get(name), options);
     const write = (value: T) => {
-      states.set(name, { v: version, value });
+      states().set(name, { v: version, value });
       this.changed();
     };
-    let value = restore(states.get(name), options);
-    states.set(name, { v: version, value });
     return {
-      get: () => value,
+      get,
       set: (next) => {
-        const old = value;
+        const old = get();
         if (Object.is(old, next)) return;
-        value = next;
         write(next);
         this.history.record({
           label: `${owner.name}: change ${name}`,
-          undo: async () => {
-            value = old;
-            write(old);
-          },
-          redo: async () => {
-            value = next;
-            write(next);
-          },
-          isCurrent: () => Object.is(value, next),
+          undo: async () => write(old),
+          redo: async () => write(next),
+          isCurrent: () => Object.is(get(), next),
         });
       },
     };
+  }
+
+  /**
+   * Replaces `owner`'s layout state with what a layout file holds, as one
+   * undoable write (inside the load's undo group).
+   */
+  loadLayout(owner: { id: string; name: string }, saved: Readonly<Record<string, Versioned>>): void {
+    const before = new Map(this.layout.get(owner.id) ?? []);
+    const after = new Map(Object.entries(saved));
+    const put = (map: Map<string, Versioned>) => {
+      this.layout.set(owner.id, new Map(map));
+      this.changed();
+    };
+    put(after);
+    this.history.record({
+      label: `${owner.name}: load saved data`,
+      undo: async () => put(before),
+      redo: async () => put(after),
+    });
   }
 }

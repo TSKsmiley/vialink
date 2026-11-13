@@ -3,7 +3,9 @@
 // (protocol/layer_name.py) and its firmware implement them:
 // - get: FE 0D 09 <layer> → status (0 = ok), 16 bytes NUL-padded UTF-8;
 // - set: FE 0D 0A <layer> <16 bytes> → status; needs an unlocked board;
-// - .vil: a "layer_names" list, one string per layer.
+// - .vil: the fork writes a top-level "layer_names" list. ViaLink keeps names in
+//   its own .vialink section instead (Extension API step 8); Import from Vial
+//   ignores "layer_names", as desktop Vial does.
 // Stock vial.c has no default case for unknown dynamic sub-commands and leaves
 // the reply untouched (0xFE in byte 0), so a status of 0 means "supported".
 
@@ -143,11 +145,14 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     }),
   ],
 
-  vil: {
-    keys: ["layer_names"],
-    save: (state) => ({ layer_names: [...state.names] }),
-    restore(state, file) {
-      const names = file.layer_names;
+  // Names live in this extension's section of .vialink files, not in .vil (desktop Vial
+  // has no layer names; the Theis194 fork's top-level "layer_names" is not written).
+  saves: "layout-file",
+  layoutFile: {
+    version: 1,
+    save: (state) => ({ names: [...state.names] }),
+    restore(state, data) {
+      const names = data.names;
       if (!Array.isArray(names)) return [];
       const steps = [];
       for (let layer = 0; layer < Math.min(names.length, state.names.length); layer++) {

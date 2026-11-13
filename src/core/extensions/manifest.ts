@@ -128,6 +128,11 @@ export function manifestProblems(exts: readonly Ext[]): string[] {
       points.add(point.id);
     }
   }
+  for (const ext of exts) {
+    if (!!ext.layoutFile !== (ext.saves === "layout-file")) {
+      problems.push(`${ext.id}: a layoutFile section and saves: "layout-file" go together.`);
+    }
+  }
   // Handling another extension's hook point means depending on it (requires or optional).
   for (const ext of exts) {
     const deps = [...(ext.requires ?? []), ...(ext.optional ?? [])];

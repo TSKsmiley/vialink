@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Save the current layout as a .vil file or in the browser, and load either
-// back onto the board with progress, after a confirmation that names a UID
-// mismatch and anything the layout holds that this version does not apply.
-// Shown as the "Layouts" menu in the top bar.
+// Save the current layout as a .vialink file (ViaLink's default, with
+// extensions' data) or in the browser, export and import Vial's .vil, and load
+// any of them back onto the board with progress, after a confirmation that
+// names a UID mismatch and anything the layout holds that is not applied.
+// Shown as the "Layouts" menu in the top bar; dropping a file on the page loads it.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
-import { applyVilRestore, parseVil, planVilRestore, saveVil, type RestorePlan } from "../../core/vil.ts";
+import {
+  leftOutOfVil,
+  planLayoutRestore,
+  readLayoutFile,
+  saveVialink,
+  type LayoutRestorePlan,
+} from "../../core/vialink.ts";
+import { applyVilRestore, parseVil, planVilRestore, saveVil } from "../../core/vil.ts";
 import { downloadText, errorMessage, fileNameFor } from "../hooks.ts";
 import { defaultLayoutName, layoutStore, newLayoutId, requestPersistence } from "../storage/savedLayouts.ts";
 import { Button, DropdownMenu } from "../ui/index.ts";
@@ -23,21 +32,63 @@ interface Props {
 
 export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Props) {
   const input = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{ name: string; plan: RestorePlan } | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{ name: string; plan: LayoutRestorePlan } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
 
-  const download = () => downloadText(fileNameFor(keyboard.name), saveVil(keyboard));
+  const layoutFile = () => saveVialink(keyboard, { app: __APP_VERSION__ });
+  const download = () => downloadText(fileNameFor(keyboard.name, ".vialink"), layoutFile());
+  // Export to Vial: pure Vial fields, so desktop Vial reads it; say what stays behind.
+  const exportVil = () => {
+    downloadText(fileNameFor(keyboard.name), saveVil(keyboard));
+    const left = leftOutOfVil(keyboard);
+    if (left.length > 0) {
+      onNotice(
+        `${left.join(" and ")} data ${left.length === 1 ? "isn't" : "aren't"} included in .vil files. Save a layout file to keep it.`,
+      );
+    }
+  };
 
-  /** Shared by files and browser saves: parse, plan, and ask before writing. */
+  /** Shared by files and browser saves: read (.vialink or .vil), plan, and ask before writing. */
   const loadText = (text: string, source: string) => {
     try {
-      setPending({ name: source, plan: planVilRestore(keyboard, parseVil(text)) });
+      const read = readLayoutFile(text);
+      const plan: LayoutRestorePlan =
+        read.kind === "vialink"
+          ? planLayoutRestore(keyboard, read.file, BUILTIN_EXTENSIONS)
+          : { ...planVilRestore(keyboard, parseVil(read.text)), notes: [], afterApply: () => undefined };
+      setPending({ name: source, plan });
     } catch (err) {
       onError(errorMessage(err));
     }
   };
+  const loadFile = (file: File) =>
+    void file.text().then(
+      (text) => loadText(text, file.name),
+      (err) => onError(errorMessage(err)),
+    );
+
+  // Dropping a .vialink or .vil file anywhere on the page loads it (what the Vial community shares).
+  useEffect(() => {
+    const isLayout = (f: File) => /\.(vil|vialink)$/i.test(f.name);
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const onDrop = (e: DragEvent) => {
+      const file = [...(e.dataTransfer?.files ?? [])].find(isLayout);
+      if (!file) return;
+      e.preventDefault();
+      if (!busy) loadFile(file);
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  });
 
   const saveToBrowser = async (name: string) => {
     try {
@@ -47,13 +98,13 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
         uid: keyboard.uid.toString(),
         keyboardName: keyboard.name,
         savedAt: new Date().toISOString(),
-        vil: saveVil(keyboard),
+        vil: layoutFile(),
       });
       const persistent = await requestPersistence();
       onNotice(
         persistent
           ? `Saved “${name.trim() || "layout"}” in this browser.`
-          : `Saved “${name.trim() || "layout"}” in this browser. The browser may clear it if space runs low; download a .vil to be safe.`,
+          : `Saved “${name.trim() || "layout"}” in this browser. The browser may clear it if space runs low; save a layout file to be safe.`,
       );
       setSaveName(null);
     } catch (err) {
@@ -73,6 +124,7 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
         (done, total) => setProgress({ done, total }),
         `Load ${pending.name}`,
       );
+      plan.afterApply();
       onNotice(
         plan.ops.length === 0
           ? "The board already matches this layout."
@@ -105,25 +157,33 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
             Save in browser…
           </DropdownMenu.Item>
           <DropdownMenu.Separator />
-          <DropdownMenu.Item onClick={download}>Save .vil file</DropdownMenu.Item>
-          <DropdownMenu.Item onClick={() => input.current?.click()}>Load .vil file…</DropdownMenu.Item>
+          <DropdownMenu.Item onClick={download}>Save layout file</DropdownMenu.Item>
+          <DropdownMenu.Item onClick={() => input.current?.click()}>Load layout file…</DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item onClick={exportVil}>Export to Vial (.vil)</DropdownMenu.Item>
+          <DropdownMenu.Item onClick={() => importInput.current?.click()}>
+            Import from Vial (.vil)…
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu>
-      <input
-        ref={input}
-        type="file"
-        accept=".vil,application/json"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file)
-            void file.text().then(
-              (text) => loadText(text, file.name),
-              (err) => onError(errorMessage(err)),
-            );
-        }}
-      />
+      {[
+        { ref: input, accept: ".vialink,.vil,application/json", label: "Layout file" },
+        { ref: importInput, accept: ".vil,application/json", label: "Vial layout file" },
+      ].map(({ ref, accept, label }) => (
+        <input
+          key={label}
+          ref={ref}
+          type="file"
+          accept={accept}
+          aria-label={label}
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) loadFile(file);
+          }}
+        />
+      ))}
       {progress && (
         <span className="progress">
           <progress max={progress.total || 1} value={progress.done} /> {progress.done}/{progress.total}
@@ -197,6 +257,9 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
                 ))}
               </ul>
             )}
+            {pending.plan.notes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
             {pending.plan.skippedFeatures.length > 0 && (
               <p>Not applied by this version: {pending.plan.skippedFeatures.join(", ")}.</p>
             )}
