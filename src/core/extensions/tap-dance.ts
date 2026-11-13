@@ -23,7 +23,7 @@ import {
   vialTapDanceSet,
   type TapDanceEntry,
 } from "../protocol/tap-dance.ts";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export class TapDanceError extends Error {
   constructor(message: string) {
@@ -39,10 +39,10 @@ const isU16 = (v: unknown): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffff;
 
 export class TapDance {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly values: TapDanceEntry[];
 
-  constructor(ctx: ExtensionContext, entries: TapDanceEntry[]) {
+  constructor(ctx: DeviceContext, entries: TapDanceEntry[]) {
     this.ctx = ctx;
     this.values = entries;
   }
@@ -76,17 +76,17 @@ export class TapDance {
     }
     if (tapDanceEntriesEqual(current, entry)) return;
 
-    const { keyboard, queue } = this.ctx;
-    const boot = keyboard.keycodes.resolve(RESET_KEYCODE);
+    const { board, device } = this.ctx;
+    const boot = board.keycodes.resolve(RESET_KEYCODE);
     if (TAP_DANCE_KEY_FIELDS.some((f) => entry[f] === boot)) {
-      await keyboard.ensureUnlocked(`Assigning ${RESET_KEYCODE} (bootloader) in a tap dance`);
+      await device.ensureUnlocked(`Assigning ${RESET_KEYCODE} (bootloader) in a tap dance`);
     }
     const copy: TapDanceEntry = { ...entry };
-    const reply = vialTapDanceSet.decode(await queue.request(vialTapDanceSet.encode(idx, copy)));
+    const reply = vialTapDanceSet.decode(await device.request(vialTapDanceSet.encode(idx, copy)));
     if (!reply.ok) throw new TapDanceError(`the keyboard rejected tap dance ${idx} (status ${reply.status})`);
     this.values[idx] = copy;
     const old: TapDanceEntry = { ...current };
-    this.ctx.record({
+    this.ctx.history.record({
       label: `Tap dance TD ${idx}`,
       undo: () => this.set(idx, old),
       redo: () => this.set(idx, copy),
@@ -97,7 +97,7 @@ export class TapDance {
 
   /** tap_dance.py save_tap_dance: [on_tap, on_hold, on_double_tap, on_tap_hold, tapping_term]. */
   toVil(): VilTapDanceEntry[] {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     return this.values.map((e) => [
       kc.serialize(e.onTap),
       kc.serialize(e.onHold),
@@ -110,7 +110,7 @@ export class TapDance {
   /** Converts one .vil entry; null when vial-gui could not pack it. */
   fromVil(raw: unknown): TapDanceEntry | null {
     if (!Array.isArray(raw) || raw.length < 5) return null;
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     const codes: number[] = [];
     for (let i = 0; i < 4; i++) {
       const v: unknown = raw[i];
@@ -132,7 +132,7 @@ export class TapDance {
 
   /** Short human-readable form, e.g. "tap KC_A, hold KC_LCTL, …, 200 ms". */
   describe(entry: TapDanceEntry): string {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     return (
       `tap ${kc.serialize(entry.onTap)}, hold ${kc.serialize(entry.onHold)}, ` +
       `double tap ${kc.serialize(entry.onDoubleTap)}, tap + hold ${kc.serialize(entry.onTapHold)}, ` +
@@ -149,12 +149,12 @@ export const tapDanceExtension: KeyboardExtension<TapDance> = {
   description: "Keys that do different things when tapped, held, double-tapped or tapped then held (TD(n)).",
 
   async probe(ctx) {
-    const { keyboard, queue } = ctx;
-    const count = keyboard.capabilities.dynamic?.tapDance ?? 0;
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_DYNAMIC || !count) return null;
+    const { board, device } = ctx;
+    const count = board.capabilities.dynamic?.tapDance ?? 0;
+    if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || !count) return null;
     const entries: TapDanceEntry[] = [];
     for (let idx = 0; idx < count; idx++) {
-      const reply = vialTapDanceGet.decode(await queue.request(vialTapDanceGet.encode(idx)));
+      const reply = vialTapDanceGet.decode(await device.request(vialTapDanceGet.encode(idx)));
       if (!reply.ok) {
         throw new TapDanceError(`failed retrieving tap dance entry ${idx} from the device`);
       }

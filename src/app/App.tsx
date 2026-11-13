@@ -65,6 +65,7 @@ export function App() {
           recency: extensionRecency,
         });
         const kb = connection.keyboard;
+        kb.notifyHandler = (kind, message) => (kind === "error" ? setError(message) : setNotice(message));
         kb.unlockHandler = (reason) =>
           new Promise<boolean>((resolve) => setUnlockRequest({ reason, resolve }));
         setStatus({ kind: "connected", connection });

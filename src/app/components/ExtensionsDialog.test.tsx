@@ -51,6 +51,7 @@ const fake = (
   id,
   name,
   description: "",
+  group: "compatible",
   ...manifest,
   probe: async () => (supported ? {} : null),
 });

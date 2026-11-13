@@ -9,6 +9,7 @@
 import { XIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
+import { CUSTOM_COMMANDS } from "../../core/extensions/index.ts";
 import { describeRequest, isRejected, type CommandKind } from "../../core/protocol/describe.ts";
 import type { QueueEvent, RequestQueue } from "../../core/transport/queue.ts";
 import { toTrimmedHex } from "../../core/util/bytes.ts";
@@ -78,7 +79,7 @@ export function DevicePanel({ queue, keyboard, onClose }: Props) {
         let out = prev;
         if (e.kind === "request") {
           if (e.attempt > 1) return prev; // a retry: the row stays, its result says so later
-          const d = describeRequest(e.data, name);
+          const d = describeRequest(e.data, name, CUSTOM_COMMANDS);
           out = [
             ...prev,
             {
@@ -135,10 +136,11 @@ export function DevicePanel({ queue, keyboard, onClose }: Props) {
       filter === "all"
         ? true
         : filter === "writes"
-          ? r.kind === "write" || (r.kind === "error" && describeRequest(r.request).kind === "write")
+          ? r.kind === "write" ||
+            (r.kind === "error" && describeRequest(r.request, undefined, CUSTOM_COMMANDS).kind === "write")
           : filter === "errors"
             ? r.kind === "error"
-            : r.kind === "unlock" || describeRequest(r.request).kind === "unlock",
+            : r.kind === "unlock" || describeRequest(r.request, undefined, CUSTOM_COMMANDS).kind === "unlock",
     )
     .reverse();
 

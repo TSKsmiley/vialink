@@ -13,7 +13,8 @@ import {
   requirementsOf,
   resolveActive,
 } from "./manifest.ts";
-import type { KeyboardExtension } from "./types.ts";
+import { vialGetKeyboardId } from "../protocol/commands.ts";
+import { ExtensionCommandError, type DeviceContext, type KeyboardExtension } from "./types.ts";
 
 type Fake = KeyboardExtension<unknown> & { probes: number };
 
@@ -28,6 +29,7 @@ function ext(
     id,
     name: id,
     description: "",
+    group: "compatible",
     ...manifest,
     probes: 0,
     async probe() {
@@ -220,5 +222,73 @@ describe("keyboard probing with dependencies", () => {
     expect(await kb.supportsExtension(other)).toBe(false);
     expect(other.probes).toBe(1);
     expect(kb.extensionStatus("other")).toEqual({ kind: "off" });
+  });
+});
+
+describe("extension groups limit device access", () => {
+  const layerNameGet = Uint8Array.of(0xfe, 0x0d, 0x09, 0);
+
+  async function contextOf(extension: KeyboardExtension<unknown>) {
+    let seen: unknown = null;
+    const spy = {
+      ...extension,
+      async probe(ctx: unknown) {
+        seen = ctx;
+        return {};
+      },
+    } as KeyboardExtension<unknown>;
+    const kb = await load([spy as Fake]);
+    return { kb, ctx: seen as DeviceContext };
+  }
+
+  it("gives a compatible extension no device at all", async () => {
+    const { ctx } = await contextOf(ext("extra"));
+    expect("device" in ctx).toBe(false);
+    expect(ctx.board.layers).toBe(2);
+  });
+
+  it("lets a standard extension send only standard Vial commands", async () => {
+    const { ctx } = await contextOf({ ...ext("feature"), group: "standard" } as KeyboardExtension<unknown>);
+    expect((await ctx.device.request(vialGetKeyboardId.encode())).length).toBeGreaterThan(0);
+    await expect(ctx.device.request(layerNameGet)).rejects.toThrow(ExtensionCommandError);
+    await expect(ctx.device.request(layerNameGet)).rejects.toThrow(
+      "feature tried to send a command it hasn't declared (fe 0d 09 …); nothing was sent.",
+    );
+  });
+
+  it("lets a non-standard extension send the custom commands it declares", async () => {
+    const { ctx } = await contextOf({
+      ...ext("fork"),
+      group: "nonstandard",
+      firmware: { label: "fork", url: "https://example.invalid" },
+      commands: [{ name: "Get layer name", kind: "read", bytes: [0xfe, 0x0d, 0x09], reply: (r) => r }],
+    } as KeyboardExtension<unknown>);
+    await expect(ctx.device.request(layerNameGet)).resolves.toBeInstanceOf(Uint8Array);
+    await expect(ctx.device.request(Uint8Array.of(0xfe, 0x0d, 0x0a, 0))).rejects.toThrow(
+      ExtensionCommandError,
+    );
+  });
+
+  it("prefixes notices with the extension's name", async () => {
+    const { kb, ctx } = await contextOf(ext("Key notes"));
+    const got: string[] = [];
+    kb.notifyHandler = (kind, message) => got.push(`${kind}: ${message}`);
+    ctx.notify.info("Saved 3 labels");
+    ctx.notify.error("No room");
+    expect(got).toEqual(["info: Key notes: Saved 3 labels", "error: Key notes: No room"]);
+  });
+
+  it("reports manifests that don't fit their group", () => {
+    const fork = {
+      ...ext("fork"),
+      group: "nonstandard",
+      firmware: { label: "fork", url: "https://example.invalid" },
+      commands: [{ name: "Get keyboard id", kind: "read", bytes: [0xfe, 0x00], reply: (r: Uint8Array) => r }],
+    } as KeyboardExtension<unknown>;
+    const empty = { ...fork, id: "empty", commands: [] } as KeyboardExtension<unknown>;
+    expect(manifestProblems([fork, empty])).toEqual([
+      'fork: "Get keyboard id" is a standard Vial command; don\'t declare it.',
+      "empty: non-standard but declares no custom commands.",
+    ]);
   });
 });

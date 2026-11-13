@@ -4,25 +4,117 @@
 // fields and restore steps. The app layer adds UI for them separately
 // (src/app/extensions/), so this stays free of React.
 //
+// Each extension talks to ViaLink only through its context (HostContext or
+// DeviceContext), one per extension: a read-only board view, keymap access,
+// undo history, notices, and device access limited by its group.
+//
 // Extensions are written in this repository only. Loading third-party code
 // needs a security design first: anything in the page has full WebHID access.
 
-import type { Keyboard } from "../keyboard.ts";
+import type { PhysicalEncoder, PhysicalKey } from "../definition/definition.ts";
+import type { LayoutLabel } from "../definition/layoutOptions.ts";
 import type { HistoryWrite } from "../history.ts";
-import type { RequestQueue } from "../transport/queue.ts";
+import type { KeycodeTable } from "../keycodes/table.ts";
+import type { Capabilities } from "../keyboard.ts";
+import type { RequestOptions } from "../transport/queue.ts";
 import type { ExtensionPoint } from "./manifest.ts";
 
-export interface ExtensionContext {
-  readonly keyboard: Keyboard;
-  readonly queue: RequestQueue;
-  /** Tells subscribers of the keyboard that extension state changed. */
-  changed(): void;
+/**
+ * What an extension sees of the keyboard: facts only, no writes. The values
+ * are live (a layout option change shows up here).
+ */
+export interface BoardView {
+  readonly viaProtocol: number;
+  readonly vialProtocol: number;
+  readonly uid: bigint;
+  readonly rows: number;
+  readonly cols: number;
+  readonly layers: number;
+  readonly encoderCount: number;
+  readonly keys: readonly PhysicalKey[];
+  readonly encoders: readonly PhysicalEncoder[];
+  readonly layoutLabels: readonly LayoutLabel[] | null;
+  /** Packed layout options, or -1 when the board declares none. */
+  readonly layoutOptions: number;
+  readonly macroCount: number;
+  readonly macroMemory: number;
+  readonly capabilities: Capabilities;
+  readonly keycodes: KeycodeTable;
+  /** A keycode's QMK name, or hex when it has none. */
+  codeName(code: number): string;
+}
+
+/** Keymap reads and writes; each write is checked, queued and recorded for undo. */
+export interface KeymapAccess {
+  get(layer: number, row: number, col: number): number | undefined;
+  set(layer: number, row: number, col: number, code: number): Promise<void>;
+  getEncoder(layer: number, index: number, direction: 0 | 1): number | undefined;
+  setEncoder(layer: number, index: number, direction: 0 | 1, code: number): Promise<void>;
+}
+
+export interface HistoryAccess {
   /**
    * Records a write the board accepted in the keyboard's undo history. Call it
    * after every write a user can take back, with undo/redo that go through the
    * same write method (so validation, unlock checks and the queue apply).
    */
   record(write: HistoryWrite): void;
+  /** Runs `action` as one undo step named `label`. */
+  group<T>(label: string, action: () => Promise<T>): Promise<T>;
+}
+
+/** Messages for the user; ViaLink prefixes them with the extension's name. */
+export interface NotifyAccess {
+  info(message: string): void;
+  error(message: string): void;
+}
+
+/** Sending commands to the keyboard, limited by the extension's group. */
+export interface DeviceAccess {
+  /**
+   * Sends one request through the keyboard's RequestQueue. Standard Vial
+   * commands (core/protocol/standard.ts) and, for a non-standard extension,
+   * the custom commands its manifest declares; anything else throws
+   * {@link ExtensionCommandError} without reaching the keyboard.
+   */
+  request(data: Uint8Array, options?: RequestOptions): Promise<Uint8Array>;
+  /** Makes sure the board is unlocked, asking the user; throws when it stays locked. */
+  ensureUnlocked(reason: string): Promise<void>;
+}
+
+/** The host API of a "compatible" extension: no device access at all. */
+export interface HostContext {
+  readonly board: BoardView;
+  readonly keymap: KeymapAccess;
+  readonly history: HistoryAccess;
+  readonly notify: NotifyAccess;
+  /** Tells subscribers of the keyboard that extension state changed. */
+  changed(): void;
+}
+
+/** The host API of a "standard" or "nonstandard" extension. */
+export interface DeviceContext extends HostContext {
+  readonly device: DeviceAccess;
+}
+
+/** A command a non-standard extension sends beyond standard Vial (named in the HID log). */
+export interface CustomCommand {
+  /** Shown in the HID log, e.g. "Get layer name". */
+  readonly name: string;
+  readonly kind: "read" | "write";
+  /** The request's leading bytes that identify this command. */
+  readonly bytes: readonly number[];
+  /** Reads the reply (the command's decode in core/protocol). */
+  readonly reply: (data: Uint8Array) => unknown;
+  /** HID log text for one request, when it should say more than the name (e.g. which layer). */
+  readonly describe?: (request: Uint8Array) => string;
+}
+
+export class ExtensionCommandError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExtensionCommandError";
+  }
 }
 
 /** One write a .vil restore will make on behalf of an extension. */
@@ -54,28 +146,16 @@ export interface ExtensionLayerHooks<State> {
 
 export type ExtensionGroup = "standard" | "compatible" | "nonstandard";
 
-export interface KeyboardExtension<State = unknown> {
+interface ExtensionBase<State> {
   /** Stable identifier, used for settings and lookups. */
   readonly id: string;
   /** Human-readable name for the settings list. */
   readonly name: string;
   readonly description: string;
-  /**
-   * Where the Extensions dialog lists it: "standard" for features of standard
-   * Vial firmware (macros, tap dance, …); "compatible" for ViaLink extras that
-   * work with standard Vial firmware but desktop Vial lacks; "nonstandard"
-   * (the default) for extensions that need firmware beyond standard Vial
-   * (e.g. dynamic layer names).
-   */
-  readonly group?: ExtensionGroup;
   /** Where to get firmware that supports this extension, shown in the settings list. */
   readonly firmware?: { readonly label: string; readonly url: string };
-  /**
-   * Runs once the keymap is loaded. Returns the extension's state when the
-   * board supports it, or null when it does not (the extension is then
-   * inactive for this board).
-   */
-  probe(ctx: ExtensionContext): Promise<State | null>;
+  readonly vil?: ExtensionVilSupport<State>;
+  readonly layers?: ExtensionLayerHooks<State>;
   /**
    * Extensions (by id) that must run on the keyboard for this one to run. They
    * probe first; without them this one stays off and the Extensions dialog
@@ -91,9 +171,51 @@ export interface KeyboardExtension<State = unknown> {
    * while one of them runs asks to turn that one off.
    */
   readonly conflicts?: readonly string[];
-  readonly vil?: ExtensionVilSupport<State>;
-  readonly layers?: ExtensionLayerHooks<State>;
 }
+
+/** A feature of standard Vial firmware (macros, tap dance, …): Vial's standard commands only. */
+export interface StandardExtension<State = unknown> extends ExtensionBase<State> {
+  readonly group: "standard";
+  readonly commands?: undefined;
+  /**
+   * Runs once the keymap is loaded. Returns the extension's state when the
+   * board supports it, or null when it does not (the extension is then
+   * inactive for this board).
+   */
+  probe(ctx: DeviceContext): Promise<State | null>;
+}
+
+/**
+ * A ViaLink extra that works with any standard Vial firmware. It has no device
+ * access, only the host API, so it works on every Vial keyboard by construction.
+ */
+export interface CompatibleExtension<State = unknown> extends ExtensionBase<State> {
+  readonly group: "compatible";
+  readonly commands?: undefined;
+  /** As {@link StandardExtension.probe}, without device access. */
+  probe(ctx: HostContext): Promise<State | null>;
+}
+
+/**
+ * Needs firmware beyond standard Vial: standard commands plus the custom ones
+ * it declares. Must link its firmware; the probe must confirm the firmware
+ * answers its commands.
+ */
+export interface NonstandardExtension<State = unknown> extends ExtensionBase<State> {
+  readonly group: "nonstandard";
+  readonly commands: readonly CustomCommand[];
+  readonly firmware: { readonly label: string; readonly url: string };
+  /** As {@link StandardExtension.probe}. */
+  probe(ctx: DeviceContext): Promise<State | null>;
+}
+
+/**
+ * A built-in extension. Its group (in the Extensions dialog) decides what it
+ * may send to the keyboard (plan doc, "Extension groups decide what an
+ * extension may send").
+ */
+export type KeyboardExtension<State = unknown> =
+  StandardExtension<State> | CompatibleExtension<State> | NonstandardExtension<State>;
 
 /** An extension that probed successfully on the connected board. */
 export interface ActiveExtension<State = unknown> {

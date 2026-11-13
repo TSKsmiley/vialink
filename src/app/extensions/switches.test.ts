@@ -7,7 +7,14 @@ const ext = (
   id: string,
   name: string,
   manifest: Partial<Pick<KeyboardExtension, "requires" | "conflicts">> = {},
-): KeyboardExtension<unknown> => ({ id, name, description: "", ...manifest, probe: async () => ({}) });
+): KeyboardExtension<unknown> => ({
+  id,
+  name,
+  description: "",
+  group: "compatible",
+  ...manifest,
+  probe: async () => ({}),
+});
 
 const sharing = ext("sharing", "Layer sharing");
 const whole = ext("whole", "Share whole keymap", { requires: ["sharing"] });

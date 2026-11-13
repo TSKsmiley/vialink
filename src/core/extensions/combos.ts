@@ -31,7 +31,7 @@
 import { RESET_KEYCODE, type KeycodeTable } from "../keycodes/table.ts";
 import { COMBO_INPUTS, vialComboGet, vialComboSet, type ComboEntry } from "../protocol/combos.ts";
 import { VIAL_PROTOCOL_DYNAMIC } from "../protocol/constants.ts";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 /** vial-gui passes retries=20 to every combo request. */
 const RETRIES = 20;
@@ -44,17 +44,17 @@ export class ComboError extends Error {
 }
 
 export class Combos {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly values: ComboEntry[];
 
-  constructor(ctx: ExtensionContext, entries: ComboEntry[]) {
+  constructor(ctx: DeviceContext, entries: ComboEntry[]) {
     this.ctx = ctx;
     this.values = entries;
   }
 
   /** The board's keycode table, for serializing entries. */
   get keycodes(): KeycodeTable {
-    return this.ctx.keyboard.keycodes;
+    return this.ctx.board.keycodes;
   }
 
   /** Number of combo slots on the board. */
@@ -78,19 +78,19 @@ export class Combos {
     const current = this.get(idx);
     if (entry.length !== COMBO_INPUTS + 1) throw new ComboError("a combo has 4 trigger keys and 1 output");
     if (entry.every((code, i) => code === current[i])) return;
-    const { keyboard, queue } = this.ctx;
-    if (entry[COMBO_INPUTS] === keyboard.keycodes.resolve(RESET_KEYCODE)) {
-      await keyboard.ensureUnlocked("Assigning QK_BOOT (bootloader) to a combo");
+    const { board, device } = this.ctx;
+    if (entry[COMBO_INPUTS] === board.keycodes.resolve(RESET_KEYCODE)) {
+      await device.ensureUnlocked("Assigning QK_BOOT (bootloader) to a combo");
     }
     const reply = vialComboSet.decode(
-      await queue.request(vialComboSet.encode(idx, entry), { retries: RETRIES }),
+      await device.request(vialComboSet.encode(idx, entry), { retries: RETRIES }),
     );
     if (!reply.ok) throw new ComboError(`the keyboard rejected combo ${idx + 1} (status ${reply.status})`);
     const old = [...current] as ComboEntry;
     const now = [...entry] as ComboEntry;
     this.values[idx] = now;
-    this.ctx.record({
-      label: `Combo ${idx + 1}: ${describeCombo(keyboard.keycodes, now)}`,
+    this.ctx.history.record({
+      label: `Combo ${idx + 1}: ${describeCombo(board.keycodes, now)}`,
       undo: () => this.set(idx, old),
       redo: () => this.set(idx, now),
       isCurrent: () => this.get(idx).every((code, i) => code === now[i]),
@@ -114,12 +114,12 @@ export const combosExtension: KeyboardExtension<Combos> = {
   description: "Press up to four keys together to send another key. Needs Vial firmware with combos enabled.",
 
   async probe(ctx) {
-    const { keyboard, queue } = ctx;
-    const count = keyboard.capabilities.dynamic?.combo ?? 0;
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_DYNAMIC || count === 0) return null;
+    const { board, device } = ctx;
+    const count = board.capabilities.dynamic?.combo ?? 0;
+    if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || count === 0) return null;
     const entries: ComboEntry[] = [];
     for (let idx = 0; idx < count; idx++) {
-      const reply = vialComboGet.decode(await queue.request(vialComboGet.encode(idx), { retries: RETRIES }));
+      const reply = vialComboGet.decode(await device.request(vialComboGet.encode(idx), { retries: RETRIES }));
       if (!reply.ok) {
         if (idx === 0) return null;
         throw new ComboError(`failed retrieving combo entry ${idx} from the device`);

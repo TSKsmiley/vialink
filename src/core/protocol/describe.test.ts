@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { describe, expect, it } from "vitest";
 import * as C from "./constants.ts";
+import { CUSTOM_COMMANDS } from "../extensions/index.ts";
 import { describeRequest, isRejected } from "./describe.ts";
 
 describe("readable command names", () => {
@@ -19,10 +20,20 @@ describe("readable command names", () => {
       );
     }
     for (const [name, op] of dynamic) {
-      expect(describeRequest(Uint8Array.of(0xfe, 0x0d, op, 0)).name, name).not.toMatch(
-        /Unknown|dynamic entry op/,
-      );
+      // Layer names (Theis194 fork) are named by the extension's manifest, not here.
+      expect(
+        describeRequest(Uint8Array.of(0xfe, 0x0d, op, 0), undefined, CUSTOM_COMMANDS).name,
+        name,
+      ).not.toMatch(/Unknown|dynamic entry op/);
     }
+  });
+
+  it("names the custom commands extensions declare", () => {
+    expect(describeRequest(Uint8Array.of(0xfe, 0x0d, 0x0a, 2), undefined, CUSTOM_COMMANDS)).toEqual({
+      name: "Set layer name 2",
+      kind: "write",
+    });
+    expect(describeRequest(Uint8Array.of(0xfe, 0x0d, 0x0a, 2)).name).toBe("Vial: dynamic entry op 0x0a");
   });
 
   it("describes arguments and kinds", () => {

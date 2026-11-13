@@ -178,7 +178,7 @@ export function ExtensionsDialog({
         </div>
         <div className="dialog-body">
           {GROUPS.map((group) => {
-            const items = extensions.filter((ext) => (ext.group ?? "nonstandard") === group.id);
+            const items = extensions.filter((ext) => ext.group === group.id);
             if (items.length === 0) return null;
             const on = items.filter((ext) => !disabled.has(ext.id)).length;
             return (

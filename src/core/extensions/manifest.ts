@@ -13,6 +13,7 @@
 //   by hand most recently wins; when neither was, the one already there (the
 //   one that doesn't declare the conflict) wins, then the earlier in the registry.
 
+import { isStandardCommand } from "../protocol/standard.ts";
 import type { KeyboardExtension } from "./types.ts";
 
 /** Something an extension offers others: a service or a hook point. Ids start with the owner's id. */
@@ -122,6 +123,15 @@ export function manifestProblems(exts: readonly Ext[]): string[] {
       }
       if (points.has(point.id)) problems.push(`"${point.id}" is provided twice.`);
       points.add(point.id);
+    }
+  }
+  for (const ext of exts) {
+    if (ext.group !== "nonstandard") continue;
+    if (ext.commands.length === 0) problems.push(`${ext.id}: non-standard but declares no custom commands.`);
+    for (const command of ext.commands) {
+      if (isStandardCommand(new Uint8Array([...command.bytes, 0, 0, 0]))) {
+        problems.push(`${ext.id}: "${command.name}" is a standard Vial command; don't declare it.`);
+      }
     }
   }
   const cycle = findCycle(exts);

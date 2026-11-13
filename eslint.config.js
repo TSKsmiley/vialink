@@ -28,4 +28,23 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // "Standard Vial compatible" extensions have no device access (plan doc, Extension
+    // groups): they may not import the protocol either. List each one here.
+    files: ["src/core/extensions/layer-sharing.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["react", "react-dom", "react/*", "../app/*", "../../app/*"] },
+            {
+              group: ["../protocol/*", "**/core/protocol/*"],
+              message: "Compatible extensions have no device access.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
