@@ -196,7 +196,8 @@ export const layerClear = defineHook<LayerClearEvent, readonly LayerWrite[]>("la
 /** Core hook point: after handlers move their own per-layer data along (e.g. layer names swaps the names). */
 export const layerSwap = defineHook<LayerSwapEvent, LayerSwapPlan>("layer.swap");
 
-async function writeAll(kb: Keyboard, layer: number, writes: readonly LayerWrite[]): Promise<void> {
+/** Writes `writes` onto `layer`, in order (no undo group of its own). */
+export async function writeAll(kb: Keyboard, layer: number, writes: readonly LayerWrite[]): Promise<void> {
   for (const w of writes) {
     if (w.kind === "key") await kb.setKey(layer, w.row, w.col, w.to);
     else await kb.setEncoder(layer, w.index, w.direction, w.to);

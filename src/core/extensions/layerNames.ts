@@ -17,6 +17,7 @@ import {
 } from "../protocol/constants.ts";
 import { layerClear, layerSwap } from "../layers.ts";
 import { on } from "./hooks.ts";
+import { paste, shareText } from "./layer-sharing.ts";
 import { layerNames, provide } from "./services.ts";
 import type { DeviceContext, KeyboardExtension } from "./types.ts";
 
@@ -109,8 +110,27 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     return new LayerNames(ctx, names);
   },
 
-  provides: [provide(layerNames, (names: LayerNames) => ({ name: (layer) => names.get(layer) || null }))],
+  // Uses layer sharing's hook points when layer sharing runs.
+  optional: ["layer-sharing"],
+  provides: [
+    provide(layerNames, (names: LayerNames) => ({
+      name: (layer) => names.get(layer) || null,
+      fromShared: (ext) => {
+        const mine = ext["layer-names"] as { name?: unknown } | undefined;
+        return typeof mine?.name === "string" && mine.name ? mine.name : null;
+      },
+    })),
+  ],
   hooks: [
+    // A copied layer carries its name (in-app copy and share text).
+    on(shareText.after, (e, _ctx, names: LayerNames) => {
+      const name = names.get(e.layer);
+      if (name) e.put({ name });
+    }),
+    // A pasted layer gets the name the user chose in the preview, when it has none yet.
+    on(paste.after, async (e, _ctx, names: LayerNames) => {
+      if (e.name && !names.get(e.target)) await names.set(e.target, e.name);
+    }),
     // A cleared layer loses its name too, so it reads as empty again.
     on(layerClear.after, (e, _ctx, names: LayerNames) => names.set(e.layer, "")),
     // Names move with the keys.

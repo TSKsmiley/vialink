@@ -50,7 +50,7 @@ describe("layer operations", () => {
   it("copies a layer and pastes it with a preview, as one undo step", async () => {
     const { sim, kb, p, q, onError } = await setup();
     await menuItem("Nav", "Copy layerCtrl+C");
-    expect(screen.getByText("Copied")).toBeTruthy();
+    expect(await screen.findByText("Copied")).toBeTruthy();
     await menuItem("Raise", /Paste onto this layer/);
 
     const options = screen.getByRole("complementary", { name: "Paste options" });
@@ -99,7 +99,9 @@ describe("layer operations", () => {
     await menuItem("Nav", "Duplicate to empty layer");
     // Cleared and unnamed, layer 2 is now the first empty one; the view opens it.
     await waitFor(() => expect(sim.getKeycode(2, p.row, p.col)).toBe(0x04));
-    expect(screen.getByRole("tab", { name: "2: Layer 2" }).getAttribute("aria-selected")).toBe("true");
+    // The duplicate takes the name along (layer-sharing.paste hook, layer names), in the same step.
+    expect(sim.layerNames?.[2]).toBe("Nav");
+    expect(screen.getByRole("tab", { name: "2: Nav" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("shares a layer as text and pastes it back from Ctrl+V anywhere", async () => {

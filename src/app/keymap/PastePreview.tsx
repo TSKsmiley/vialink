@@ -6,13 +6,10 @@
 
 import { useId, useMemo, useState, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
-import {
-  applyLayerWrites,
-  planPaste,
-  snapshotCounts,
-  type LayerSnapshot,
-  type PasteMode,
-} from "../../core/layers.ts";
+import { planPaste, snapshotCounts, type LayerSnapshot, type PasteMode } from "../../core/layers.ts";
+import { OperationCancelledError } from "../../core/extensions/hooks.ts";
+import { pasteLayer } from "../../core/extensions/layer-sharing.ts";
+import { layerNames } from "../../core/extensions/services.ts";
 import { KeyboardView } from "../components/KeyboardView.tsx";
 import { errorMessage } from "../hooks.ts";
 import { Button } from "../ui/index.ts";
@@ -24,8 +21,12 @@ export interface PasteSource {
   name: string;
   /** Keys with no spot on this layout (shared text from another layout option), to place by hand. */
   unplaced?: { row: number; col: number; code: number; from: string }[];
-  /** Offer to name the target layer after the paste (layer names extension). */
+  /** Offer to name the target layer this (layer names handles the paste hook). */
   rename?: string;
+  /** Where the keys come from, for the paste hook. */
+  kind: "copy" | "text";
+  /** Extensions' data copied with the layer (share-text hook), by extension id. */
+  ext: Readonly<Record<string, unknown>>;
   /** Prefer this mode at first. */
   mode?: PasteMode;
 }
@@ -40,8 +41,6 @@ interface Props {
   onError: (message: string) => void;
   /** Shown above the preview keyboard (the share text and its checks). */
   before?: ReactNode;
-  /** Sets a layer's name inside the paste's undo step; absent without the layer names extension. */
-  setLayerName?: (layer: number, name: string) => Promise<void>;
 }
 
 export function PastePreview({
@@ -53,12 +52,14 @@ export function PastePreview({
   onClose,
   onError,
   before,
-  setLayerName,
 }: Props) {
   const ids = useId();
   const counts = snapshotCounts(source.snapshot);
   const someKeys =
     source.snapshot.layer !== null && source.snapshot.keys.size < keyboard.matrixPositions.length;
+  // Naming is offered when something provides layer names and the target has none.
+  const namer = keyboard.provided(layerNames)[0];
+  const offerName = !!source.rename && !!namer && !namer.name(target);
   const [mode, setMode] = useState<PasteMode>(source.mode ?? (someKeys ? "replace" : "overlay"));
   // Keys without a spot, placed by hand: pick one, then click a key in the preview.
   const unplaced = source.unplaced ?? [];
@@ -108,13 +109,17 @@ export function PastePreview({
     setBusy(true);
     try {
       const label = `Paste ${source.name} onto ${targetName}`;
-      await keyboard.history.group(label, async () => {
-        await applyLayerWrites(keyboard, target, plan.writes, label);
-        if (rename && source.rename && setLayerName) await setLayerName(target, source.rename);
-      });
+      // One operation through the layer-sharing.paste hook; layer names names the target.
+      const name = offerName && rename ? (source.rename ?? null) : null;
+      await pasteLayer(
+        keyboard,
+        { source: source.kind, target, mode, name, ext: source.ext },
+        plan.writes,
+        label,
+      );
       onClose(target);
     } catch (err) {
-      onError(errorMessage(err));
+      if (!(err instanceof OperationCancelledError)) onError(errorMessage(err));
       setBusy(false);
     }
   };
@@ -232,7 +237,7 @@ export function PastePreview({
           </span>
         </div>
 
-        {source.rename && setLayerName && (
+        {offerName && (
           <label className="-mt-2 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
