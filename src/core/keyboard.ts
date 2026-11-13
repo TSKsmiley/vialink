@@ -25,6 +25,7 @@ import {
   type KeyboardExtension,
 } from "./extensions/types.ts";
 import { isStandardCommand, startsWith } from "./protocol/standard.ts";
+import { Scheduler } from "./scheduler.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
   viaGetLayerCount,
@@ -149,6 +150,12 @@ export class Keyboard {
   unlocked: boolean | null = null;
   /** Undo/redo of every write made through this object; ends with it (on disconnect). */
   readonly history = new History();
+  /**
+   * Background work for this keyboard (extensions' ctx.schedule, matrix and
+   * unlock polling). Pauses while an operation writes and after a disconnect;
+   * the app pauses it while the tab is hidden.
+   */
+  readonly scheduler: Scheduler;
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
@@ -166,6 +173,16 @@ export class Keyboard {
   private constructor(queue: RequestQueue, recency: (id: string) => number = () => 0) {
     this.queue = queue;
     this.recency = recency;
+    this.scheduler = new Scheduler({ busy: () => queue.busy });
+    this.history.subscribe(() => {
+      if (this.history.writing) this.scheduler.pause("operation");
+      else this.scheduler.resume("operation");
+    });
+    queue.subscribe((event) => {
+      if (event.kind !== "disconnected") return;
+      this.scheduler.pause("disconnected");
+      this.scheduler.stopAll();
+    });
   }
 
   /** Connects and loads the keyboard, mirroring vial-gui's Keyboard.reload(). */
@@ -339,8 +356,8 @@ export class Keyboard {
   }
 
   /** Pressed state per [row][col], or null when the board is locked (it refuses to answer). */
-  async pollMatrix(): Promise<boolean[][] | null> {
-    const reply = await this.queue.request(viaGetMatrixState.encode(), { retries: 3 });
+  async pollMatrix(options: { priority?: "normal" | "low" } = {}): Promise<boolean[][] | null> {
+    const reply = await this.queue.request(viaGetMatrixState.encode(), { retries: 3, ...options });
     return viaGetMatrixState.decode(reply, this.rows, this.cols);
   }
 
@@ -389,6 +406,7 @@ export class Keyboard {
         // Turning it on again probes afresh.
         this.supported.delete(extension.id);
         this.active.delete(extension.id);
+        this.scheduler.stopOwner(extension.id);
       }
     }
     const order = BUILTIN_EXTENSIONS.map((e) => e.id);
@@ -466,6 +484,8 @@ export class Keyboard {
       }
       next.set(ext.id, { extension: ext, state });
     }
+    // Extensions that stopped running lose their scheduled work.
+    for (const id of this.active.keys()) if (!next.has(id)) this.scheduler.stopOwner(id);
     this.active.clear();
     for (const [id, entry] of next) this.active.set(id, entry);
     this.statuses = statuses;
@@ -494,6 +514,11 @@ export class Keyboard {
         info: (message) => this.notifyHandler?.("info", `${ext.name}: ${message}`),
         error: (message) => this.notifyHandler?.("error", `${ext.name}: ${message}`),
       },
+      schedule: {
+        every: (ms, fn, options) => this.scheduler.every(ms, fn, { ...options, owner: ext.id }),
+        once: (ms, fn, options) => this.scheduler.once(ms, fn, { ...options, owner: ext.id }),
+        idle: (fn, options) => this.scheduler.idle(fn, { ...options, owner: ext.id }),
+      },
       changed: () => this.changed(),
     };
     // A compatible extension's probe is typed without `device`; leaving it out
@@ -512,7 +537,9 @@ export class Keyboard {
               ),
             );
           }
-          return this.queue.request(data, options);
+          // Requests from the extension's scheduled work go behind the user's own.
+          const scheduled = this.scheduler.noteRequest(ext.id);
+          return this.queue.request(data, scheduled ? { ...options, priority: "low" } : options);
         },
         ensureUnlocked: (reason) => this.ensureUnlocked(reason),
       },

@@ -25,6 +25,7 @@ export function UnlockDialog({ keyboard, reason, onFinish, pollIntervalMs }: Pro
   useEffect(() => {
     let live = true;
     runUnlock(keyboard.queue, {
+      scheduler: keyboard.scheduler,
       onProgress: (p) => live && setProgress(p),
       signal: controller.signal,
       pollIntervalMs,

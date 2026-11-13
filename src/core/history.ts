@@ -101,6 +101,11 @@ export class History {
     return this.replaying;
   }
 
+  /** True while an operation writes: a group is open, or undo/redo replays. */
+  get writing(): boolean {
+    return this.groups.length > 0 || this.replaying;
+  }
+
   /** Called with each change; `null` when only availability changed (e.g. busy). */
   subscribe(listener: (e: HistoryEvent | null) => void): () => void {
     this.listeners.add(listener);
@@ -130,10 +135,12 @@ export class History {
   async group<T>(label: string, action: () => Promise<T>): Promise<T> {
     const group: OpenGroup = { label, writes: [] };
     this.groups.push(group);
+    if (this.groups.length === 1) this.emit(null);
     try {
       return await action();
     } finally {
       this.groups = this.groups.filter((g) => g !== group);
+      if (this.groups.length === 0) this.emit(null);
       if (group.writes.length > 0) {
         const parent = this.groups.at(-1);
         if (parent) parent.writes.push(...group.writes);
