@@ -173,6 +173,23 @@ export function planClear(kb: Keyboard, layer: number): LayerWrite[] {
   return writes;
 }
 
+/**
+ * Clears a layer as one undo entry: every key and encoder transparent (empty on
+ * layer 0), then each active extension's `layers.clear` hook (e.g. layer names).
+ */
+export async function clearLayer(kb: Keyboard, layer: number, label: string): Promise<void> {
+  const writes = planClear(kb, layer);
+  await kb.history.group(label, async () => {
+    for (const w of writes) {
+      if (w.kind === "key") await kb.setKey(layer, w.row, w.col, w.to);
+      else await kb.setEncoder(layer, w.index, w.direction, w.to);
+    }
+    for (const { extension, state } of kb.activeExtensions) {
+      await extension.layers?.clear?.(state, layer);
+    }
+  });
+}
+
 /** Swaps two layers' keys and encoders, as one undo entry. */
 export async function swapLayers(kb: Keyboard, a: number, b: number, label: string): Promise<void> {
   if (a === b) return;
