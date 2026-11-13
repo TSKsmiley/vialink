@@ -25,6 +25,7 @@ import {
 } from "../../core/layers.ts";
 import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
+import { OperationCancelledError } from "../../core/extensions/hooks.ts";
 import { errorMessage, pickerInfoOf, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
@@ -129,7 +130,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
     try {
       await fn();
     } catch (err) {
-      onError(errorMessage(err));
+      if (!(err instanceof OperationCancelledError)) onError(errorMessage(err));
     } finally {
       setWriting(false);
     }
@@ -179,21 +180,9 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
         await applyLayerWrites(keyboard, to, plan.writes, `Duplicate ${layerName(l)} to layer ${to}`);
         setLayer(to);
       }),
-    // Swapping moves the layer names along with the keys (layer names extension), in the same undo step.
+    // Extensions move their per-layer data along (layer.swap hook; layer names swaps the names).
     onSwap: (a: number, b: number) =>
-      void run(async () => {
-        const label = `Swap ${layerName(a)} and ${layerName(b)}`;
-        await keyboard.history.group(label, async () => {
-          await swapLayers(keyboard, a, b, label);
-          if (names) {
-            const [na, nb] = [names.get(a), names.get(b)];
-            if (na !== nb) {
-              await names.set(a, nb);
-              await names.set(b, na);
-            }
-          }
-        });
-      }),
+      void run(() => swapLayers(keyboard, a, b, `Swap ${layerName(a)} and ${layerName(b)}`)),
     onClear: (l: number) => void run(() => clearLayer(keyboard, l, `Clear ${layerName(l)}`)),
   };
 

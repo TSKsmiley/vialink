@@ -15,6 +15,8 @@ import {
   DYNAMIC_VIAL_LAYER_NAME_SET,
   VIAL_PROTOCOL_DYNAMIC,
 } from "../protocol/constants.ts";
+import { layerClear, layerSwap } from "../layers.ts";
+import { on } from "./hooks.ts";
 import type { DeviceContext, KeyboardExtension } from "./types.ts";
 
 export class LayerNameError extends Error {
@@ -106,10 +108,17 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     return new LayerNames(ctx, names);
   },
 
-  layers: {
+  hooks: [
     // A cleared layer loses its name too, so it reads as empty again.
-    clear: (state, layer) => state.set(layer, ""),
-  },
+    on(layerClear.after, (e, _ctx, names: LayerNames) => names.set(e.layer, "")),
+    // Names move with the keys.
+    on(layerSwap.after, async (e, _ctx, names: LayerNames) => {
+      const [na, nb] = [names.get(e.a), names.get(e.b)];
+      if (na === nb) return;
+      await names.set(e.a, nb);
+      await names.set(e.b, na);
+    }),
+  ],
 
   vil: {
     keys: ["layer_names"],
