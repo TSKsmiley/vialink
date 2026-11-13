@@ -23,6 +23,7 @@ import {
   vialTapDanceSet,
   type TapDanceEntry,
 } from "../protocol/tap-dance.ts";
+import { keycodeDescriptions, provide } from "./services.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export class TapDanceError extends Error {
@@ -147,6 +148,32 @@ export const tapDanceExtension: KeyboardExtension<TapDance> = {
   group: "standard",
   name: "Tap dance",
   description: "Keys that do different things when tapped, held, double-tapped or tapped then held (TD(n)).",
+  provides: [
+    provide(keycodeDescriptions, (state: TapDance, ctx) => {
+      const table = ctx.board.keycodes;
+      const index = new Map(state.entries.map((_, n) => [table.parse(`TD(${n})`), n]));
+      const label = (code: number) =>
+        table.label(code).text.replace(/\n/g, " ").trim() || table.serialize(code);
+      return {
+        describe(code) {
+          const n = index.get(code);
+          const e = n === undefined ? undefined : state.entries[n];
+          if (!e) return null;
+          const parts = (
+            [
+              ["Tap", e.onTap],
+              ["Hold", e.onHold],
+              ["Double tap", e.onDoubleTap],
+              ["Tap + hold", e.onTapHold],
+            ] as const
+          ).filter(([, c]) => c !== 0);
+          return parts.length === 0
+            ? { text: null, empty: true }
+            : { text: parts.map(([what, c]) => `${what} ${label(c)}`).join(" · "), empty: false };
+        },
+      };
+    }),
+  ],
 
   async probe(ctx) {
     const { board, device } = ctx;

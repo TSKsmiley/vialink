@@ -18,6 +18,7 @@ import type { KeycodeTable } from "../keycodes/table.ts";
 import type { Capabilities } from "../keyboard.ts";
 import type { TaskHandle, TaskOptions } from "../scheduler.ts";
 import type { HookHandler } from "./hooks.ts";
+import type { Service } from "./services.ts";
 import type { StateHandle, StateOptions } from "./state.ts";
 import type { RequestOptions } from "../transport/queue.ts";
 import type { ExtensionPoint } from "./manifest.ts";
@@ -108,6 +109,12 @@ export interface HostContext {
    * `"browser"` stays in this browser. Plain variables need no API.
    */
   state<T>(name: string, options: StateOptions<T>): StateHandle<T>;
+  /**
+   * Another extension's service (or a core service's first provider), or null
+   * when no running extension provides it. Using another extension's service
+   * requires listing that extension in requires or optional.
+   */
+  use<T>(service: Service<T>): T | null;
   readonly keymap: KeymapAccess;
   readonly history: HistoryAccess;
   readonly notify: NotifyAccess;

@@ -5,8 +5,6 @@
 // place by hand. Text from another keyboard, or cut-off text, is refused.
 
 import { useEffect, useId, useState } from "react";
-import { macrosExtension } from "../../core/extensions/macros.ts";
-import { tapDanceExtension } from "../../core/extensions/tap-dance.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import {
   decodeLayer,
@@ -16,8 +14,7 @@ import {
   type ShareMatch,
   type SharedLayer,
 } from "../../core/layer-share.ts";
-import { TAP_DANCE_KEY_FIELDS } from "../../core/protocol/tap-dance.ts";
-import { errorMessage } from "../hooks.ts";
+import { errorMessage, keycodeDescriber } from "../hooks.ts";
 import { Button } from "../ui/index.ts";
 import { PastePreview } from "./PastePreview.tsx";
 
@@ -62,14 +59,12 @@ export function PasteFromText({
     if (!text.trim()) return;
     decodeLayer(text)
       .then((shared) => {
-        const macros = keyboard.extension(macrosExtension);
-        const tds = keyboard.extension(tapDanceExtension);
+        // Empty macros and tap dances, as the extensions that own them describe them.
+        const describe = keycodeDescriber(keyboard);
+        const empty = (name: string) => describe(keyboard.keycodes.parse(name))?.empty ?? true;
         const match = matchShared(keyboard, shared, {
-          macroEmpty: (n) => !macros || (macros.pieces[n]?.length ?? 0) === 0,
-          tapDanceEmpty: (n) => {
-            const e = tds?.entries[n];
-            return !e || TAP_DANCE_KEY_FIELDS.every((f) => e[f] === 0);
-          },
+          macroEmpty: (n) => empty(`M${n}`),
+          tapDanceEmpty: (n) => empty(`TD(${n})`),
         });
         if (live) setResult({ text, decoded: { shared, match } });
       })

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { useSyncExternalStore } from "react";
-import { layerNamesExtension } from "../core/extensions/layerNames.ts";
-import { tapDanceExtension } from "../core/extensions/tap-dance.ts";
+import { keycodeDescriptions, layerNames, type KeycodeDescription } from "../core/extensions/services.ts";
 import type { Keyboard } from "../core/keyboard.ts";
 import type { PickerInfo } from "./components/KeycodePicker.tsx";
 
@@ -45,17 +44,30 @@ export function pickerInfoOf(keyboard: Keyboard): PickerInfo {
     }
     if (keys || encoders) usedLayers.add(layer);
   }
-  const label = (code: number) => table.label(code).text.replace(/\n/g, " ").trim() || table.serialize(code);
-  const tapDances = keyboard.extension(tapDanceExtension)?.entries.map((e) => {
-    const parts = (
-      [
-        ["Tap", e.onTap],
-        ["Hold", e.onHold],
-        ["Double tap", e.onDoubleTap],
-        ["Tap + hold", e.onTapHold],
-      ] as const
-    ).filter(([, code]) => code !== 0);
-    return parts.length === 0 ? null : parts.map(([what, code]) => `${what} ${label(code)}`).join(" · ");
-  });
-  return { layerNames: keyboard.extension(layerNamesExtension)?.names, usedLayers, tapDances };
+  // Tap dance summaries come from whoever describes TD(n) keycodes (the tap dance extension).
+  const describe = keycodeDescriber(keyboard);
+  const tapDances: (string | null)[] = [];
+  for (let n = 0; n < 256; n++) {
+    const d = describe(table.parse(`TD(${n})`));
+    if (!d) break;
+    tapDances.push(d.text);
+  }
+  const names = keyboard.provided(layerNames);
+  const layerNamesList =
+    names.length === 0
+      ? undefined
+      : Array.from({ length: keyboard.layers }, (_, l) => names.map((p) => p.name(l)).find((n) => n) ?? "");
+  return { layerNames: layerNamesList, usedLayers, tapDances: tapDances.length > 0 ? tapDances : undefined };
+}
+
+/** Describes a keycode through the extensions that own it (core keycode descriptions service). */
+export function keycodeDescriber(keyboard: Keyboard): (code: number) => KeycodeDescription | null {
+  const providers = keyboard.provided(keycodeDescriptions);
+  return (code) => {
+    for (const p of providers) {
+      const d = p.describe(code);
+      if (d) return d;
+    }
+    return null;
+  };
 }

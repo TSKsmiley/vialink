@@ -69,7 +69,7 @@ describe("manifest checks", () => {
       'a: requires names unknown extension "ghost".',
       "a: conflicts names itself.",
       'a: both requires and conflicts with "b".',
-      'a: provided "b.thing" must start with "a.".',
+      'a: provided "b.thing" must start with "a." or "core.".',
       '"b.thing" is provided twice.',
       '"b.thing" is provided twice.',
     ]);
