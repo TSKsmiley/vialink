@@ -14,7 +14,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "keycodes:dump": "python3 -I scripts/dump_keycodes.py"
+    "keycodes:dump": "python3 -I scripts/dump_keycodes.py",
+    "keymaps:dump": "python3 -I scripts/dump_keymaps.py",
+    "vial:dump": "sh -c 'python3 -I scripts/dump_keycodes.py \"$0\" && python3 -I scripts/dump_keymaps.py \"$0\"'"
   },
   "dependencies": {
     "@cloudflare/kumo": "2.18.0",

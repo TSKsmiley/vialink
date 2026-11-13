@@ -184,6 +184,13 @@ svg.keyboard {
 .key-label .inner {
   fill: var(--accent);
 }
+/* Labels replaced by the keyboard layout (e.g. Danish Æ), in the link colour as vial-gui does. */
+.key-label .layout-label {
+  fill: var(--vl-accent-link);
+}
+.keycode.layout-label {
+  color: var(--vl-accent-link);
+}
 .encoder-dir {
   fill: var(--muted);
   font-size: 12px;

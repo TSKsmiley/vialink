@@ -144,6 +144,8 @@ export function KeyboardView({
               h={k.height * U}
               text={label.text}
               inner={label.inner}
+              overridden={label.overridden}
+              innerOverridden={label.innerOverridden}
             />
           </g>
         );
@@ -193,6 +195,8 @@ export function KeyboardView({
               h={e.height * U}
               text={label.text}
               inner={label.inner}
+              overridden={label.overridden}
+              innerOverridden={label.innerOverridden}
             />
           </g>
         );
@@ -208,6 +212,8 @@ function KeyLabel({
   h,
   text,
   inner,
+  overridden = false,
+  innerOverridden = false,
 }: {
   x: number;
   y: number;
@@ -215,6 +221,9 @@ function KeyLabel({
   h: number;
   text: string;
   inner: string | null;
+  /** The keyboard layout (e.g. Danish) replaced the label: drawn in the link colour, as vial-gui does. */
+  overridden?: boolean;
+  innerOverridden?: boolean;
 }) {
   const lines = text.split("\n").filter((l, _i, all) => l !== "" || all.length === 1);
   const all = inner !== null ? [...lines, inner] : lines;
@@ -228,7 +237,14 @@ function KeyLabel({
           key={i}
           x={x + w / 2}
           y={startY + i * size * 1.15}
-          className={inner !== null && i === all.length - 1 ? "inner" : undefined}
+          className={
+            [
+              inner !== null && i === all.length - 1 ? "inner" : "",
+              (inner !== null && i === all.length - 1 ? innerOverridden : overridden) ? "layout-label" : "",
+            ]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
         >
           {line}
         </tspan>

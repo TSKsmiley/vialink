@@ -22,13 +22,14 @@ interface Indexed {
   tooltip: string;
 }
 
-const cache = new WeakMap<KeycodeTable, Indexed[]>();
+// Rebuilt when the keyboard layout changes, since labels are searched as shown.
+const cache = new WeakMap<KeycodeTable, { overrides: object; items: Indexed[] }>();
 
 function index(table: KeycodeTable): Indexed[] {
-  let out = cache.get(table);
-  if (out) return out;
+  const hit = cache.get(table);
+  if (hit && hit.overrides === table.labelOverrides) return hit.items;
   const seen = new Set<string>();
-  out = [];
+  const out: Indexed[] = [];
   for (const group of table.groups()) {
     for (const kc of group.keycodes) {
       if (seen.has(kc.qmk_id)) continue;
@@ -37,10 +38,13 @@ function index(table: KeycodeTable): Indexed[] {
         const low = id.toLowerCase();
         return low.startsWith("kc_") ? [low, low.slice(3)] : [low];
       });
-      out.push({ keycode: kc, ids, label: words(kc.label), tooltip: words(kc.tooltip ?? "") });
+      // With a keyboard layout (e.g. Danish) the shown label is searched first; the US one still matches.
+      const shown = table.display(kc);
+      const tooltip = [kc.tooltip ?? "", shown.overridden ? kc.label : ""].join(" ");
+      out.push({ keycode: kc, ids, label: words(shown.text), tooltip: words(tooltip) });
     }
   }
-  cache.set(table, out);
+  cache.set(table, { overrides: table.labelOverrides, items: out });
   return out;
 }
 

@@ -79,9 +79,10 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
   keymap view; `extensions/` the feature views; `ui/` wraps the Kumo components ViaLink uses;
   `theme.css` holds the colour tokens.
 - `fixtures/`: keyboard definitions and `.vil` files used by tests.
-- `scripts/`: `dump_keycodes.py` regenerates `src/core/keycodes/data/keycodes.json` from a vial-gui
-  checkout (`pnpm keycodes:dump <path>`); `compress_fixtures.py` XZ-compresses the fixture
-  definitions.
+- `scripts/`: `dump_keycodes.py` and `dump_keymaps.py` regenerate the keycode tables and the
+  keyboard layouts (Danish, German, …) in `src/core/keycodes/data/` from a vial-gui checkout.
+  `pnpm vial:dump <path>` runs both, to catch up with upstream Vial in one step.
+  `compress_fixtures.py` XZ-compresses the fixture definitions.
 
 ## Licence
 

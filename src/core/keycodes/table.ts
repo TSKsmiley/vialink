@@ -41,6 +41,10 @@ export interface KeycodeLabel {
   inner: string | null;
   /** "QMK_ID: description", as vial-gui's tooltip. */
   tooltip: string | null;
+  /** True when the keyboard layout (e.g. Danish) replaced `text`; vial-gui draws it in the link colour. */
+  overridden: boolean;
+  /** Same for `inner`. */
+  innerOverridden: boolean;
 }
 
 export const RESET_KEYCODE = "QK_BOOT";
@@ -77,6 +81,8 @@ export class KeycodeTable {
   private readonly maskedValues: Set<number>;
   private readonly scope: ExpressionScope;
   private readonly features: Set<string>;
+  /** Keyboard layout labels by canonical QMK id (keymaps.ts); empty for US QWERTY. */
+  private overrides: Readonly<Record<string, string>> = {};
 
   constructor(config: KeycodeTableConfig) {
     this.config = { ...config };
@@ -248,17 +254,43 @@ export class KeycodeTable {
     return this.find(this.isMaskId(qmkId) ? qmkId.slice(qmkId.indexOf("(") + 1, -1) : qmkId);
   }
 
+  /**
+   * Picks the keyboard layout whose labels replace the US ones (KeycodeDisplay.set_keymap_override).
+   * Labels only: keycodes on the wire do not change.
+   */
+  setLabelOverrides(labels: Readonly<Record<string, string>>): void {
+    this.overrides = labels;
+  }
+
+  get labelOverrides(): Readonly<Record<string, string>> {
+    return this.overrides;
+  }
+
+  /** A picker button's text: the layout's label when it has one (KeycodeDisplay.relabel_buttons). */
+  display(kc: Pick<Keycode, "qmk_id" | "label">): { text: string; overridden: boolean } {
+    const o = Object.hasOwn(this.overrides, kc.qmk_id) ? this.overrides[kc.qmk_id] : undefined;
+    return o === undefined ? { text: kc.label, overridden: false } : { text: o, overridden: true };
+  }
+
   /** What a key cap shows, following vial-gui's util.py::KeycodeDisplay. */
   label(code: number): KeycodeLabel {
     const qmkId = this.serialize(code);
     const outer = this.findOuter(qmkId);
-    let text = outer ? outer.label : qmkId;
+    const shown = outer ? this.display(outer) : { text: qmkId, overridden: false };
+    let text = shown.text;
     const masked = this.isMaskId(qmkId);
     if (masked) text = text.split("\n")[0];
     const innerKc = masked ? this.findInner(qmkId) : undefined;
+    const inner = innerKc ? this.display(innerKc) : null;
     let tooltip: string | null = null;
     if (outer) tooltip = outer.tooltip ? `${outer.qmk_id}: ${outer.tooltip}` : outer.qmk_id;
-    return { text, inner: innerKc ? innerKc.label : null, tooltip };
+    return {
+      text,
+      inner: inner ? inner.text : null,
+      tooltip,
+      overridden: shown.overridden,
+      innerOverridden: inner?.overridden ?? false,
+    };
   }
 
   /** The picker tabs, as vial-gui's tabbed_keycodes.py groups them; unsupported keycodes are left out. */

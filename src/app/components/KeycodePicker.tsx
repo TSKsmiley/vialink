@@ -43,14 +43,22 @@ export function KeycodePicker({ table, disabled, current, onPick, info, hint }: 
       .flatMap((g) => g.keycodes)
       .filter((kc) => {
         if (seen.has(kc.qmk_id)) return false;
-        const hay = [kc.qmk_id, kc.label.replace(/\n/g, " "), kc.tooltip ?? "", ...(kc.alias ?? [])]
+        const hay = [
+          kc.qmk_id,
+          kc.label.replace(/\n/g, " "),
+          table.display(kc).text.replace(/\n/g, " "),
+          kc.tooltip ?? "",
+          ...(kc.alias ?? []),
+        ]
           .join(" ")
           .toLowerCase();
         const hit = hay.includes(q);
         if (hit) seen.add(kc.qmk_id);
         return hit;
       });
-  }, [groups, tab, q]);
+    // table.labelOverrides changes in place when the keyboard layout is switched, so it is listed too.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, tab, q, table, table.labelOverrides]);
 
   const submitAny = () => {
     try {
@@ -124,12 +132,12 @@ export function KeycodePicker({ table, disabled, current, onPick, info, hint }: 
           {shown.map((kc) => (
             <button
               key={kc.qmk_id}
-              className="keycode"
+              className={"keycode" + (table.display(kc).overridden ? " layout-label" : "")}
               disabled={disabled}
               title={kc.tooltip ? `${kc.qmk_id}: ${kc.tooltip}` : kc.qmk_id}
               onClick={() => onPick(kc.value)}
             >
-              {kc.label === "" ? " " : kc.label}
+              {table.display(kc).text || " "}
             </button>
           ))}
           {shown.length === 0 && <p className="hint">No keycodes match “{query}”.</p>}

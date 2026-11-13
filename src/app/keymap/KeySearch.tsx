@@ -111,7 +111,7 @@ export function KeySearch({
               key={kc.qmk_id}
               disabled={disabled}
               onClick={() => pick(kc.value)}
-              label={kc.label.replace(/\n/g, " ").trim() || kc.qmk_id}
+              label={table.display(kc).text.replace(/\n/g, " ").trim() || kc.qmk_id}
               id={kc.qmk_id}
               title={kc.tooltip ? `${kc.qmk_id}: ${kc.tooltip}` : kc.qmk_id}
             />
