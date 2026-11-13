@@ -18,6 +18,7 @@ import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
 import {
   enabledExtensions,
+  extensionBrowserStorage,
   extensionRecency,
   loadDisabledExtensions,
   saveDisabledExtensions,
@@ -63,6 +64,7 @@ export function App() {
           onProgress: (progress) => setStatus({ kind: "connecting", progress }),
           extensions: enabledExtensions(disabledExtensions),
           recency: extensionRecency,
+          browserStorage: extensionBrowserStorage,
         });
         const kb = connection.keyboard;
         kb.notifyHandler = (kind, message) => (kind === "error" ? setError(message) : setNotice(message));

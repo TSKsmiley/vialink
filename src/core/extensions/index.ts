@@ -22,6 +22,7 @@ export type {
 } from "./types.ts";
 export { ExtensionCommandError } from "./types.ts";
 export type { ExtensionPoint, ExtensionStatus } from "./manifest.ts";
+export type { BrowserStorage, StateHandle, StateOptions } from "./state.ts";
 
 /** Every built-in extension, in probe order. */
 export const BUILTIN_EXTENSIONS: readonly KeyboardExtension<unknown>[] = [

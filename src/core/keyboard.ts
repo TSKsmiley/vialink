@@ -26,6 +26,7 @@ import {
 } from "./extensions/types.ts";
 import { isStandardCommand, startsWith } from "./protocol/standard.ts";
 import { Scheduler } from "./scheduler.ts";
+import { ExtensionStates, memoryStorage, type BrowserStorage, type Versioned } from "./extensions/state.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
   viaGetLayerCount,
@@ -112,6 +113,8 @@ export interface LoadOptions {
    * never). Of two conflicting extensions the board supports, the more recent runs.
    */
   recency?: (id: string) => number;
+  /** Where extensions' "browser" state lives (localStorage in the app); in memory when absent. */
+  browserStorage?: BrowserStorage;
 }
 
 export interface LoadProgress {
@@ -156,6 +159,8 @@ export class Keyboard {
    * the app pauses it while the tab is hidden.
    */
   readonly scheduler: Scheduler;
+  /** Extensions' ctx.state; layout state stays for the whole connection, also while an extension is off. */
+  private readonly states: ExtensionStates;
 
   private readonly keymap = new Map<string, number>();
   private readonly encoderMap = new Map<string, number>();
@@ -170,9 +175,12 @@ export class Keyboard {
   private readonly recency: (id: string) => number;
   private revision = 0;
 
-  private constructor(queue: RequestQueue, recency: (id: string) => number = () => 0) {
+  private constructor(queue: RequestQueue, options: LoadOptions = {}) {
     this.queue = queue;
-    this.recency = recency;
+    this.recency = options.recency ?? (() => 0);
+    this.states = new ExtensionStates(options.browserStorage ?? memoryStorage(), this.history, () =>
+      this.changed(),
+    );
     this.scheduler = new Scheduler({ busy: () => queue.busy });
     this.history.subscribe(() => {
       if (this.history.writing) this.scheduler.pause("operation");
@@ -187,7 +195,7 @@ export class Keyboard {
 
   /** Connects and loads the keyboard, mirroring vial-gui's Keyboard.reload(). */
   static async load(queue: RequestQueue, options: LoadOptions = {}): Promise<Keyboard> {
-    const kb = new Keyboard(queue, options.recency);
+    const kb = new Keyboard(queue, options);
     await kb.reload(options.onProgress);
     await kb.probeExtensions(options.extensions ?? BUILTIN_EXTENSIONS, options.onProgress);
     return kb;
@@ -416,6 +424,11 @@ export class Keyboard {
     await this.refreshExtensions();
   }
 
+  /** Every extension's "layout" state (ctx.state), for saving into a layout file. */
+  extensionLayoutState(): Record<string, Record<string, Versioned>> {
+    return this.states.layoutSnapshot();
+  }
+
   /** Why an extension does or does not run on this board. */
   extensionStatus(id: string): ExtensionStatus {
     return this.statuses.get(id) ?? { kind: "off" };
@@ -519,6 +532,7 @@ export class Keyboard {
         once: (ms, fn, options) => this.scheduler.once(ms, fn, { ...options, owner: ext.id }),
         idle: (fn, options) => this.scheduler.idle(fn, { ...options, owner: ext.id }),
       },
+      state: (name, options) => this.states.state(ext, name, options),
       changed: () => this.changed(),
     };
     // A compatible extension's probe is typed without `device`; leaving it out

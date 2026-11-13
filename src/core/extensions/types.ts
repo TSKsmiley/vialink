@@ -17,6 +17,7 @@ import type { HistoryWrite } from "../history.ts";
 import type { KeycodeTable } from "../keycodes/table.ts";
 import type { Capabilities } from "../keyboard.ts";
 import type { TaskHandle, TaskOptions } from "../scheduler.ts";
+import type { StateHandle, StateOptions } from "./state.ts";
 import type { RequestOptions } from "../transport/queue.ts";
 import type { ExtensionPoint } from "./manifest.ts";
 
@@ -100,6 +101,12 @@ export interface ScheduleAccess {
 export interface HostContext {
   readonly board: BoardView;
   readonly schedule: ScheduleAccess;
+  /**
+   * This extension's own state, which ViaLink saves, loads and re-renders.
+   * `persist: "layout"` (the default) moves with layout files and is undoable;
+   * `"browser"` stays in this browser. Plain variables need no API.
+   */
+  state<T>(name: string, options: StateOptions<T>): StateHandle<T>;
   readonly keymap: KeymapAccess;
   readonly history: HistoryAccess;
   readonly notify: NotifyAccess;

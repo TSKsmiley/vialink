@@ -4,6 +4,7 @@
 // simulated KLOR, so the UI can be tried without hardware.
 
 import klorDefinitionUrl from "../../fixtures/definitions/klor.vial.json.xz?url";
+import type { BrowserStorage } from "../core/extensions/state.ts";
 import type { KeyboardExtension } from "../core/extensions/types.ts";
 import { Keyboard, type LoadProgress } from "../core/keyboard.ts";
 import {
@@ -65,6 +66,7 @@ export async function connect(
     onProgress?: (p: LoadProgress) => void;
     extensions?: readonly KeyboardExtension<unknown>[];
     recency?: (id: string) => number;
+    browserStorage?: BrowserStorage;
   } = {},
 ): Promise<Connection> {
   await transport.open();
@@ -75,6 +77,7 @@ export async function connect(
       onProgress: options.onProgress,
       extensions: options.extensions,
       recency: options.recency,
+      browserStorage: options.browserStorage,
     });
     return { keyboard, queue, demo: options.demo ?? false };
   } catch (err) {
