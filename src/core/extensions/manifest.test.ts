@@ -278,6 +278,21 @@ describe("extension groups limit device access", () => {
     expect(got).toEqual(["info: Saved 3 labels", "error: No room"]);
   });
 
+  it("reports handlers of another extension's hook point without a dependency", () => {
+    const owner = ext("sharing", { provides: [{ id: "sharing.paste" }] });
+    const sloppy = {
+      ...ext("names"),
+      hooks: [{ hook: "sharing.paste", phase: "after", run: () => undefined }],
+    };
+    const core = {
+      ...ext("core-user"),
+      hooks: [{ hook: "layer.clear", phase: "after", run: () => undefined }],
+    };
+    expect(manifestProblems([owner, sloppy, core] as KeyboardExtension<unknown>[])).toEqual([
+      'names: handles sharing.paste without listing "sharing" in requires or optional.',
+    ]);
+  });
+
   it("reports manifests that don't fit their group", () => {
     const fork = {
       ...ext("fork"),

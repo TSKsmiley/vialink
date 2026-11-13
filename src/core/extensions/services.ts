@@ -69,6 +69,8 @@ export const keycodeDescriptions = defineService<KeycodeDescriber>("core.keycode
 export interface LayerNameProvider {
   /** The layer's name, or null when it has none. */
   name(layer: number): string | null;
+  /** Renames a layer (one undo step); absent when this provider can't. */
+  rename?(layer: number, name: string): Promise<void>;
   /** The name a copied layer carries (its share data, by extension id), or null. */
   fromShared?(ext: Readonly<Record<string, unknown>>): string | null;
 }

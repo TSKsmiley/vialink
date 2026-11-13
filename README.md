@@ -72,7 +72,8 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
   - `history.ts`: undo and redo of every write.
   - `layers.ts`, `layer-share.ts`, `layerInfo.ts`: layer operations, the share text format and
     facts for the layer rail.
-  - `extensions/`: optional features (macros, tap dance, combos, …) probed at connect time.
+  - `extensions/`: optional features (macros, tap dance, combos, …) probed at connect time,
+    and the Extension API they are written against (see "Writing an extension").
   - `vil.ts`: `.vil` save and load.
   - `sim/`: a simulated keyboard that answers commands like the firmware, for tests and the demo.
 - `src/app/`: the React UI. `shell/` is the top bar, sidebar, undo and device panel; `keymap/` the
@@ -83,6 +84,41 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
   keyboard layouts (Danish, German, …) in `src/core/keycodes/data/` from a vial-gui checkout.
   `pnpm vial:dump <path>` runs both, to catch up with upstream Vial in one step.
   `compress_fixtures.py` XZ-compresses the fixture definitions.
+
+### Writing an extension
+
+Every feature beyond the keymap is an extension, written against one API: a context (`ctx`)
+an extension calls, and hooks ViaLink calls. The design is in the plan doc's "Extension API" tab.
+
+1. **Core part** in `src/core/extensions/<id>.ts`: a `KeyboardExtension` with `id`, `name`,
+   `description` and `group`. The group decides what it may send to the keyboard:
+   `"standard"` (Vial's standard commands for its own feature), `"compatible"` (no device
+   access at all; works on every Vial keyboard) or `"nonstandard"` (standard commands plus the
+   custom `commands` it declares, and a `firmware` link). `probe(ctx)` returns its state, or
+   null when the keyboard lacks the feature. Add it to `BUILTIN_EXTENSIONS` in
+   `extensions/index.ts`.
+2. **Manifest**: `requires` / `optional` (other extensions, by id; they probe first),
+   `conflicts`, and `provides` (services from `defineService`/`provide`, hook points from
+   `defineHook`; ids start with the extension's id).
+3. **Through `ctx` only**: `ctx.board` (read-only facts), `ctx.keymap`, `ctx.device` (by group),
+   `ctx.history` (record every write for undo), `ctx.state(name, { persist })` (saved state;
+   `"layout"` by default, `"browser"` for this browser only), `ctx.schedule` (every, once, idle;
+   never your own timers), `ctx.use(service)`, `ctx.notify`, `ctx.ui` (confirm, overlay).
+4. **Hooks**: `hooks: [on(layerClear.after, (event, ctx, state) => …)]`. Before handlers may
+   `preventDefault(reason)` or `requireConfirm(message)` and can't write; filters adjust the
+   plan; after handlers write in the same undo step, and a failure rolls the operation back.
+   Handling another extension's hook point needs that extension in `requires` or `optional`.
+5. **UI part** in `src/app/extensions/<id>Ui.tsx`, listed in `APP_EXTENSIONS`: views
+   (`panels`, each gets `{ ctx, state, ui }`, never the Keyboard), `layerCommands` (menu entries
+   and shortcuts), `decorations` (marks on keycaps and layer cards) and `slots`
+   (`keyInspector.tab`, `devicePanel.section`, `topBar.item`). Everything draws inside an error
+   boundary.
+6. **Public API**: anything other code outside the extension folders may use goes in
+   `<id>.api.ts`. ESLint stops code outside `src/core/extensions/` and `src/app/extensions/` from
+   importing an extension module itself, and stops timers in extension code.
+
+`manifest.test.ts` checks every built-in manifest (known ids, no dependency cycles, prefixed
+ids, hook dependencies, groups).
 
 ## Licence
 

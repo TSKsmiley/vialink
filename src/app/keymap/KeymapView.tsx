@@ -25,7 +25,7 @@ import {
 import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
 import { OperationCancelledError } from "../../core/extensions/hooks.ts";
-import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.ts";
+import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.api.ts";
 import { shortcutOf, type LayerCommandEnv } from "../extensions/commands.ts";
 import { decorationsOf, layerCommandsOf } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, sharedLayerName, useKeyboardVersion } from "../hooks.ts";
@@ -33,8 +33,7 @@ import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
 import { PasteFromText } from "./PasteFromText.tsx";
 import { PastePreview, type PasteSource } from "./PastePreview.tsx";
-import { layerSharingExtension } from "../../core/extensions/layer-sharing.ts";
-import { layerNamesExtension } from "../../core/extensions/layerNames.ts";
+import { layerNames } from "../../core/extensions/services.ts";
 import { encodeLayer, isShareText } from "../../core/layer-share.ts";
 
 type Target = NonNullable<Selection>;
@@ -83,8 +82,9 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
   const [clipboard, setClipboard] = useState<PasteSource | null>(null);
   const [pasting, setPasting] = useState<{ source: PasteSource; target: number } | null>(null);
   const [importing, setImporting] = useState<{ text: string } | null>(null);
-  const sharing = keyboard.extension(layerSharingExtension) !== null;
-  const names = keyboard.extension(layerNamesExtension);
+  // Copy, paste and share are layer sharing's (layer commands); renaming comes from a layer name provider.
+  const sharing = keyboard.extensionStatus("layer-sharing").kind === "active";
+  const namer = keyboard.provided(layerNames).find((p) => p.rename);
   const [autoAdvance, setAutoAdvance] = useState(() =>
     load(ADVANCE_KEY, false, (v): v is boolean => typeof v === "boolean"),
   );
@@ -334,7 +334,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
           }}
           onPeek={setPeek}
           layerName={named}
-          rename={names ? (l, n) => names.set(l, n) : undefined}
+          rename={namer?.rename ? (l, n) => namer.rename!(l, n) : undefined}
           onError={onError}
           menu={sharing ? menu : undefined}
           commands={layerCommandsOf(keyboard)}

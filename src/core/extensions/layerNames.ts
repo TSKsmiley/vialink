@@ -17,7 +17,7 @@ import {
 } from "../protocol/constants.ts";
 import { layerClear, layerSwap } from "../layers.ts";
 import { on } from "./hooks.ts";
-import { paste, shareText } from "./layer-sharing.ts";
+import { paste, shareText } from "./layer-sharing.api.ts";
 import { layerNames, provide } from "./services.ts";
 import type { DeviceContext, KeyboardExtension } from "./types.ts";
 
@@ -115,6 +115,7 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
   provides: [
     provide(layerNames, (names: LayerNames) => ({
       name: (layer) => names.get(layer) || null,
+      rename: (layer, name) => names.set(layer, name),
       fromShared: (ext) => {
         const mine = ext["layer-names"] as { name?: unknown } | undefined;
         return typeof mine?.name === "string" && mine.name ? mine.name : null;
