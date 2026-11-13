@@ -14,6 +14,7 @@ import {
 import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
+import { ExtensionOverlays } from "./extensions/ExtensionSlot.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
 import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
@@ -248,6 +249,7 @@ export function App() {
             />
           )}
           {showLog && <DevicePanel queue={queue} keyboard={kb} onClose={() => setShowLog(false)} />}
+          {kb && <ExtensionOverlays keyboard={kb} />}
         </main>
 
         <UndoToast keyboard={kb} controls={history} />

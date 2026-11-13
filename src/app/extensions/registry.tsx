@@ -14,7 +14,8 @@ import {
   type LayerCommand,
   type LayerMark,
 } from "./commands.ts";
-import type { PanelKit } from "./kit.tsx";
+import { ExtensionErrorBoundary } from "./ErrorBoundary.tsx";
+import { kitFor, type PanelKit } from "./kit.tsx";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { layerNamesUi } from "./layerNamesUi.tsx";
 import { layerSharingUi } from "./layerSharingUi.tsx";
@@ -65,6 +66,45 @@ export interface AppExtension {
   layerCommands?: readonly LayerCommand[];
   /** Marks on keycaps and layer cards; they get the extension's state. */
   decorations?: Decorations;
+  /** Components for named spots in ViaLink's screens (see Slots). */
+  slots?: Slots;
+}
+
+/** What the key inspector tells its tab slot: the layer and the keys selected. */
+export interface KeySlotProps {
+  layer: number;
+  /** Matrix positions of the selected keys (encoders left out). */
+  keys: readonly { row: number; col: number }[];
+  /** The selected keys' keycode, or null when there is none or they differ. */
+  current: number | null;
+}
+
+/**
+ * Named spots in ViaLink's screens an extension can fill (plan doc, "User
+ * interface"). ViaLink owns the layout; each component draws inside an error
+ * boundary with the extension's ctx, state and ui.
+ */
+export interface Slots<State = unknown> {
+  /** A tab in the selected key's panel, e.g. a key note. */
+  "keyInspector.tab"?: { title: string; Component: ComponentType<PanelProps<State> & KeySlotProps> };
+  /** A section in the device panel (HID log). */
+  "devicePanel.section"?: { title: string; Component: ComponentType<PanelProps<State>> };
+  /** An item in the top bar, before Extensions. */
+  "topBar.item"?: { Component: ComponentType<PanelProps<State>> };
+}
+
+/** Types slots for an extension's state, for AppExtension.slots. */
+export function slots<State>(s: Slots<State>): Slots {
+  return s as unknown as Slots;
+}
+
+/** The running extensions that fill slot `name`, with their extension and state. */
+export function slotFillers<K extends keyof Slots>(keyboard: Keyboard, name: K) {
+  return activeUi(keyboard).flatMap((ui) => {
+    const fill = ui.slots?.[name];
+    const owner = keyboard.activeExtensions.find((a) => a.extension.id === ui.id);
+    return fill && owner ? [{ fill: fill as NonNullable<Slots[K]>, owner }] : [];
+  });
 }
 
 /** Types decorations for an extension's state, for AppExtension.decorations. */
@@ -136,6 +176,27 @@ export function decorationsOf(keyboard: Keyboard) {
       return running.flatMap(({ d, state }) => d.layerCard?.(layer, state) ?? []);
     },
   };
+}
+
+/** The key inspector's extra tabs, from running extensions. */
+export function keyInspectorTabs(keyboard: Keyboard) {
+  return slotFillers(keyboard, "keyInspector.tab").map(({ fill, owner }) => ({
+    id: `ext:${owner.extension.id}`,
+    title: fill.title,
+    render: (props: KeySlotProps) => {
+      const Component = fill.Component as ComponentType<PanelProps & KeySlotProps>;
+      return (
+        <ExtensionErrorBoundary name={owner.extension.name}>
+          <Component
+            ctx={keyboard.contextOf(owner.extension)}
+            state={owner.state}
+            ui={kitFor(keyboard)}
+            {...props}
+          />
+        </ExtensionErrorBoundary>
+      );
+    },
+  }));
 }
 
 // ── Enabled/disabled setting (per browser) ──────────────────────────────────

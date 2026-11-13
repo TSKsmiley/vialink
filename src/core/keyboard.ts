@@ -23,6 +23,7 @@ import {
   type DeviceContext,
   type HostContext,
   type KeyboardExtension,
+  type Overlay,
 } from "./extensions/types.ts";
 import { isStandardCommand, startsWith } from "./protocol/standard.ts";
 import { Scheduler } from "./scheduler.ts";
@@ -179,6 +180,8 @@ export class Keyboard {
   private readonly states: ExtensionStates;
   /** Built service implementations, by extension id then service id; dropped when the extension stops. */
   private readonly provisions = new Map<string, Map<string, unknown>>();
+  private overlayList: readonly (Overlay & { id: number; owner: string })[] = [];
+  private overlaySeq = 0;
   /** The extension whose before/filter handler is running; its writes throw meanwhile. */
   private readOnlyFor: string | null = null;
 
@@ -445,6 +448,7 @@ export class Keyboard {
         this.active.delete(extension.id);
         this.scheduler.stopOwner(extension.id);
         this.provisions.delete(extension.id);
+        this.overlayList = this.overlayList.filter((o) => o.owner !== extension.id);
       }
     }
     const order = BUILTIN_EXTENSIONS.map((e) => e.id);
@@ -586,6 +590,19 @@ export class Keyboard {
     return this.states.layoutSnapshot();
   }
 
+  /** The overlays extensions show now (ctx.ui.overlay), oldest first; the app draws them. */
+  get overlays(): readonly (Overlay & { id: number; owner: string })[] {
+    return this.overlayList;
+  }
+
+  /** Closes an overlay (its ✕ button, or the extension's handle). */
+  closeOverlay(id: number): void {
+    const next = this.overlayList.filter((o) => o.id !== id);
+    if (next.length === this.overlayList.length) return;
+    this.overlayList = next;
+    this.changed();
+  }
+
   /** Sets {@link notifyHandler} (for React code, which may not assign to a prop). */
   setNotifyHandler(handler: ((kind: "info" | "error", message: string) => void) | null): void {
     this.notifyHandler = handler;
@@ -669,6 +686,7 @@ export class Keyboard {
       if (next.has(id)) continue;
       this.scheduler.stopOwner(id);
       this.provisions.delete(id);
+      this.overlayList = this.overlayList.filter((o) => o.owner !== id);
     }
     this.active.clear();
     for (const [id, entry] of next) this.active.set(id, entry);
@@ -714,6 +732,15 @@ export class Keyboard {
       notify: {
         info: (message) => this.notifyHandler?.("info", message),
         error: (message) => this.notifyHandler?.("error", message),
+      },
+      ui: {
+        confirm: async (message) => (await this.confirmHandler?.([message])) ?? false,
+        overlay: (overlay) => {
+          const shown = { ...overlay, id: ++this.overlaySeq, owner: ext.id };
+          this.overlayList = [...this.overlayList, shown];
+          this.changed();
+          return { close: () => this.closeOverlay(shown.id) };
+        },
       },
       schedule: {
         every: (ms, fn, options) => this.scheduler.every(ms, fn, { ...options, owner: ext.id }),

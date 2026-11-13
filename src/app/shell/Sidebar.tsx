@@ -46,6 +46,7 @@ export function Sidebar({ sections, current, onSelect }: Props) {
                 return (
                   <button
                     key={s.id}
+                    data-anchor={`sidebar.${s.id}`}
                     role="tab"
                     aria-selected={active}
                     aria-description={s.count ? `${s.count} set up` : undefined}

@@ -104,6 +104,7 @@ export function LayerRail({
   return (
     <section
       aria-label="Layers"
+      data-anchor="keymap.layerRail"
       className="flex min-w-0 flex-col gap-1.5"
       onMouseLeave={() => {
         setHovered(null);
