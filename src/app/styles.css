@@ -169,6 +169,12 @@ svg.keyboard {
   stroke: var(--accent);
   stroke-width: 2;
 }
+/* An extension's mark on a key (decorations), e.g. a dot on keys that have a note. */
+.key circle.key-mark,
+.key.selected circle.key-mark {
+  fill: var(--accent);
+  stroke: none;
+}
 .key:focus-visible {
   outline: none;
 }

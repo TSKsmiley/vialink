@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { placeLayout } from "../../core/definition/geometry.ts";
 import { hasSecondRect } from "../../core/definition/geometry.ts";
 import type { PhysicalShape } from "../../core/definition/definition.ts";
+import type { KeyMark } from "../extensions/commands.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { KC_TRNS, layerKeyOf } from "../../core/layerInfo.ts";
 import { useKeyboardVersion } from "../hooks.ts";
@@ -36,6 +37,8 @@ interface Props {
   note?: (row: number, col: number) => string | null;
   /** Extra CSS class per matrix position, e.g. "pressed" in the matrix tester or "target" when unlocking. */
   highlight?: (row: number, col: number) => string | null;
+  /** Extensions' mark on a key (decorations): a dot and words for its tooltip. */
+  mark?: (row: number, col: number) => KeyMark | null;
   /** Label for the whole view; defaults to "Layer n keymap". */
   label?: string;
 }
@@ -47,6 +50,7 @@ export function KeyboardView({
   isSelected,
   onSelect,
   highlight,
+  mark,
   label: viewLabel,
   fallthrough = false,
   codeAt,
@@ -75,7 +79,8 @@ export function KeyboardView({
     >
       {placed.keys.map(({ shape: k, shiftX, shiftY }, i) => {
         const code = codeAt?.(k.row, k.col) ?? keyboard.getKey(layer, k.row, k.col) ?? 0;
-        const extraNote = note?.(k.row, k.col) ?? null;
+        const keyMark = mark?.(k.row, k.col) ?? null;
+        const extraNote = [note?.(k.row, k.col), keyMark?.title].filter(Boolean).join(", ") || null;
         let shownCode = code;
         let through = false;
         if (fallthrough && code === KC_TRNS) {
@@ -137,6 +142,9 @@ export function KeyboardView({
               height={k.height * U - 2 * GAP}
               rx={6}
             />
+            {keyMark?.dot && (
+              <circle className="key-mark" cx={(k.x + k.width) * U - GAP - 7} cy={k.y * U + GAP + 7} r={3} />
+            )}
             <KeyLabel
               x={k.x * U}
               y={k.y * U}

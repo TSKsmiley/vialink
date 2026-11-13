@@ -4,7 +4,7 @@ import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { ExtensionGroup, KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { conflicting, requirementsOf } from "../../core/extensions/manifest.ts";
-import { markTurnedOn } from "../extensions/registry.tsx";
+import { markTurnedOn, shortcutConflicts } from "../extensions/registry.tsx";
 import { nameList, planTurnOff, planTurnOn, type SwitchChange } from "../extensions/switches.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 
@@ -67,6 +67,8 @@ export function ExtensionsDialog({
   const [question, setQuestion] = useState<Question | null>(null);
   const active = new Set(keyboard?.activeExtensions.map((a) => a.extension.id) ?? []);
   const nameOf = (id: string) => extensions.find((e) => e.id === id)?.name ?? id;
+  // A shortcut two switched-on extensions both want goes to the one loaded first.
+  const conflicts = shortcutConflicts(extensions.filter((e) => !disabled.has(e.id)));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -221,6 +223,13 @@ export function ExtensionsDialog({
                             </a>
                           </p>
                         )}
+                        {conflicts
+                          .filter((c) => c.refused === ext.name)
+                          .map((c) => (
+                            <p key={c.shortcut + c.command} className="hint">
+                              {`“${c.command}” has no shortcut: ${c.shortcut} is taken by ${c.keptBy}.`}
+                            </p>
+                          ))}
                         {line && (
                           <p
                             className={`hint extension-status${active.has(ext.id) ? " on" : ""}`}
