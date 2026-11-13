@@ -26,6 +26,8 @@ interface Props extends LayerMenuActions {
   layerName: (l: number) => string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Screen point to open at (right-click); null places it under the ⋯ button. */
+  at?: { x: number; y: number } | null;
 }
 
 export function LayerMenu({
@@ -35,6 +37,7 @@ export function LayerMenu({
   layerName,
   open,
   onOpenChange,
+  at = null,
   onCopy,
   onPaste,
   onDuplicate,
@@ -51,13 +54,23 @@ export function LayerMenu({
           <button
             type="button"
             aria-label={`Menu for ${title}`}
-            className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
+            className="relative grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
           >
             <DotsThreeIcon size={18} weight="bold" />
           </button>
         }
       />
-      <DropdownMenu.Content>
+      <DropdownMenu.Content
+        {...(at && {
+          // A zero-size virtual element at the pointer, like a native context menu.
+          anchor: {
+            getBoundingClientRect: () => DOMRect.fromRect({ x: at.x, y: at.y, width: 0, height: 0 }),
+          },
+          side: "bottom" as const,
+          align: "start" as const,
+          sideOffset: 2,
+        })}
+      >
         <DropdownMenu.Item onClick={() => onCopy(layer)}>
           Copy layer
           <DropdownMenu.Shortcut>Ctrl+C</DropdownMenu.Shortcut>
