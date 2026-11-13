@@ -15,7 +15,8 @@ import type { Keyboard } from "../../core/keyboard.ts";
 import { keyCount, reachSummary } from "../../core/layerInfo.ts";
 import { LAYER_NAME_LEN } from "../../core/protocol/constants.ts";
 import { errorMessage } from "../hooks.ts";
-import { LayerMenu, type LayerMenuActions } from "./LayerMenu.tsx";
+import type { LayerCommand, LayerCommandEnv, LayerMark } from "../extensions/commands.ts";
+import { LayerMenu } from "./LayerMenu.tsx";
 
 export interface LayerRailProps {
   keyboard: Keyboard;
@@ -27,8 +28,12 @@ export interface LayerRailProps {
   /** Writes a layer name (one undo step); absent when the keyboard has no layer names. */
   rename?: (layer: number, name: string) => Promise<void>;
   onError: (message: string) => void;
-  /** Layer menu entries (copy, paste, duplicate, swap, clear); drag-and-drop swaps too. Absent when layer sharing is off. */
-  menu?: LayerMenuActions;
+  /** What layer commands can do; drag-and-drop swaps too. Absent when layer sharing is off. */
+  menu?: LayerCommandEnv;
+  /** The running extensions' layer commands for the ⋯ menu. */
+  commands?: readonly { command: LayerCommand; shortcut: string | null }[];
+  /** Extensions' marks on a layer card (decorations). */
+  marks?: (layer: number) => LayerMark[];
   /** What is copied, shown above the cards; null when nothing is. */
   copied: { name: string; keys: number; encoders: number } | null;
   onClearCopied: () => void;
@@ -47,6 +52,8 @@ export function LayerRail({
   rename,
   onError,
   menu,
+  commands = [],
+  marks,
   copied,
   onClearCopied,
   pasteTarget,
@@ -57,7 +64,6 @@ export function LayerRail({
   // Where a right-click opened the menu; null when it was opened from the ⋯ button.
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [dropOn, setDropOn] = useState<number | null>(null);
-  const nameOf = (l: number) => layerName(l) || `Layer ${l}`;
 
   const layers = Array.from({ length: keyboard.layers }, (_, l) => {
     const keys = keyCount(keyboard, l);
@@ -172,7 +178,7 @@ export function LayerRail({
               onDrop={(e) => {
                 setDropOn(null);
                 const from = Number(e.dataTransfer.getData(DRAG_TYPE));
-                if (menu && Number.isInteger(from) && from !== l) menu.onSwap(from, l);
+                if (menu && Number.isInteger(from) && from !== l) menu.swap(from, l);
               }}
               onContextMenu={(e) => {
                 if (!menu) return;
@@ -241,21 +247,25 @@ export function LayerRail({
                       ) : null}
                       {detail}
                     </span>
+                    {marks?.(l).map((m, i) => (
+                      <span key={i} title={m.title} className="text-xs text-kumo-subtle">
+                        {m.text}
+                      </span>
+                    ))}
                   </div>
                 )}
-                {menu && (
+                {menu && commands.length > 0 && (
                   <LayerMenu
                     layer={l}
                     title={title}
-                    layerCount={keyboard.layers}
-                    layerName={nameOf}
+                    commands={commands}
+                    env={menu}
                     open={menuFor === l}
                     at={menuFor === l ? menuAt : null}
                     onOpenChange={(o) => {
                       if (o && menuFor !== l) setMenuAt(null);
                       setMenuFor(o ? l : null);
                     }}
-                    {...menu}
                   />
                 )}
               </div>

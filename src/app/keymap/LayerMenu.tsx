@@ -1,52 +1,62 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // The ⋯ menu of a layer card (design board 5), also opened by right-clicking
-// the card: copy, paste, duplicate, swap and clear. Every entry that writes is
-// one undo step.
+// the card. Its entries are the running extensions' layer commands
+// (extensions/commands.ts); layer sharing's are copy, paste, duplicate, swap,
+// share text and clear. Every entry that writes is one undo step.
 
 import { DotsThreeIcon } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import type { LayerCommand, LayerCommandEnv } from "../extensions/commands.ts";
 import { DropdownMenu } from "../ui/index.ts";
 
-export interface LayerMenuActions {
-  onCopy(layer: number): void;
-  /** Opens the paste preview onto this layer; absent when nothing is copied. */
-  onPaste?(layer: number): void;
-  onDuplicate(layer: number): void;
-  onSwap(layer: number, other: number): void;
-  onClear(layer: number): void;
-  onCopyText(layer: number): void;
-  onPasteText(): void;
-  /** Whether an empty layer exists to duplicate into. */
-  canDuplicate: boolean;
-}
-
-interface Props extends LayerMenuActions {
+interface Props {
   layer: number;
   title: string;
-  layerCount: number;
-  layerName: (l: number) => string;
+  /** The running extensions' layer commands, each with the shortcut it keeps. */
+  commands: readonly { command: LayerCommand; shortcut: string | null }[];
+  env: LayerCommandEnv;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Screen point to open at (right-click); null places it under the ⋯ button. */
   at?: { x: number; y: number } | null;
 }
 
-export function LayerMenu({
-  layer,
-  title,
-  layerCount,
-  layerName,
-  open,
-  onOpenChange,
-  at = null,
-  onCopy,
-  onPaste,
-  onDuplicate,
-  onSwap,
-  onClear,
-  onCopyText,
-  onPasteText,
-  canDuplicate,
-}: Props) {
+export function LayerMenu({ layer, title, commands, env, open, onOpenChange, at = null }: Props) {
+  const items: ReactNode[] = [];
+  let section: string | undefined;
+  for (const { command, shortcut } of commands) {
+    if (items.length > 0 && command.section !== section) {
+      items.push(<DropdownMenu.Separator key={`sep-${command.id}`} />);
+    }
+    section = command.section;
+    const label = typeof command.title === "function" ? command.title(layer) : command.title;
+    const enabled = command.enabled?.(layer, env) ?? true;
+    const choices = command.choices?.(layer, env);
+    items.push(
+      choices ? (
+        <DropdownMenu.Sub key={command.id}>
+          <DropdownMenu.SubTrigger disabled={!enabled}>{label}</DropdownMenu.SubTrigger>
+          <DropdownMenu.SubContent>
+            {choices.map((c) => (
+              <DropdownMenu.Item key={c.value} onClick={() => command.run(layer, env, c.value)}>
+                {c.label}
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.SubContent>
+        </DropdownMenu.Sub>
+      ) : (
+        <DropdownMenu.Item
+          key={command.id}
+          disabled={!enabled}
+          variant={command.danger ? "danger" : undefined}
+          onClick={() => command.run(layer, env)}
+        >
+          {label}
+          {shortcut && <DropdownMenu.Shortcut>{shortcut}</DropdownMenu.Shortcut>}
+        </DropdownMenu.Item>
+      ),
+    );
+  }
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenu.Trigger
@@ -71,39 +81,7 @@ export function LayerMenu({
           sideOffset: 2,
         })}
       >
-        <DropdownMenu.Item onClick={() => onCopy(layer)}>
-          Copy layer
-          <DropdownMenu.Shortcut>Ctrl+C</DropdownMenu.Shortcut>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item disabled={!onPaste} onClick={() => onPaste?.(layer)}>
-          Paste onto this layer…
-          <DropdownMenu.Shortcut>Ctrl+V</DropdownMenu.Shortcut>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item disabled={!canDuplicate} onClick={() => onDuplicate(layer)}>
-          Duplicate to empty layer
-        </DropdownMenu.Item>
-        <DropdownMenu.Sub>
-          <DropdownMenu.SubTrigger>Swap with…</DropdownMenu.SubTrigger>
-          <DropdownMenu.SubContent>
-            {Array.from({ length: layerCount }, (_, l) => l)
-              .filter((l) => l !== layer)
-              .map((l) => (
-                <DropdownMenu.Item key={l} onClick={() => onSwap(layer, l)}>
-                  {l} · {layerName(l)}
-                </DropdownMenu.Item>
-              ))}
-          </DropdownMenu.SubContent>
-        </DropdownMenu.Sub>
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item onClick={() => onCopyText(layer)}>
-          Copy layer as text
-          <DropdownMenu.Shortcut>Ctrl+Shift+C</DropdownMenu.Shortcut>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item onClick={onPasteText}>Paste layer from text…</DropdownMenu.Item>
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item variant="danger" onClick={() => onClear(layer)}>
-          Clear layer ({layer === 0 ? "all empty" : "all transparent"})
-        </DropdownMenu.Item>
+        {items}
       </DropdownMenu.Content>
     </DropdownMenu>
   );

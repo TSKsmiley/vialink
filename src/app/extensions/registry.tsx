@@ -7,9 +7,17 @@ import type { ComponentType } from "react";
 import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { BrowserStorage } from "../../core/extensions/state.ts";
 import type { DeviceContext, KeyboardExtension } from "../../core/extensions/types.ts";
+import {
+  resolveShortcuts,
+  type Decorations,
+  type KeyMark,
+  type LayerCommand,
+  type LayerMark,
+} from "./commands.ts";
 import type { PanelKit } from "./kit.tsx";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { layerNamesUi } from "./layerNamesUi.tsx";
+import { layerSharingUi } from "./layerSharingUi.tsx";
 import { macrosUi } from "./macrosUi.tsx";
 import { tapDanceUi } from "./tap-danceUi.tsx";
 import { combosUi } from "./combosUi.tsx";
@@ -51,13 +59,21 @@ export function panel<State>(p: ExtensionPanel<State>): ExtensionPanel {
 export interface AppExtension {
   /** Id of the core extension this UI belongs to. */
   id: string;
-  /** Text for a layer tab, replacing the bare layer number; null keeps the default. */
-  layerTabLabel?(keyboard: Keyboard, layer: number): string | null;
   /** Editor views this extension adds. */
   panels?: readonly ExtensionPanel[];
+  /** Entries for the layer card's ⋯ menu, with optional shortcuts (commands.ts). */
+  layerCommands?: readonly LayerCommand[];
+  /** Marks on keycaps and layer cards; they get the extension's state. */
+  decorations?: Decorations;
+}
+
+/** Types decorations for an extension's state, for AppExtension.decorations. */
+export function decorations<State>(d: Decorations<State>): Decorations {
+  return d as Decorations;
 }
 
 export const APP_EXTENSIONS: readonly AppExtension[] = [
+  layerSharingUi,
   layerNamesUi,
   macrosUi,
   tapDanceUi,
@@ -79,6 +95,47 @@ export function activePanels(keyboard: Keyboard) {
   return activeUi(keyboard).flatMap((ui) =>
     (ui.panels ?? []).map((panel) => ({ panel, owner: running.get(ui.id)! })),
   );
+}
+
+/** The layer commands of the extensions running on `keyboard`, with the shortcut each keeps. */
+export function layerCommandsOf(keyboard: Keyboard): { command: LayerCommand; shortcut: string | null }[] {
+  const owners = activeUi(keyboard).map((ui) => ({
+    extension: keyboard.activeExtensions.find((a) => a.extension.id === ui.id)!.extension,
+    commands: ui.layerCommands ?? [],
+  }));
+  const { shortcuts } = resolveShortcuts(owners);
+  return owners.flatMap((o) =>
+    o.commands.map((command) => ({ command, shortcut: shortcuts.get(command) ?? null })),
+  );
+}
+
+/** Shortcut conflicts among the switched-on extensions, for the Extensions dialog. */
+export function shortcutConflicts(extensions: readonly KeyboardExtension<unknown>[]) {
+  const owners = extensions.flatMap((extension) => {
+    const ui = APP_EXTENSIONS.find((u) => u.id === extension.id);
+    return ui?.layerCommands ? [{ extension, commands: ui.layerCommands }] : [];
+  });
+  return resolveShortcuts(owners).conflicts;
+}
+
+/** The running extensions' decorations, combined: keycap marks merge, layer card marks list. */
+export function decorationsOf(keyboard: Keyboard) {
+  const running = activeUi(keyboard).flatMap((ui) => {
+    const owner = keyboard.activeExtensions.find((a) => a.extension.id === ui.id);
+    return ui.decorations && owner ? [{ d: ui.decorations, state: owner.state }] : [];
+  });
+  return {
+    keycap(layer: number, row: number, col: number): KeyMark | null {
+      const code = keyboard.getKey(layer, row, col) ?? 0;
+      const marks = running.flatMap(({ d, state }) => d.keycap?.({ layer, row, col, code }, state) ?? []);
+      if (marks.length === 0) return null;
+      const titles = marks.flatMap((m) => (m.title ? [m.title] : []));
+      return { dot: marks.some((m) => m.dot), title: titles.length > 0 ? titles.join("; ") : undefined };
+    },
+    layerCard(layer: number): LayerMark[] {
+      return running.flatMap(({ d, state }) => d.layerCard?.(layer, state) ?? []);
+    },
+  };
 }
 
 // ── Enabled/disabled setting (per browser) ──────────────────────────────────

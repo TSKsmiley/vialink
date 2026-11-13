@@ -26,6 +26,8 @@ import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
 import { OperationCancelledError } from "../../core/extensions/hooks.ts";
 import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.ts";
+import { shortcutOf, type LayerCommandEnv } from "../extensions/commands.ts";
+import { decorationsOf, layerCommandsOf } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, sharedLayerName, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
@@ -169,16 +171,19 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
       }
     })();
   const emptyLayer = firstEmptyLayer(keyboard, (l) => named(l) !== null);
-  const menu = {
-    onCopy: (l: number) => copy(l),
-    onCopyText: copyAsText,
-    onPasteText: () => {
+  // What layer commands (the layer card's ⋯ menu) can do here; layer sharing's commands use these.
+  const menu: LayerCommandEnv = {
+    layerCount: keyboard.layers,
+    layerName,
+    copy: (l: number) => copy(l),
+    copyAsText: copyAsText,
+    pasteFromText: () => {
       setPasting(null);
       setImporting({ text: "" });
     },
-    onPaste: clipboard ? pasteOnto : undefined,
+    paste: clipboard ? pasteOnto : undefined,
     canDuplicate: emptyLayer !== null,
-    onDuplicate: (l: number) =>
+    duplicate: (l: number) =>
       void run(async () => {
         const to = firstEmptyLayer(keyboard, (x) => named(x) !== null);
         if (to === null) return;
@@ -190,10 +195,26 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
         setLayer(to);
       }),
     // Extensions move their per-layer data along (layer.swap hook; layer names swaps the names).
-    onSwap: (a: number, b: number) =>
+    swap: (a: number, b: number) =>
       void run(() => swapLayers(keyboard, a, b, `Swap ${layerName(a)} and ${layerName(b)}`)),
-    onClear: (l: number) => void run(() => clearLayer(keyboard, l, `Clear ${layerName(l)}`)),
+    clear: (l: number) => void run(() => clearLayer(keyboard, l, `Clear ${layerName(l)}`)),
   };
+
+  // Extensions' layer command shortcuts act on the current layer (those the view handles itself are below).
+  useEffect(() => {
+    const dispatch = layerCommandsOf(keyboard).filter((c) => c.shortcut && !c.command.shortcutHandledByView);
+    if (dispatch.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const hit = dispatch.find((c) => c.shortcut === shortcutOf(e));
+      if (!hit || !(hit.command.enabled?.(layer, menu) ?? true)) return;
+      e.preventDefault();
+      hit.command.run(layer, menu);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Ctrl+C copies the selected keys, or the whole layer; Ctrl+Shift+C copies the layer as text.
   useEffect(() => {
@@ -316,6 +337,8 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
           rename={names ? (l, n) => names.set(l, n) : undefined}
           onError={onError}
           menu={sharing ? menu : undefined}
+          commands={layerCommandsOf(keyboard)}
+          marks={(l) => decorationsOf(keyboard).layerCard(l)}
           copied={clipboard ? { name: clipboard.name, ...snapshotCounts(clipboard.snapshot) } : null}
           onClearCopied={() => setClipboard(null)}
           pasteTarget={pasting?.target ?? null}
@@ -402,6 +425,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
                 isSelected={peek !== null ? () => false : (s) => targets.some((t) => sameTarget(t, s))}
                 onSelect={peek !== null ? undefined : select}
                 fallthrough={showThrough}
+                mark={(row, col) => decorationsOf(keyboard).keycap(shownLayer, row, col)}
               />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
