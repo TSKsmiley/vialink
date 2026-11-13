@@ -14,6 +14,7 @@ import {
 } from "./definition/definition.ts";
 import { packLayoutOptions, unpackLayoutOptions, type LayoutLabel } from "./definition/layoutOptions.ts";
 import { BUILTIN_EXTENSIONS } from "./extensions/index.ts";
+import { dependencyOrder, resolveActive, type ExtensionStatus } from "./extensions/manifest.ts";
 import { History } from "./history.ts";
 import type { ActiveExtension, ExtensionContext, KeyboardExtension } from "./extensions/types.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
@@ -97,6 +98,11 @@ export interface LoadOptions {
   onProgress?: (p: LoadProgress) => void;
   /** Extensions to probe; defaults to every built-in one. */
   extensions?: readonly KeyboardExtension<unknown>[];
+  /**
+   * When an extension was last turned on by hand (higher is more recent, 0 when
+   * never). Of two conflicting extensions the board supports, the more recent runs.
+   */
+  recency?: (id: string) => number;
 }
 
 export interface LoadProgress {
@@ -138,15 +144,23 @@ export class Keyboard {
   private readonly encoderMap = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
   private readonly active = new Map<string, ActiveExtension>();
+  /** Switched-on extensions, in dependency order. */
+  private enabledList: KeyboardExtension<unknown>[] = [];
+  /** What the probes said, by extension id; cleared for an extension when it is turned off. */
+  private readonly supported = new Map<string, boolean>();
+  private statuses = new Map<string, ExtensionStatus>();
+  /** When an extension was last turned on by hand (0: never); settles conflicts. */
+  private readonly recency: (id: string) => number;
   private revision = 0;
 
-  private constructor(queue: RequestQueue) {
+  private constructor(queue: RequestQueue, recency: (id: string) => number = () => 0) {
     this.queue = queue;
+    this.recency = recency;
   }
 
   /** Connects and loads the keyboard, mirroring vial-gui's Keyboard.reload(). */
   static async load(queue: RequestQueue, options: LoadOptions = {}): Promise<Keyboard> {
-    const kb = new Keyboard(queue);
+    const kb = new Keyboard(queue, options.recency);
     await kb.reload(options.onProgress);
     await kb.probeExtensions(options.extensions ?? BUILTIN_EXTENSIONS, options.onProgress);
     return kb;
@@ -341,39 +355,107 @@ export class Keyboard {
   /**
    * Turns an extension on or off for the connected board without reconnecting:
    * off drops its state, on probes the board for it. Resolves whether the
-   * extension is active afterwards (on can still be false: the board lacks it).
+   * extension is active afterwards (on can still be false: the board lacks it,
+   * a requirement doesn't run, or a conflicting extension wins).
    */
   async setExtensionEnabled(ext: KeyboardExtension<unknown>, enabled: boolean): Promise<boolean> {
-    if (!enabled) {
-      if (this.active.delete(ext.id)) this.changed();
-      return false;
+    await this.setExtensionsEnabled([{ extension: ext, enabled }]);
+    return this.active.has(ext.id);
+  }
+
+  /**
+   * Applies several switches at once (the Extensions dialog turns a requirement
+   * on together with the extension that needs it), then works out again what
+   * runs: requirements first, conflicts by {@link LoadOptions.recency}.
+   */
+  async setExtensionsEnabled(
+    changes: readonly { extension: KeyboardExtension<unknown>; enabled: boolean }[],
+  ): Promise<void> {
+    let list = [...this.enabledList];
+    for (const { extension, enabled } of changes) {
+      list = list.filter((e) => e.id !== extension.id);
+      if (enabled) list.push(extension);
+      else {
+        // Turning it on again probes afresh.
+        this.supported.delete(extension.id);
+        this.active.delete(extension.id);
+      }
     }
-    if (this.active.has(ext.id)) return true;
-    const ctx = this.extensionContext();
-    const state = await ext.probe(ctx);
-    if (state === null) return false;
-    // Keep probe order, so activeExtensions stays the same as after a fresh connect.
-    const entries = [...this.active.values(), { extension: ext, state }];
     const order = BUILTIN_EXTENSIONS.map((e) => e.id);
     const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
-    entries.sort((a, b) => rank(a.extension.id) - rank(b.extension.id));
-    this.active.clear();
-    for (const entry of entries) this.active.set(entry.extension.id, entry);
-    this.changed();
-    return true;
+    list.sort((a, b) => rank(a.id) - rank(b.id));
+    this.enabledList = dependencyOrder(list);
+    await this.refreshExtensions();
+  }
+
+  /** Why an extension does or does not run on this board. */
+  extensionStatus(id: string): ExtensionStatus {
+    return this.statuses.get(id) ?? { kind: "off" };
+  }
+
+  /**
+   * Whether the board supports an extension, probing it when not known yet,
+   * without turning it on. Requirements are not checked.
+   */
+  async supportsExtension(ext: KeyboardExtension<unknown>): Promise<boolean> {
+    const known = this.supported.get(ext.id);
+    if (known !== undefined) return known;
+    const ok = (await ext.probe(this.extensionContext())) !== null;
+    this.supported.set(ext.id, ok);
+    return ok;
   }
 
   private async probeExtensions(
     extensions: readonly KeyboardExtension<unknown>[],
     onProgress?: (p: LoadProgress) => void,
   ): Promise<void> {
+    this.enabledList = dependencyOrder(extensions);
+    await this.refreshExtensions(onProgress);
+  }
+
+  /**
+   * Probes enabled extensions not probed yet, in dependency order (skipping
+   * those whose requirements the board lacks), then decides which run.
+   * Running extensions keep their state; newly running ones get a fresh probe.
+   */
+  private async refreshExtensions(onProgress?: (p: LoadProgress) => void): Promise<void> {
     const ctx = this.extensionContext();
-    for (let i = 0; i < extensions.length; i++) {
-      onProgress?.({ stage: "extensions", done: i, total: extensions.length });
-      const ext = extensions[i];
-      const state = await ext.probe(ctx);
-      if (state !== null) this.active.set(ext.id, { extension: ext, state });
+    const ordered = this.enabledList;
+    const fresh = new Map<string, unknown>();
+    const candidates = new Set<string>();
+    for (let i = 0; i < ordered.length; i++) {
+      onProgress?.({ stage: "extensions", done: i, total: ordered.length });
+      const ext = ordered[i];
+      if (!(ext.requires ?? []).every((id) => candidates.has(id))) continue;
+      if (!this.supported.has(ext.id)) {
+        const state = await ext.probe(ctx);
+        this.supported.set(ext.id, state !== null);
+        if (state !== null) fresh.set(ext.id, state);
+      }
+      if (this.supported.get(ext.id)) candidates.add(ext.id);
     }
+
+    const statuses = resolveActive(ordered, (id) => this.supported.get(id) === true, this.recency);
+    const next = new Map<string, ActiveExtension>();
+    for (const ext of ordered) {
+      if (statuses.get(ext.id)?.kind !== "active") continue;
+      const needs = (ext.requires ?? []).filter((id) => !next.has(id));
+      if (needs.length > 0) {
+        statuses.set(ext.id, { kind: "needs", ids: needs });
+        continue;
+      }
+      const kept = this.active.get(ext.id);
+      const state = kept ? kept.state : fresh.has(ext.id) ? fresh.get(ext.id) : await ext.probe(ctx);
+      if (state === null) {
+        this.supported.set(ext.id, false);
+        statuses.set(ext.id, { kind: "unsupported" });
+        continue;
+      }
+      next.set(ext.id, { extension: ext, state });
+    }
+    this.active.clear();
+    for (const [id, entry] of next) this.active.set(id, entry);
+    this.statuses = statuses;
     this.changed();
   }
 

@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { macrosExtension } from "../../core/extensions/macros.ts";
+import type { KeyboardExtension } from "../../core/extensions/types.ts";
 import { Keyboard } from "../../core/keyboard.ts";
 import { installMacroSimulator } from "../../core/sim/macros.ts";
 import { SimulatedKeyboard } from "../../core/sim/simulatedKeyboard.ts";
@@ -17,23 +18,44 @@ afterEach(cleanup);
 function Harness({
   keyboard,
   onClose = () => undefined,
+  extensions,
+  initiallyOff = [],
 }: {
   keyboard: Keyboard | null;
   onClose?: () => void;
+  extensions?: readonly KeyboardExtension<unknown>[];
+  initiallyOff?: string[];
 }) {
-  const [disabled, setDisabled] = useState(new Set<string>());
+  const [disabled, setDisabled] = useState(new Set<string>(initiallyOff));
   return (
     <ExtensionsDialog
       disabled={disabled}
       onChange={setDisabled}
       keyboard={keyboard}
-      onError={() => undefined}
+      onError={(message) => {
+        throw new Error(message);
+      }}
       onClose={onClose}
+      extensions={extensions}
     />
   );
 }
 
-async function klor() {
+/** A fake extension the keyboard supports unless `supported` is false. */
+const fake = (
+  id: string,
+  name: string,
+  manifest: Partial<Pick<KeyboardExtension, "requires" | "conflicts">> = {},
+  supported = true,
+): KeyboardExtension<unknown> => ({
+  id,
+  name,
+  description: "",
+  ...manifest,
+  probe: async () => (supported ? {} : null),
+});
+
+async function klor(extensions?: readonly KeyboardExtension<unknown>[]) {
   const sim = new SimulatedKeyboard({
     compressedDefinition: new Uint8Array(
       readFileSync(resolve(process.cwd(), "fixtures/definitions/klor.vial.json.xz")),
@@ -44,7 +66,7 @@ async function klor() {
   });
   installMacroSimulator(sim, { count: 4, memory: 64 });
   await sim.open();
-  return Keyboard.load(new RequestQueue(sim, { retryDelayMs: 0 }));
+  return Keyboard.load(new RequestQueue(sim, { retryDelayMs: 0 }), { extensions });
 }
 
 describe("Extensions dialog", () => {
@@ -96,5 +118,84 @@ describe("Extensions dialog", () => {
     render(<Harness keyboard={null} onClose={onClose} />);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe("dependencies", () => {
+    const sharing = fake("sharing", "Layer sharing");
+    const whole = fake("whole", "Share whole keymap", { requires: ["sharing"] });
+    const macros = fake("macros", "Macros");
+    const recorder = fake("recorder", "Macro recorder", { conflicts: ["macros"] });
+    const all = [sharing, whole, macros, recorder];
+    const ids = (kb: Keyboard) => kb.activeExtensions.map((a) => a.extension.id);
+    const question = () => screen.getByRole("alertdialog", { name: "Turn extensions on or off" });
+
+    it("shows what a switched-off requirement keeps off, without a keyboard", () => {
+      render(<Harness keyboard={null} extensions={all} initiallyOff={["sharing"]} />);
+      expect(screen.getByText("Needs Layer sharing.")).toBeTruthy();
+    });
+
+    it("offers to turn a requirement on too, and No changes nothing", async () => {
+      const kb = await klor([macros]);
+      render(<Harness keyboard={kb} extensions={all} initiallyOff={["sharing", "whole", "recorder"]} />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Share whole keymap" }));
+      await waitFor(() =>
+        expect(question().textContent).toContain(
+          "Share whole keymap needs Layer sharing. Turn Layer sharing on too?",
+        ),
+      );
+      fireEvent.click(within(question()).getByRole("button", { name: "No" }));
+      expect((screen.getByRole("checkbox", { name: "Share whole keymap" }) as HTMLInputElement).checked).toBe(
+        false,
+      );
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Share whole keymap" }));
+      await waitFor(() => question());
+      fireEvent.click(within(question()).getByRole("button", { name: "Yes" }));
+      await waitFor(() => expect(ids(kb)).toEqual(["macros", "sharing", "whole"]));
+      expect(screen.getAllByText("Active on this keyboard.")).toHaveLength(3);
+    });
+
+    it("asks before turning off what needs the extension turned off", async () => {
+      const kb = await klor([sharing, whole]);
+      render(<Harness keyboard={kb} extensions={all} initiallyOff={["macros", "recorder"]} />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Layer sharing" }));
+      await waitFor(() =>
+        expect(question().textContent).toContain(
+          "Share whole keymap needs Layer sharing. Turn Share whole keymap off too?",
+        ),
+      );
+      fireEvent.click(within(question()).getByRole("button", { name: "Yes" }));
+      await waitFor(() => expect(ids(kb)).toEqual([]));
+      expect(screen.getAllByText("Turned off.")).toHaveLength(4);
+    });
+
+    it("asks to turn a running conflicting extension off", async () => {
+      const kb = await klor([macros]);
+      render(<Harness keyboard={kb} extensions={all} initiallyOff={["sharing", "whole", "recorder"]} />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Macro recorder" }));
+      await waitFor(() =>
+        expect(question().textContent).toContain("Macro recorder doesn't work with Macros. Turn Macros off?"),
+      );
+      fireEvent.click(within(question()).getByRole("button", { name: "Yes" }));
+      await waitFor(() => expect(ids(kb)).toEqual(["recorder"]));
+      expect((screen.getByRole("checkbox", { name: "Macros" }) as HTMLInputElement).checked).toBe(false);
+    });
+
+    it("doesn't ask when the conflicting extension doesn't run on this keyboard", async () => {
+      const unsupportedMacros = fake("macros", "Macros", {}, false);
+      const exts = [sharing, whole, unsupportedMacros, recorder];
+      const kb = await klor([unsupportedMacros]);
+      render(<Harness keyboard={kb} extensions={exts} initiallyOff={["sharing", "whole", "recorder"]} />);
+      fireEvent.click(screen.getByRole("checkbox", { name: "Macro recorder" }));
+      await waitFor(() => expect(ids(kb)).toEqual(["recorder"]));
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      expect((screen.getByRole("checkbox", { name: "Macros" }) as HTMLInputElement).checked).toBe(true);
+    });
+
+    it("says which conflicting extension runs instead", async () => {
+      const kb = await klor([macros, recorder]);
+      render(<Harness keyboard={kb} extensions={all} initiallyOff={["sharing", "whole"]} />);
+      expect(screen.getByText("Not running: doesn't work with Macros, which is on.")).toBeTruthy();
+    });
   });
 });

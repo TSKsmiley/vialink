@@ -86,3 +86,42 @@ export function saveDisabledExtensions(ids: Set<string>): void {
 export function enabledExtensions(disabled: Set<string>): KeyboardExtension<unknown>[] {
   return BUILTIN_EXTENSIONS.filter((ext) => !disabled.has(ext.id));
 }
+
+// ── When each extension was last turned on by hand (per browser) ────────────
+// Settles conflicts on connect: of two conflicting extensions a keyboard
+// supports, the one turned on more recently runs (0: never turned on by hand).
+
+const TURNED_ON_KEY = "vialink.extensionsTurnedOn";
+
+function loadTurnedOn(): Record<string, number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TURNED_ON_KEY) ?? "{}") as unknown;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return Object.fromEntries(
+      Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+    );
+  } catch {
+    return {};
+  }
+}
+
+let turnedOn: Record<string, number> | null = null;
+
+/** When `id` was last turned on by hand; higher is more recent, 0 when never. */
+export function extensionRecency(id: string): number {
+  turnedOn ??= loadTurnedOn();
+  return turnedOn[id] ?? 0;
+}
+
+/** Records that the user turned these extensions on now. */
+export function markTurnedOn(ids: readonly string[]): void {
+  turnedOn ??= loadTurnedOn();
+  // Strictly increasing, so two turn-ons in the same millisecond still have an order.
+  let now = Math.max(Date.now(), ...Object.values(turnedOn).map((t) => t + 1));
+  for (const id of ids) turnedOn[id] = now++;
+  try {
+    localStorage.setItem(TURNED_ON_KEY, JSON.stringify(turnedOn));
+  } catch {
+    // Storage blocked: remembered for this page only.
+  }
+}
