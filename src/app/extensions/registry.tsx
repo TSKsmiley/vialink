@@ -5,6 +5,7 @@
 
 import type { ComponentType } from "react";
 import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
+import type { BrowserStorage } from "../../core/extensions/state.ts";
 import type { KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { layerNamesUi } from "./layerNamesUi.tsx";
@@ -125,3 +126,19 @@ export function markTurnedOn(ids: readonly string[]): void {
     // Storage blocked: remembered for this page only.
   }
 }
+
+// ── Extensions' "browser" state (ctx.state with persist: "browser") ─────────
+
+/** localStorage for extensions' browser state; blocked storage leaves values for this page only. */
+export const extensionBrowserStorage: BrowserStorage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    localStorage.setItem(key, value); // ctx.state catches a failure
+  },
+};
