@@ -178,6 +178,20 @@ export interface ExtensionRestoreStep {
   apply(): Promise<void>;
 }
 
+/**
+ * An extension's own section of the .vialink file, `extensions.<id>`: its
+ * fields next to their data version `v` (and ViaLink adds its ctx.state under
+ * "state"). Needs the `saves: "layout-file"` permission.
+ */
+export interface ExtensionLayoutFile<State> {
+  /** Data version of the fields save() writes; bump it when their shape changes. */
+  readonly version: number;
+  /** The extension's fields, e.g. { names: ["Base", "Nav"] }. Not "v" or "state". */
+  save(state: State): Record<string, unknown>;
+  /** Writes needed to make the board match a section; `fromVersion` is the section's "v". */
+  restore(state: State, data: Readonly<Record<string, unknown>>, fromVersion: number): ExtensionRestoreStep[];
+}
+
 export interface ExtensionVilSupport<State> {
   /** Top-level .vil keys this extension owns. */
   readonly keys: readonly string[];
@@ -197,7 +211,12 @@ interface ExtensionBase<State> {
   readonly description: string;
   /** Where to get firmware that supports this extension, shown in the settings list. */
   readonly firmware?: { readonly label: string; readonly url: string };
+  /** Vial's own .vil fields (standard Vial features only); kept pure for Export to Vial. */
   readonly vil?: ExtensionVilSupport<State>;
+  /** Permission to keep data in .vialink layout files (shown in the Extensions dialog). */
+  readonly saves?: "layout-file";
+  /** The extension's section of the .vialink file; needs `saves: "layout-file"`. */
+  readonly layoutFile?: ExtensionLayoutFile<State>;
   /** Handlers for hook points (core's, like layer.clear, or other extensions'); see hooks.ts. */
   readonly hooks?: readonly HookHandler[];
   /**

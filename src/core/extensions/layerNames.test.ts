@@ -7,6 +7,7 @@ import { SimulatedKeyboard } from "../sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../transport/queue.ts";
 import { toHex } from "../util/bytes.ts";
 import { parseVil, planVilRestore, saveVil } from "../vil.ts";
+import { planLayoutRestore, readLayoutFile, saveVialink } from "../vialink.ts";
 import { KC_TRNS } from "../layerInfo.ts";
 import { clearLayer } from "../layers.ts";
 import { layerNamesExtension } from "./layerNames.ts";
@@ -86,19 +87,30 @@ describe("layer names extension", () => {
     expect(names.get(1)).toBe("Lower");
   });
 
-  it("saves and restores names through .vil", async () => {
+  it("keeps names in its .vialink section and out of .vil", async () => {
     const { sim, kb } = await board();
-    expect(saveVil(kb)).toContain('"layer_names": ["Base", "Nav"]');
-
-    const file = parseVil(saveVil(kb).replace('"Nav"', '"Symbols"'));
-    const plan = planVilRestore(kb, file);
-    expect(plan.skippedFeatures).toEqual([]);
+    expect(saveVil(kb)).not.toContain("layer_names"); // Export to Vial stays pure Vial
+    const text = saveVialink(kb, { app: "test" });
+    const read = readLayoutFile(text.replace('"Nav"', '"Symbols"'));
+    if (read.kind !== "vialink") throw new Error("expected a .vialink file");
+    expect(read.file.extensions["layer-names"]).toEqual({ v: 1, names: ["Base", "Symbols"] });
+    const plan = planLayoutRestore(kb, read.file, [layerNamesExtension]);
     expect(plan.ops.map((op) => (op.kind === "extension" ? op.description : op.kind))).toEqual([
       'Rename layer 1 to "Symbols"',
     ]);
     sim.unlocked = true;
     for (const op of plan.ops) if (op.kind === "extension") await op.apply();
     expect(sim.layerNames).toEqual(["Base", "Symbols"]);
+  });
+
+  it("ignores the Theis194 fork's layer_names on Import from Vial", async () => {
+    const { kb } = await board();
+    const plan = planVilRestore(
+      kb,
+      parseVil('{"uid": 1, "layout": [], "layout_options": -1, "layer_names": ["A", "B"]}'),
+    );
+    expect(plan.ops).toEqual([]);
+    expect(plan.skippedFeatures).toEqual(["layer names"]);
   });
 
   it("reports names in a file as skipped when the board lacks the extension", async () => {

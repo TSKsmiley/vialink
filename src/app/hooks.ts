@@ -26,8 +26,8 @@ export function errorMessage(err: unknown): string {
 }
 
 /** A safe .vil file name for a keyboard or layout name. */
-export function fileNameFor(name: string): string {
-  return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}.vil`;
+export function fileNameFor(name: string, extension: ".vil" | ".vialink" = ".vil"): string {
+  return `${(name || "keyboard").replace(/[^\w-]+/g, "_")}${extension}`;
 }
 
 /** What the keycode picker shows about this board beyond the keycodes themselves. */

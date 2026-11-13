@@ -16,7 +16,7 @@ export interface SavedLayout {
   keyboardName: string;
   /** ISO 8601 timestamp. */
   savedAt: string;
-  /** The .vil file contents. */
+  /** The layout file: .vialink JSON, or .vil text for layouts saved before .vialink (both load). */
   vil: string;
 }
 

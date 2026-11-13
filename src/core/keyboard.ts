@@ -585,6 +585,14 @@ export class Keyboard {
     return out;
   }
 
+  /** Puts an extension's "layout" state from a layout file in place (undoable). */
+  loadExtensionLayoutState(
+    ext: KeyboardExtension<unknown>,
+    saved: Readonly<Record<string, Versioned>>,
+  ): void {
+    this.states.loadLayout(ext, saved);
+  }
+
   /** Every extension's "layout" state (ctx.state), for saving into a layout file. */
   extensionLayoutState(): Record<string, Record<string, Versioned>> {
     return this.states.layoutSnapshot();

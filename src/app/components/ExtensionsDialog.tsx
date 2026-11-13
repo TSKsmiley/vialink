@@ -215,6 +215,9 @@ export function ExtensionsDialog({
                           <strong>{ext.name}</strong>
                         </label>
                         <p className="hint">{ext.description}</p>
+                        {ext.saves === "layout-file" && (
+                          <p className="hint">Saves its data in layout files (.vialink).</p>
+                        )}
                         {ext.firmware && (
                           <p className="hint">
                             Firmware:{" "}
