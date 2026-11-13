@@ -64,6 +64,7 @@ export async function connect(
     onQueue?: (q: RequestQueue) => void;
     onProgress?: (p: LoadProgress) => void;
     extensions?: readonly KeyboardExtension<unknown>[];
+    recency?: (id: string) => number;
   } = {},
 ): Promise<Connection> {
   await transport.open();
@@ -73,6 +74,7 @@ export async function connect(
     const keyboard = await Keyboard.load(queue, {
       onProgress: options.onProgress,
       extensions: options.extensions,
+      recency: options.recency,
     });
     return { keyboard, queue, demo: options.demo ?? false };
   } catch (err) {

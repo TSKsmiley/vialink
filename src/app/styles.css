@@ -298,6 +298,15 @@ svg.keyboard {
   gap: 8px;
   margin-top: 14px;
 }
+/* A yes/no question in place of the dialog's buttons (Extensions dialog). */
+.extension-question {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.extension-question p {
+  flex: 1 1 16em;
+  margin: 0;
+}
 
 .rename-layer {
   display: flex;

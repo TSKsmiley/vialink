@@ -16,7 +16,12 @@ import { Editor } from "./components/Editor.tsx";
 import { ExtensionsDialog } from "./components/ExtensionsDialog.tsx";
 import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
-import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
+import {
+  enabledExtensions,
+  extensionRecency,
+  loadDisabledExtensions,
+  saveDisabledExtensions,
+} from "./extensions/registry.tsx";
 import { errorMessage } from "./hooks.ts";
 import { useKeyboardLayoutLabels } from "./keyboardLayout.ts";
 import { DevicePanel } from "./shell/DevicePanel.tsx";
@@ -57,6 +62,7 @@ export function App() {
           onQueue: setQueue,
           onProgress: (progress) => setStatus({ kind: "connecting", progress }),
           extensions: enabledExtensions(disabledExtensions),
+          recency: extensionRecency,
         });
         const kb = connection.keyboard;
         kb.unlockHandler = (reason) =>

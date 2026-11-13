@@ -10,6 +10,7 @@ import { layerSharingExtension } from "./layer-sharing.ts";
 import type { KeyboardExtension } from "./types.ts";
 
 export type { ActiveExtension, ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+export type { ExtensionPoint, ExtensionStatus } from "./manifest.ts";
 
 /** Every built-in extension, in probe order. */
 export const BUILTIN_EXTENSIONS: readonly KeyboardExtension<unknown>[] = [

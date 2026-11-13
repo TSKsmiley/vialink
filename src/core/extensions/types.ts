@@ -10,6 +10,7 @@
 import type { Keyboard } from "../keyboard.ts";
 import type { HistoryWrite } from "../history.ts";
 import type { RequestQueue } from "../transport/queue.ts";
+import type { ExtensionPoint } from "./manifest.ts";
 
 export interface ExtensionContext {
   readonly keyboard: Keyboard;
@@ -75,6 +76,21 @@ export interface KeyboardExtension<State = unknown> {
    * inactive for this board).
    */
   probe(ctx: ExtensionContext): Promise<State | null>;
+  /**
+   * Extensions (by id) that must run on the keyboard for this one to run. They
+   * probe first; without them this one stays off and the Extensions dialog
+   * says "Needs …". Turning one of them off turns this one off too, after asking.
+   */
+  readonly requires?: readonly string[];
+  /** Extensions this one uses when they run and works without. They probe first. */
+  readonly optional?: readonly string[];
+  /** Services and hook points this extension offers others; ids start with this extension's id. */
+  readonly provides?: readonly ExtensionPoint[];
+  /**
+   * Extensions that can't run at the same time as this one. Turning this one on
+   * while one of them runs asks to turn that one off.
+   */
+  readonly conflicts?: readonly string[];
   readonly vil?: ExtensionVilSupport<State>;
   readonly layers?: ExtensionLayerHooks<State>;
 }
