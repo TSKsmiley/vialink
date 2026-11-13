@@ -375,6 +375,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
         <>
           <section
             aria-label="Keyboard"
+            data-anchor="keymap.board"
             className="flex min-w-0 flex-col gap-3 [grid-area:board] lg:row-span-1"
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

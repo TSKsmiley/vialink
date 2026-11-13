@@ -10,6 +10,7 @@
 // (bits 8-11 Ctrl/Shift/Alt/GUI, bit 12 right-hand), which is the same in
 // the v5 and v6 keycode tables.
 
+import { keyInspectorTabs } from "../extensions/registry.tsx";
 import { useMemo, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import type { KeycodeTable } from "../../core/keycodes/table.ts";
@@ -138,6 +139,10 @@ export function KeyInspector({
     setChosen(null);
   }
   const kind = chosen ?? detected;
+  // Extensions' tabs (keyInspector.tab slot) after ViaLink's own.
+  const extTabs = keyInspectorTabs(keyboard);
+  const [extTabId, setExtTabId] = useState<string | null>(null);
+  const extTab = extTabs.find((t) => t.id === extTabId) ?? null;
   const disabled = targets.length === 0 || busy;
   const kinds = KINDS.filter(
     (k) =>
@@ -150,6 +155,7 @@ export function KeyInspector({
   return (
     <aside
       aria-label="Selected key"
+      data-anchor="keymap.keyInspector"
       className="flex min-w-0 flex-col gap-4 rounded-xl border border-kumo-line bg-kumo-elevated p-5"
     >
       {where === null ? (
@@ -188,11 +194,14 @@ export function KeyInspector({
           <button
             key={k.id}
             role="tab"
-            aria-selected={kind === k.id}
-            onClick={() => setChosen(k.id)}
+            aria-selected={!extTab && kind === k.id}
+            onClick={() => {
+              setChosen(k.id);
+              setExtTabId(null);
+            }}
             className={
               "min-h-8 cursor-pointer rounded-lg border px-2.5 py-1 text-sm " +
-              (kind === k.id
+              (!extTab && kind === k.id
                 ? "border-accent bg-accent-tint font-semibold"
                 : "border-kumo-line hover:bg-kumo-tint")
             }
@@ -200,64 +209,92 @@ export function KeyInspector({
             {k.label}
           </button>
         ))}
+        {extTabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={extTab?.id === t.id}
+            onClick={() => setExtTabId(t.id)}
+            className={
+              "min-h-8 cursor-pointer rounded-lg border px-2.5 py-1 text-sm " +
+              (extTab?.id === t.id
+                ? "border-accent bg-accent-tint font-semibold"
+                : "border-kumo-line hover:bg-kumo-tint")
+            }
+          >
+            {t.title}
+          </button>
+        ))}
       </div>
 
       <div
         role="tabpanel"
-        aria-label={KINDS.find((k) => k.id === kind)?.label}
+        aria-label={extTab ? extTab.title : KINDS.find((k) => k.id === kind)?.label}
         className="flex flex-col gap-4"
       >
-        {kind === "key" && (
-          <KeyGrid
-            table={table}
-            keycodes={[...group("basic"), ...group("iso")]}
-            current={current}
-            disabled={disabled}
-            onPick={(c) => onPick(c)}
-          />
-        )}
-        {kind === "layer" && (
-          <LayerPanel
-            keyboard={keyboard}
-            current={current}
-            disabled={disabled}
-            layerName={layerName}
-            info={info}
-            onPick={onPick}
-          />
-        )}
-        {kind === "mods" && <ModsPanel table={table} current={current} disabled={disabled} onPick={onPick} />}
-        {kind === "tapdance" && (
-          <div className="legacy-view">
-            <TapDancePicker
-              keycodes={group("tapdance")}
-              summaries={info.tapDances ?? []}
-              disabled={disabled}
-              current={current}
-              onPick={(c) => onPick(c)}
-            />
-          </div>
-        )}
-        {kind === "macro" && (
-          <KeyGrid
-            table={table}
-            keycodes={group("macro")}
-            current={current}
-            disabled={disabled}
-            onPick={(c) => onPick(c)}
-          />
-        )}
-        {kind === "all" && (
-          <div className="legacy-view">
-            <KeycodePicker
-              info={info}
-              table={table}
-              disabled={disabled}
-              current={current}
-              onPick={(c) => onPick(c, { fillInner: true })}
-              hint="Select a key on the keyboard first."
-            />
-          </div>
+        {extTab ? (
+          extTab.render({
+            layer,
+            keys: targets.flatMap((t) => (t.kind === "key" ? [{ row: t.row, col: t.col }] : [])),
+            current,
+          })
+        ) : (
+          <>
+            {kind === "key" && (
+              <KeyGrid
+                table={table}
+                keycodes={[...group("basic"), ...group("iso")]}
+                current={current}
+                disabled={disabled}
+                onPick={(c) => onPick(c)}
+              />
+            )}
+            {kind === "layer" && (
+              <LayerPanel
+                keyboard={keyboard}
+                current={current}
+                disabled={disabled}
+                layerName={layerName}
+                info={info}
+                onPick={onPick}
+              />
+            )}
+            {kind === "mods" && (
+              <ModsPanel table={table} current={current} disabled={disabled} onPick={onPick} />
+            )}
+            {kind === "tapdance" && (
+              <div className="legacy-view">
+                <TapDancePicker
+                  keycodes={group("tapdance")}
+                  summaries={info.tapDances ?? []}
+                  disabled={disabled}
+                  current={current}
+                  onPick={(c) => onPick(c)}
+                />
+              </div>
+            )}
+            {kind === "macro" && (
+              <KeyGrid
+                table={table}
+                keycodes={group("macro")}
+                current={current}
+                disabled={disabled}
+                onPick={(c) => onPick(c)}
+              />
+            )}
+            {kind === "all" && (
+              <div className="legacy-view">
+                <KeycodePicker
+                  info={info}
+                  table={table}
+                  disabled={disabled}
+                  current={current}
+                  onPick={(c) => onPick(c, { fillInner: true })}
+                  hint="Select a key on the keyboard first."
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 

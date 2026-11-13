@@ -19,6 +19,7 @@ import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { KEYBOARD_LAYOUTS } from "../../core/keycodes/keymaps.ts";
 import { setKeyboardLayout, useKeyboardLayout } from "../keyboardLayout.ts";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "../theme.ts";
+import { ExtensionSlot } from "../extensions/ExtensionSlot.tsx";
 import { Button, DropdownMenu } from "../ui/index.ts";
 import type { HistoryControls } from "./useHistory.ts";
 
@@ -60,6 +61,7 @@ export function TopBar({
       <div className="flex-1" />
       {keyboard && <HistoryButtons controls={history} />}
       {keyboard && layouts}
+      {keyboard && <ExtensionSlot keyboard={keyboard} name="topBar.item" />}
       <Button onClick={onExtensions}>Extensions</Button>
       <DropdownMenu>
         <DropdownMenu.Trigger render={<Button shape="square" icon={DotsThreeIcon} aria-label="More" />} />

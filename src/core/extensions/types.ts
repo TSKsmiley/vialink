@@ -99,6 +99,29 @@ export interface ScheduleAccess {
   idle(fn: () => void | Promise<void>, options: TaskOptions): TaskHandle;
 }
 
+/** Something an overlay points at, drawn by ViaLink next to a named element (an anchor). */
+export interface Overlay {
+  /**
+   * A stable id ViaLink puts on an element (data-anchor): "keymap.layerRail",
+   * "keymap.board", "keymap.keyInspector", "sidebar.<view id>". Never a CSS selector.
+   */
+  readonly anchor: string;
+  readonly title: string;
+  readonly body?: string;
+}
+
+export interface OverlayHandle {
+  close(): void;
+}
+
+/** Feedback ViaLink draws for an extension: questions and pointers. */
+export interface UiAccess {
+  /** Asks the user a yes/no question; resolves true for yes. */
+  confirm(message: string): Promise<boolean>;
+  /** Shows a popover pointing at an anchor until closed (by the extension or the user). */
+  overlay(overlay: Overlay): OverlayHandle;
+}
+
 /** The host API of a "compatible" extension: no device access at all. */
 export interface HostContext {
   readonly board: BoardView;
@@ -118,6 +141,7 @@ export interface HostContext {
   readonly keymap: KeymapAccess;
   readonly history: HistoryAccess;
   readonly notify: NotifyAccess;
+  readonly ui: UiAccess;
   /** Tells subscribers of the keyboard that extension state changed. */
   changed(): void;
 }

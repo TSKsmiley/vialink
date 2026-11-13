@@ -292,3 +292,33 @@ describe("extension groups limit device access", () => {
     ]);
   });
 });
+
+describe("ctx.ui", () => {
+  it("shows overlays until closed, and drops them when the extension stops", async () => {
+    let ctx: DeviceContext | null = null;
+    const tour = {
+      ...ext("tour"),
+      probe: async (c: DeviceContext) => ((ctx = c), {}),
+    } as KeyboardExtension<unknown>;
+    const kb = await load([tour as Fake]);
+    const a = ctx!.ui.overlay({ anchor: "keymap.layerRail", title: "Your layers" });
+    ctx!.ui.overlay({ anchor: "keymap.board", title: "Your keys" });
+    expect(kb.overlays.map((o) => o.title)).toEqual(["Your layers", "Your keys"]);
+    a.close();
+    expect(kb.overlays.map((o) => o.title)).toEqual(["Your keys"]);
+    await kb.setExtensionEnabled(tour, false);
+    expect(kb.overlays).toEqual([]);
+  });
+
+  it("asks yes/no questions through the app's confirm", async () => {
+    let ctx: DeviceContext | null = null;
+    const asker = {
+      ...ext("asker"),
+      probe: async (c: DeviceContext) => ((ctx = c), {}),
+    } as KeyboardExtension<unknown>;
+    const kb = await load([asker as Fake]);
+    expect(await ctx!.ui.confirm("Forget all notes?")).toBe(false); // no handler: no
+    kb.confirmHandler = async (messages) => messages[0] === "Forget all notes?";
+    expect(await ctx!.ui.confirm("Forget all notes?")).toBe(true);
+  });
+});

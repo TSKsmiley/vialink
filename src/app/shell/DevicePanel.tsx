@@ -10,6 +10,7 @@ import { XIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { CUSTOM_COMMANDS } from "../../core/extensions/index.ts";
+import { ExtensionSlot } from "../extensions/ExtensionSlot.tsx";
 import { describeRequest, isRejected, type CommandKind } from "../../core/protocol/describe.ts";
 import type { QueueEvent, RequestQueue } from "../../core/transport/queue.ts";
 import { toTrimmedHex } from "../../core/util/bytes.ts";
@@ -337,6 +338,11 @@ export function DevicePanel({ queue, keyboard, onClose }: Props) {
           keyboard.
         </span>
       </div>
+      {keyboard && (
+        <div className="flex flex-col gap-3 border-t border-kumo-line p-4">
+          <ExtensionSlot keyboard={keyboard} name="devicePanel.section" headings />
+        </div>
+      )}
     </aside>
   );
 }
