@@ -209,6 +209,7 @@ export function KeyInspector({
       >
         {kind === "key" && (
           <KeyGrid
+            table={table}
             keycodes={[...group("basic"), ...group("iso")]}
             current={current}
             disabled={disabled}
@@ -239,6 +240,7 @@ export function KeyInspector({
         )}
         {kind === "macro" && (
           <KeyGrid
+            table={table}
             keycodes={group("macro")}
             current={current}
             disabled={disabled}
@@ -287,11 +289,13 @@ function capText(table: KeycodeTable, code: number): string {
 }
 
 function KeyGrid({
+  table,
   keycodes,
   current,
   disabled,
   onPick,
 }: {
+  table: KeycodeTable;
   keycodes: readonly { qmk_id: string; label: string; value: number; tooltip?: string }[];
   current: number | null;
   disabled: boolean;
@@ -313,10 +317,11 @@ function KeyGrid({
             "min-h-11 cursor-pointer rounded-md border px-1 text-xs leading-tight whitespace-pre-line disabled:cursor-default disabled:opacity-50 " +
             (kc.value === current
               ? "border-accent bg-accent-tint"
-              : "border-kumo-line bg-kumo-base hover:border-accent")
+              : "border-kumo-line bg-kumo-base hover:border-accent") +
+            (table.display(kc).overridden ? " text-accent-link" : "")
           }
         >
-          {kc.label === "" ? " " : kc.label}
+          {table.display(kc).text || " "}
         </button>
       ))}
     </div>

@@ -34,8 +34,8 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
 
 - `src/core/` never imports React or the DOM (ESLint enforces it); it runs under Node in tests.
 - Every device command goes through the one `RequestQueue` per keyboard.
-- Keycode tables are generated: never edit `src/core/keycodes/data/keycodes.json` by hand; re-run
-  `pnpm keycodes:dump <vial-gui checkout>`.
+- Keycode tables and keyboard layouts are generated: never edit `src/core/keycodes/data/*.json` by
+  hand; re-run `pnpm vial:dump <vial-gui checkout>` (both dumps; read vial-gui with `ast`, never run it).
 - vial-gui's Python source is the spec. Ported files name their upstream file in the header and
   call out deviations.
   - Strict where compatibility depends on it: bytes on the wire (command layouts, byte order,

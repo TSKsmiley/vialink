@@ -16,6 +16,8 @@ import {
 import { useEffect, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { KEYBOARD_LAYOUTS } from "../../core/keycodes/keymaps.ts";
+import { setKeyboardLayout, useKeyboardLayout } from "../keyboardLayout.ts";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "../theme.ts";
 import { Button, DropdownMenu } from "../ui/index.ts";
 import type { HistoryControls } from "./useHistory.ts";
@@ -63,6 +65,8 @@ export function TopBar({
         <DropdownMenu.Trigger render={<Button shape="square" icon={DotsThreeIcon} aria-label="More" />} />
         <DropdownMenu.Content>
           <ThemeItems />
+          <DropdownMenu.Separator />
+          <KeyboardLayoutItems />
           {keyboard && (
             <>
               <DropdownMenu.Separator />
@@ -72,6 +76,37 @@ export function TopBar({
         </DropdownMenu.Content>
       </DropdownMenu>
     </header>
+  );
+}
+
+/**
+ * The layout the user types with (vial-gui: View > Keyboard layout). Relabels key caps only, so it
+ * is shown even without a keyboard.
+ */
+function KeyboardLayoutItems() {
+  const layout = useKeyboardLayout();
+  return (
+    <DropdownMenu.Sub>
+      <DropdownMenu.SubTrigger>
+        <span className="flex flex-col">
+          Keyboard layout
+          <span className="text-xs text-kumo-subtle">
+            {layout.name === "QWERTY" ? "US (QWERTY)" : layout.name}
+          </span>
+        </span>
+      </DropdownMenu.SubTrigger>
+      <DropdownMenu.SubContent className="max-h-[70vh] overflow-y-auto">
+        <DropdownMenu.RadioGroup value={layout.name} onValueChange={(v: string) => setKeyboardLayout(v)}>
+          <DropdownMenu.Label>Your computer's layout</DropdownMenu.Label>
+          {KEYBOARD_LAYOUTS.map((l) => (
+            <DropdownMenu.RadioItem key={l.name} value={l.name} closeOnClick={false}>
+              {l.name === "QWERTY" ? "US (QWERTY)" : l.name}
+              <DropdownMenu.RadioItemIndicator />
+            </DropdownMenu.RadioItem>
+          ))}
+        </DropdownMenu.RadioGroup>
+      </DropdownMenu.SubContent>
+    </DropdownMenu.Sub>
   );
 }
 

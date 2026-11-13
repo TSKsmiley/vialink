@@ -18,6 +18,7 @@ import { UnlockDialog } from "./components/UnlockDialog.tsx";
 import { VilControls } from "./components/VilControls.tsx";
 import { enabledExtensions, loadDisabledExtensions, saveDisabledExtensions } from "./extensions/registry.tsx";
 import { errorMessage } from "./hooks.ts";
+import { useKeyboardLayoutLabels } from "./keyboardLayout.ts";
 import { DevicePanel } from "./shell/DevicePanel.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
@@ -101,6 +102,7 @@ export function App() {
   }, [notice]);
 
   const kb = status.kind === "connected" ? status.connection.keyboard : null;
+  useKeyboardLayoutLabels(kb);
   const history = useHistory(kb, setError);
 
   return (
