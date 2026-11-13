@@ -69,6 +69,8 @@ export const keycodeDescriptions = defineService<KeycodeDescriber>("core.keycode
 export interface LayerNameProvider {
   /** The layer's name, or null when it has none. */
   name(layer: number): string | null;
+  /** The name a copied layer carries (its share data, by extension id), or null. */
+  fromShared?(ext: Readonly<Record<string, unknown>>): string | null;
 }
 
 /** Any extension can supply layer names (layer names reads them from the keyboard). */

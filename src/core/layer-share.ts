@@ -8,7 +8,8 @@
 // data: base64url (no padding) of deflate-raw compressed JSON:
 //   { kb: [vendorId, productId, "<Vial keyboard uid, hex>"],
 //     lo: [[label, choice name or 0/1], …],   layout options of the sender
-//     name?: "Nav",                            layer name, if it has one
+//     ext?: { "layer-names": { name: "Nav" } }, extensions' own data, by id
+//                                              (layer-sharing.share-text hook)
 //     keys: [[row, col, "KC_A"], …],           keys that are not transparent
 //     enc?: [[index, direction, "KC_VOLU"], …],
 //     refs?: { macros: [3], tapDances: [0] } } macros/tap dances the keys use
@@ -45,6 +46,9 @@ export class ShareError extends Error {
 interface ShareJson {
   kb: [number, number, string];
   lo: [string, string | number][];
+  /** Extensions' data by extension id. */
+  ext?: Record<string, unknown>;
+  /** Written by ViaLink before 13 Nov 2026; read into ext["layer-names"]. */
   name?: string;
   keys: [number, number, string][];
   enc?: [number, 0 | 1, string][];
@@ -58,7 +62,8 @@ export interface SharedLayer {
   uid: bigint;
   /** Sender's layout options as [label, choice]. */
   layout: [string, string | number][];
-  name: string | null;
+  /** Extensions' data by extension id, as the share-text hook collected it. */
+  ext: Record<string, unknown>;
   keys: { row: number; col: number; id: string }[];
   encoders: { index: number; direction: 0 | 1; id: string }[];
   macros: number[];
@@ -122,8 +127,15 @@ const slugOf = (name: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 24) || "keyboard";
 
-/** The share text for one layer: every visible key that is not transparent, and its encoders. */
-export async function encodeLayer(kb: Keyboard, layer: number, name: string | null): Promise<string> {
+/**
+ * The share text for one layer: every visible key that is not transparent, its
+ * encoders, and extensions' data (`ext`, from the layer-sharing.share-text hook).
+ */
+export async function encodeLayer(
+  kb: Keyboard,
+  layer: number,
+  ext: Readonly<Record<string, unknown>> = {},
+): Promise<string> {
   const table = kb.keycodes;
   const keys: ShareJson["keys"] = [];
   const macros = new Set<number>();
@@ -155,7 +167,7 @@ export async function encodeLayer(kb: Keyboard, layer: number, name: string | nu
   const json: ShareJson = {
     kb: [info.vendorId, info.productId, kb.uid.toString(16)],
     lo: layoutOf(kb),
-    ...(name ? { name } : {}),
+    ...(Object.keys(ext).length > 0 ? { ext: { ...ext } } : {}),
     keys,
     ...(enc.length ? { enc } : {}),
     ...(macros.size || tapDances.size
@@ -243,7 +255,10 @@ async function decodeV1(slug: string, data: string): Promise<SharedLayer> {
             Array.isArray(x) && typeof x[0] === "string" && (typeof x[1] === "string" || isInt(x[1])),
         )
       : [],
-    name: typeof json.name === "string" ? json.name : null,
+    ext: {
+      ...(typeof json.name === "string" ? { "layer-names": { name: json.name } } : {}),
+      ...(json.ext && typeof json.ext === "object" && !Array.isArray(json.ext) ? json.ext : {}),
+    },
     keys,
     encoders,
     macros: ints(json.refs?.macros),

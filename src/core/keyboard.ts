@@ -518,6 +518,39 @@ export class Keyboard {
     for (const w of warnings) this.notifyHandler?.("info", w);
   }
 
+  /**
+   * Gathers data from extensions at a hook point that changes nothing (e.g.
+   * layer-sharing.share-text): each after handler runs read-only and may
+   * `put` one value, stored under its extension's id. A handler that fails is
+   * left out and reported, so one extension can't break a copy.
+   */
+  async collect<Event>(
+    hook: HookPoint<Event, unknown>,
+    makeEvent: (put: (value: unknown) => void) => Event,
+  ): Promise<Record<string, unknown>> {
+    const out: Record<string, unknown> = {};
+    for (const { extension, state } of this.activeExtensions) {
+      for (const handler of extension.hooks ?? []) {
+        if (handler.hook !== hook.id || handler.phase !== "after") continue;
+        const event = makeEvent((value) => {
+          out[extension.id] = value;
+        });
+        try {
+          await this.readOnly(extension.id, () =>
+            handler.run(event, this.extensionContext(extension), state),
+          );
+        } catch (err) {
+          delete out[extension.id];
+          this.notifyHandler?.(
+            "error",
+            `${extension.name}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    }
+    return out;
+  }
+
   /** Runs a before or filter handler of `extensionId`, during which its writes throw. */
   private async readOnly<T>(extensionId: string, run: () => T | Promise<T>): Promise<T> {
     this.readOnlyFor = extensionId;

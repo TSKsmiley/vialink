@@ -71,3 +71,12 @@ export function keycodeDescriber(keyboard: Keyboard): (code: number) => KeycodeD
     return null;
   };
 }
+
+/** The layer name a copied or shared layer carries, as layer name providers read it; null when none. */
+export function sharedLayerName(keyboard: Keyboard, ext: Readonly<Record<string, unknown>>): string | null {
+  for (const p of keyboard.provided(layerNames)) {
+    const name = p.fromShared?.(ext);
+    if (name) return name;
+  }
+  return null;
+}

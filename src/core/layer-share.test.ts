@@ -44,12 +44,12 @@ describe("layer share text", () => {
     if (kb.encoderIndices.length)
       await kb.setEncoder(1, kb.encoderIndices[0], 1, kb.keycodes.parse("KC_VOLU"));
 
-    const text = await encodeLayer(kb, 1, "Nav");
+    const text = await encodeLayer(kb, 1, { "layer-names": { name: "Nav" } });
     expect(text).toMatch(/^vialink:layer:1:klor:[A-Za-z0-9_-]+$/);
     expect(isShareText(`  ${text}\n`)).toBe(true);
 
     const shared = await decodeLayer(text);
-    expect(shared.name).toBe("Nav");
+    expect(shared.ext).toEqual({ "layer-names": { name: "Nav" } });
     expect(shared.keys).toEqual([
       { row: p.row, col: p.col, id: kb.keycodes.serialize(kb.keycodes.parse("LT(2, KC_SPACE)")) },
       { row: q.row, col: q.col, id: "TD(0)" },
@@ -74,7 +74,7 @@ describe("layer share text", () => {
     const kb = await klor();
     const before = new Set(visiblePositions(kb).map((p) => `${p.row},${p.col}`));
     for (const p of visiblePositions(kb)) await kb.setKey(0, p.row, p.col, 0x04);
-    const text = await encodeLayer(kb, 0, null);
+    const text = await encodeLayer(kb, 0);
 
     // Another layout option on the receiving end (same keyboard).
     const labels = kb.layoutLabels ?? [];
@@ -101,17 +101,17 @@ describe("layer share text", () => {
     for (const pos of kb.matrixPositions) await kb.setKey(1, pos.row, pos.col, KC_TRNS);
     await kb.setKey(1, p.row, p.col, 0x04);
     await kb.setKey(1, q.row, q.col, 0x05);
-    const text = await encodeLayer(kb, 1, "Nav");
+    const text = await encodeLayer(kb, 1, { "layer-names": { name: "Nav" } });
     expect(text.startsWith("vialink:layer:1:klor:")).toBe(true);
     expect(FORMAT_1_SAMPLE.startsWith("vialink:layer:1:")).toBe(true);
     const old = await decodeLayer(FORMAT_1_SAMPLE);
-    expect(old.name).toBe("Nav");
+    expect(old.ext).toEqual({ "layer-names": { name: "Nav" } }); // read from the old top-level name
     expect(old.keys.map((k) => k.id)).toEqual(["KC_A", "KC_B"]);
   });
 
   it("refuses another keyboard, cut-off text and other versions", async () => {
     const kb = await klor();
-    const text = await encodeLayer(kb, 0, null);
+    const text = await encodeLayer(kb, 0);
     const other = await klor({ vendorId: 0x1234, productId: 0x0001 });
     await expect(decodeLayer(text).then((s) => matchShared(other, s))).rejects.toThrow(/another keyboard/);
     const otherUid = await klor(undefined, 0x1122334455667799n);
@@ -153,7 +153,7 @@ describe("layer share text", () => {
       await kb.setEncoder(0, index, 0, kb.keycodes.parse("KC_AUDIO_VOL_DOWN"));
       await kb.setEncoder(0, index, 1, kb.keycodes.parse("KC_AUDIO_VOL_UP"));
     }
-    const text = await encodeLayer(kb, 0, "A long layer name");
+    const text = await encodeLayer(kb, 0, { "layer-names": { name: "A long layer name" } });
     ctx.annotate(`worst case: ${text.length} characters for ${most} keys`);
     expect(text.length).toBeLessThanOrEqual(SHARE_MAX_LENGTH);
   });

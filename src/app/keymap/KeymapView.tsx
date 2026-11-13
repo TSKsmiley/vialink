@@ -15,7 +15,6 @@ import { useEffect, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { keyCount, reachSummary, visiblePositions } from "../../core/layerInfo.ts";
 import {
-  applyLayerWrites,
   firstEmptyLayer,
   clearLayer,
   planPaste,
@@ -26,7 +25,8 @@ import {
 import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
 import { OperationCancelledError } from "../../core/extensions/hooks.ts";
-import { errorMessage, pickerInfoOf, useKeyboardVersion } from "../hooks.ts";
+import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.ts";
+import { errorMessage, pickerInfoOf, sharedLayerName, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
 import { PasteFromText } from "./PasteFromText.tsx";
@@ -136,14 +136,20 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
     }
   };
 
-  const copy = (l: number, only?: readonly Target[]) => {
-    const snapshot = snapshotLayer(keyboard, l, only);
-    const n = snapshot.keys.size + snapshot.encoders.size;
-    setClipboard({
-      snapshot,
-      name: only ? `${n} ${n === 1 ? "key" : "keys"} from ${layerName(l)}` : layerName(l),
-    });
-  };
+  const copy = (l: number, only?: readonly Target[]) =>
+    void (async () => {
+      const snapshot = snapshotLayer(keyboard, l, only);
+      const n = snapshot.keys.size + snapshot.encoders.size;
+      // A whole layer carries extensions' data (layer-sharing.share-text), e.g. its name.
+      const ext = only ? {} : await shareData(keyboard, l);
+      setClipboard({
+        snapshot,
+        name: only ? `${n} ${n === 1 ? "key" : "keys"} from ${layerName(l)}` : layerName(l),
+        rename: only ? undefined : (sharedLayerName(keyboard, ext) ?? undefined),
+        kind: "copy",
+        ext,
+      });
+    })();
   const pasteOnto = (l: number) => {
     if (clipboard) {
       setImporting(null);
@@ -153,7 +159,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
   const copyAsText = (l: number) =>
     void (async () => {
       try {
-        const text = await encodeLayer(keyboard, l, named(l));
+        const text = await encodeLayer(keyboard, l, await shareData(keyboard, l));
         await navigator.clipboard.writeText(text);
         onNotice(
           `Copied ${layerName(l)} as text (${text.length} characters). Send it in a chat; it pastes into ViaLink with Ctrl+V.`,
@@ -177,7 +183,10 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
         const to = firstEmptyLayer(keyboard, (x) => named(x) !== null);
         if (to === null) return;
         const plan = planPaste(keyboard, snapshotLayer(keyboard, l), to, "replace", true);
-        await applyLayerWrites(keyboard, to, plan.writes, `Duplicate ${layerName(l)} to layer ${to}`);
+        // Through the paste hook: extensions carry their data along (layer names copies the name).
+        const ext = await shareData(keyboard, l);
+        const event = { source: "duplicate", target: to, mode: "replace", name: named(l), ext } as const;
+        await pasteLayer(keyboard, event, plan.writes, `Duplicate ${layerName(l)} to layer ${to}`);
         setLayer(to);
       }),
     // Extensions move their per-layer data along (layer.swap hook; layer names swaps the names).
@@ -320,7 +329,6 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
           initialText={importing.text}
           defaultTarget={firstEmptyLayer(keyboard, (l) => named(l) !== null) ?? layer}
           layerName={layerName}
-          setLayerName={names ? (l, n) => names.set(l, n) : undefined}
           onError={onError}
           onClose={(onto) => {
             setImporting(null);

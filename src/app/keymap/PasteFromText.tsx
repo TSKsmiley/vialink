@@ -14,7 +14,7 @@ import {
   type ShareMatch,
   type SharedLayer,
 } from "../../core/layer-share.ts";
-import { errorMessage, keycodeDescriber } from "../hooks.ts";
+import { errorMessage, keycodeDescriber, sharedLayerName } from "../hooks.ts";
 import { Button } from "../ui/index.ts";
 import { PastePreview } from "./PastePreview.tsx";
 
@@ -25,7 +25,6 @@ interface Props {
   /** Layer to paste onto at first. */
   defaultTarget: number;
   layerName: (layer: number) => string;
-  setLayerName?: (layer: number, name: string) => Promise<void>;
   onClose: (pastedOnto: number | null) => void;
   onError: (message: string) => void;
 }
@@ -38,15 +37,7 @@ interface Check {
   detail: string;
 }
 
-export function PasteFromText({
-  keyboard,
-  initialText,
-  defaultTarget,
-  layerName,
-  setLayerName,
-  onClose,
-  onError,
-}: Props) {
+export function PasteFromText({ keyboard, initialText, defaultTarget, layerName, onClose, onError }: Props) {
   const id = useId();
   const [text, setText] = useState(initialText);
   // Each result remembers the text it belongs to; a stale one counts as not decoded yet.
@@ -91,9 +82,12 @@ export function PasteFromText({
       />
       {decoded && "shared" in decoded && (
         <span className="text-xs text-kumo-subtle">
-          Decoded: {decoded.shared.name ? `layer “${decoded.shared.name}”` : "a layer"} from a{" "}
-          {decoded.shared.slug} with {describeLayout(decoded.shared.layout)}. Pasting this text anywhere in
-          ViaLink with Ctrl+V opens this screen.
+          Decoded:{" "}
+          {sharedLayerName(keyboard, decoded.shared.ext)
+            ? `layer “${sharedLayerName(keyboard, decoded.shared.ext)}”`
+            : "a layer"}{" "}
+          from a {decoded.shared.slug} with {describeLayout(decoded.shared.layout)}. Pasting this text
+          anywhere in ViaLink with Ctrl+V opens this screen.
         </span>
       )}
     </div>
@@ -173,7 +167,8 @@ export function PasteFromText({
         },
   ];
 
-  const name = shared.name ? `“${shared.name}” from the text` : "the shared layer";
+  const sharedName = sharedLayerName(keyboard, shared.ext);
+  const name = sharedName ? `“${sharedName}” from the text` : "the shared layer";
   const fromLabel = (row: number, col: number) => `Text's layout: row ${row}, column ${col}`;
 
   return (
@@ -184,13 +179,14 @@ export function PasteFromText({
         snapshot: match.snapshot,
         name,
         mode: "replace",
-        rename: shared.name ? `${shared.name} (imported)` : undefined,
+        rename: sharedName ? `${sharedName} (imported)` : undefined,
+        kind: "text",
+        ext: shared.ext,
         unplaced: match.unplaced.map((u) => ({ ...u, from: fromLabel(u.row, u.col) })),
       }}
       target={target}
       onTarget={setTarget}
       layerName={layerName}
-      setLayerName={setLayerName}
       onClose={onClose}
       onError={onError}
       before={
