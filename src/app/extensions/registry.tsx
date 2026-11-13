@@ -15,12 +15,6 @@ import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { altRepeatKeyUi } from "./alt-repeat-keyUi.tsx";
 import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
 
-export interface LayerActionProps {
-  keyboard: Keyboard;
-  layer: number;
-  onError: (message: string) => void;
-}
-
 export interface PanelProps {
   keyboard: Keyboard;
   onError: (message: string) => void;
@@ -46,8 +40,6 @@ export interface AppExtension {
   id: string;
   /** Text for a layer tab, replacing the bare layer number; null keeps the default. */
   layerTabLabel?(keyboard: Keyboard, layer: number): string | null;
-  /** Controls shown next to the layer tabs for the selected layer. */
-  LayerActions?: ComponentType<LayerActionProps>;
   /** Editor views this extension adds. */
   panels?: readonly ExtensionPanel[];
 }

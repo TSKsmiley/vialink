@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // SPDX-License-Identifier: GPL-2.0-or-later
 // The keymap view: layer rail, keyboard and key inspector (redesign phase 2).
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,10 +91,30 @@ describe("keymap", () => {
     await kb.setKey(0, first.row, first.col, kb.keycodes.parse("LT(1, KC_SPACE)"));
     const nav = await screen.findByRole("tab", { name: "1: Nav" });
     expect(nav.getAttribute("aria-description")).toMatch(/hold Space/);
-    // Empty, unnamed, unreached layers fold into one row.
-    expect(screen.getByRole("button", { name: "2 empty layers (2–3)" })).toBeTruthy();
+    // Of the empty, unnamed, unreached layers only the first shows, as a ghost card.
+    expect(screen.getByRole("tab", { name: "2: Layer 2" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "3: Layer 3" })).toBeNull();
+    // Opening the ghost starts naming it; Escape leaves it empty and adds nothing.
+    fireEvent.click(screen.getByRole("tab", { name: "2: Layer 2" }));
+    fireEvent.keyDown(await screen.findByLabelText("Name for layer 2"), { key: "Escape" });
+    expect(screen.queryByRole("tab", { name: "3: Layer 3" })).toBeNull();
+    // Naming it makes it a real layer, and the next empty one becomes the ghost.
+    fireEvent.click(screen.getByRole("tab", { name: "2: Layer 2" }));
+    const ghostBox = await screen.findByLabelText("Name for layer 2");
+    fireEvent.change(ghostBox, { target: { value: "Sym" } });
+    fireEvent.submit(ghostBox.closest("form")!);
+    expect(await screen.findByRole("tab", { name: "3: Layer 3" })).toBeTruthy();
+    // Undoing the name makes layer 2 empty again, so layer 3 goes away.
+    await act(() => kb.history.undo());
+    expect(screen.queryByRole("tab", { name: "3: Layer 3" })).toBeNull();
     fireEvent.click(nav);
     expect(nav.getAttribute("aria-selected")).toBe("true");
+    // The pen after the name edits it in place.
+    fireEvent.click(screen.getByRole("button", { name: "Rename Nav" }));
+    const box = screen.getByLabelText("Name for layer 1");
+    fireEvent.change(box, { target: { value: "Arrows" } });
+    fireEvent.submit(box.closest("form")!);
+    expect(await screen.findByRole("tab", { name: "1: Arrows" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Layer 1 keymap" })).toBeTruthy();
   });
 
@@ -168,5 +188,9 @@ describe("keymap", () => {
     await kb.setKey(1, first.row, first.col, kb.keycodes.parse("KC_TRNS"));
     fireEvent.click(screen.getByRole("tab", { name: "1: Nav" }));
     expect(keyButton(first).getAttribute("aria-label")).toContain("shows KC_A from below");
+    // The toggle shows only this layer: the key is plain transparent again.
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show keys from layers below" }));
+    expect(keyButton(first).getAttribute("aria-label")).not.toContain("from below");
+    expect(keyButton(first).textContent).toContain("▽");
   });
 });

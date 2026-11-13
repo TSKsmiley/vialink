@@ -6,7 +6,7 @@
 //   key after assigning" is ticked (off by default; remembered per browser).
 // - Shift-click selects several keys; an assignment sets all of them as one
 //   undo step.
-// - Transparent keys show the key they fall through to, dimmed.
+// - Transparent keys show the key they fall through to, dimmed (a toggle turns it off: ▽).
 // - Layer operations (design board 5): copy, paste with a preview and three
 //   modes, duplicate, swap (menu or drag), clear; Ctrl+C / Ctrl+V copy the
 //   selected keys, or the whole layer when nothing is selected.
@@ -25,7 +25,6 @@ import {
 } from "../../core/layers.ts";
 import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
-import { activeUi } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, useKeyboardVersion } from "../hooks.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { LayerRail } from "./LayerRail.tsx";
@@ -38,6 +37,7 @@ import { encodeLayer, isShareText } from "../../core/layer-share.ts";
 type Target = NonNullable<Selection>;
 
 const ADVANCE_KEY = "vialink.autoAdvance";
+const THROUGH_KEY = "vialink.showThrough";
 const RECENT_KEY = "vialink.recentKeys";
 const RECENT_MAX = 8;
 
@@ -84,6 +84,9 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
   const names = keyboard.extension(layerNamesExtension);
   const [autoAdvance, setAutoAdvance] = useState(() =>
     load(ADVANCE_KEY, false, (v): v is boolean => typeof v === "boolean"),
+  );
+  const [showThrough, setShowThrough] = useState(() =>
+    load(THROUGH_KEY, true, (v): v is boolean => typeof v === "boolean"),
   );
   const [recent, setRecent] = useState<number[]>(() =>
     load(RECENT_KEY, [], (v): v is number[] => Array.isArray(v) && v.every((n) => Number.isInteger(n))),
@@ -291,9 +294,6 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
     }
   };
 
-  const actions = activeUi(keyboard).flatMap((ui) =>
-    ui.LayerActions ? [{ id: ui.id, Component: ui.LayerActions }] : [],
-  );
   const keys = keyCount(keyboard, shownLayer);
   const reach = reachSummary(keyboard, shownLayer);
 
@@ -302,7 +302,8 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
       className={
         "grid items-start gap-5 [grid-template-areas:'rail'_'board'_'insp'] " +
         "lg:grid-cols-[minmax(0,1fr)_340px] lg:[grid-template-areas:'rail_insp'_'board_insp'] " +
-        "min-[1600px]:grid-cols-[220px_minmax(0,1fr)_380px] min-[1600px]:[grid-template-areas:'rail_board_insp']"
+        "xl:grid-cols-[200px_minmax(0,1fr)_340px] xl:[grid-template-areas:'rail_board_insp'] " +
+        "min-[1600px]:grid-cols-[220px_minmax(0,1fr)_380px]"
       }
     >
       <div className="min-w-0 [grid-area:rail]">
@@ -315,7 +316,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
           }}
           onPeek={setPeek}
           layerName={named}
-          actions={actions}
+          rename={names ? (l, n) => names.set(l, n) : undefined}
           onError={onError}
           menu={sharing ? menu : undefined}
           copied={clipboard ? { name: clipboard.name, ...snapshotCounts(clipboard.snapshot) } : null}
@@ -365,6 +366,21 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
                   : `${keys} ${keys === 1 ? "key" : "keys"} · ${reach === "default" ? "default layer, on at power-up" : reach}`}
               </span>
               <div className="flex-1" />
+              <label
+                className="inline-flex items-center gap-2 text-sm"
+                title="Off: transparent keys show ▽, so you see only what this layer sets"
+              >
+                <input
+                  type="checkbox"
+                  className="size-4 accent-accent"
+                  checked={showThrough}
+                  onChange={(e) => {
+                    setShowThrough(e.target.checked);
+                    save(THROUGH_KEY, e.target.checked);
+                  }}
+                />
+                Show keys from layers below
+              </label>
               <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -389,7 +405,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
                 layer={shownLayer}
                 isSelected={peek !== null ? () => false : (s) => targets.some((t) => sameTarget(t, s))}
                 onSelect={peek !== null ? undefined : select}
-                fallthrough
+                fallthrough={showThrough}
               />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
