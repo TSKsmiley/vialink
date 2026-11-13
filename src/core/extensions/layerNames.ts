@@ -17,6 +17,7 @@ import {
 } from "../protocol/constants.ts";
 import { layerClear, layerSwap } from "../layers.ts";
 import { on } from "./hooks.ts";
+import { layerNames, provide } from "./services.ts";
 import type { DeviceContext, KeyboardExtension } from "./types.ts";
 
 export class LayerNameError extends Error {
@@ -108,6 +109,7 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     return new LayerNames(ctx, names);
   },
 
+  provides: [provide(layerNames, (names: LayerNames) => ({ name: (layer) => names.get(layer) || null }))],
   hooks: [
     // A cleared layer loses its name too, so it reads as empty again.
     on(layerClear.after, (e, _ctx, names: LayerNames) => names.set(e.layer, "")),

@@ -39,6 +39,7 @@ import {
   type MacroAction,
 } from "../protocol/macros.ts";
 import { concat } from "../util/bytes.ts";
+import { keycodeDescriptions, provide } from "./services.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export { MacroError };
@@ -173,6 +174,20 @@ export const macrosExtension: KeyboardExtension<Macros> = {
   group: "standard",
   name: "Macros",
   description: "Edit the keyboard's dynamic macros (M0, M1, ...) and keep them in .vil files.",
+  provides: [
+    provide(keycodeDescriptions, (state: Macros, ctx) => {
+      const table = ctx.board.keycodes;
+      const index = new Map(Array.from({ length: state.count }, (_, n) => [table.parse(`M${n}`), n]));
+      return {
+        describe(code) {
+          const n = index.get(code);
+          if (n === undefined) return null;
+          const empty = (state.pieces[n]?.length ?? 0) === 0;
+          return { text: empty ? null : describeMacro(state.macros[n] ?? []), empty };
+        },
+      };
+    }),
+  ],
 
   async probe(ctx) {
     const { macroCount, macroMemory } = ctx.board;

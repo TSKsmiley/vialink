@@ -26,6 +26,7 @@ import {
 } from "./extensions/types.ts";
 import { isStandardCommand, startsWith } from "./protocol/standard.ts";
 import { Scheduler } from "./scheduler.ts";
+import { serviceOwner, type Provision, type Service } from "./extensions/services.ts";
 import { describeRequest } from "./protocol/describe.ts";
 import {
   HookPhaseError,
@@ -176,6 +177,8 @@ export class Keyboard {
   readonly scheduler: Scheduler;
   /** Extensions' ctx.state; layout state stays for the whole connection, also while an extension is off. */
   private readonly states: ExtensionStates;
+  /** Built service implementations, by extension id then service id; dropped when the extension stops. */
+  private readonly provisions = new Map<string, Map<string, unknown>>();
   /** The extension whose before/filter handler is running; its writes throw meanwhile. */
   private readOnlyFor: string | null = null;
 
@@ -441,6 +444,7 @@ export class Keyboard {
         this.supported.delete(extension.id);
         this.active.delete(extension.id);
         this.scheduler.stopOwner(extension.id);
+        this.provisions.delete(extension.id);
       }
     }
     const order = BUILTIN_EXTENSIONS.map((e) => e.id);
@@ -524,6 +528,26 @@ export class Keyboard {
     }
   }
 
+  /**
+   * Every running extension's implementation of `service`, in load order
+   * (core services can have several providers, e.g. keycode descriptions).
+   */
+  provided<T>(service: Service<T>): T[] {
+    const out: T[] = [];
+    for (const { extension, state } of this.active.values()) {
+      for (const point of extension.provides ?? []) {
+        if (point.id !== service.id || !("create" in point)) continue;
+        let cache = this.provisions.get(extension.id);
+        if (!cache) this.provisions.set(extension.id, (cache = new Map()));
+        if (!cache.has(point.id)) {
+          cache.set(point.id, (point as Provision).create(state, this.extensionContext(extension)));
+        }
+        out.push(cache.get(point.id) as T);
+      }
+    }
+    return out;
+  }
+
   /** Every extension's "layout" state (ctx.state), for saving into a layout file. */
   extensionLayoutState(): Record<string, Record<string, Versioned>> {
     return this.states.layoutSnapshot();
@@ -598,7 +622,11 @@ export class Keyboard {
       next.set(ext.id, { extension: ext, state });
     }
     // Extensions that stopped running lose their scheduled work.
-    for (const id of this.active.keys()) if (!next.has(id)) this.scheduler.stopOwner(id);
+    for (const id of this.active.keys()) {
+      if (next.has(id)) continue;
+      this.scheduler.stopOwner(id);
+      this.provisions.delete(id);
+    }
     this.active.clear();
     for (const [id, entry] of next) this.active.set(id, entry);
     this.statuses = statuses;
@@ -650,6 +678,19 @@ export class Keyboard {
         idle: (fn, options) => this.scheduler.idle(fn, { ...options, owner: ext.id }),
       },
       state: (name, options) => this.states.state(ext, name, options),
+      use: (service) => {
+        const owner = serviceOwner(service.id);
+        if (
+          owner !== null &&
+          owner !== ext.id &&
+          ![...(ext.requires ?? []), ...(ext.optional ?? [])].includes(owner)
+        ) {
+          throw new Error(
+            `${ext.name} uses ${service.id} without listing "${owner}" in requires or optional.`,
+          );
+        }
+        return this.provided(service)[0] ?? null;
+      },
       changed: () => this.changed(),
     };
     // A compatible extension's probe is typed without `device`; leaving it out

@@ -14,6 +14,7 @@
 //   one that doesn't declare the conflict) wins, then the earlier in the registry.
 
 import { isStandardCommand } from "../protocol/standard.ts";
+import { isCoreService } from "./services.ts";
 import type { KeyboardExtension } from "./types.ts";
 
 /** Something an extension offers others: a service or a hook point. Ids start with the owner's id. */
@@ -118,8 +119,10 @@ export function manifestProblems(exts: readonly Ext[]): string[] {
         problems.push(`${ext.id}: both requires and conflicts with "${id}".`);
     }
     for (const point of ext.provides ?? []) {
+      // Core services ("core.…") may have several providers; an extension's own points have one.
+      if (isCoreService(point.id)) continue;
       if (!point.id.startsWith(`${ext.id}.`)) {
-        problems.push(`${ext.id}: provided "${point.id}" must start with "${ext.id}.".`);
+        problems.push(`${ext.id}: provided "${point.id}" must start with "${ext.id}." or "core.".`);
       }
       if (points.has(point.id)) problems.push(`"${point.id}" is provided twice.`);
       points.add(point.id);
