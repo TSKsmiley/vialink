@@ -16,6 +16,7 @@ import type { LayoutLabel } from "../definition/layoutOptions.ts";
 import type { HistoryWrite } from "../history.ts";
 import type { KeycodeTable } from "../keycodes/table.ts";
 import type { Capabilities } from "../keyboard.ts";
+import type { TaskHandle, TaskOptions } from "../scheduler.ts";
 import type { RequestOptions } from "../transport/queue.ts";
 import type { ExtensionPoint } from "./manifest.ts";
 
@@ -82,9 +83,23 @@ export interface DeviceAccess {
   ensureUnlocked(reason: string): Promise<void>;
 }
 
+/**
+ * Background work, through the keyboard's one scheduler (core/scheduler.ts).
+ * Never start your own timers: scheduled tasks don't pile up, pause while the
+ * tab is hidden or an operation writes, stop when the extension is turned off,
+ * and their device requests go behind the user's own.
+ */
+export interface ScheduleAccess {
+  every(ms: number, fn: () => void | Promise<void>, options: TaskOptions): TaskHandle;
+  once(ms: number, fn: () => void | Promise<void>, options: TaskOptions): TaskHandle;
+  /** Once, when nothing else is running. */
+  idle(fn: () => void | Promise<void>, options: TaskOptions): TaskHandle;
+}
+
 /** The host API of a "compatible" extension: no device access at all. */
 export interface HostContext {
   readonly board: BoardView;
+  readonly schedule: ScheduleAccess;
   readonly keymap: KeymapAccess;
   readonly history: HistoryAccess;
   readonly notify: NotifyAccess;

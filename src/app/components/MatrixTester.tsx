@@ -28,13 +28,15 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30 }: Props) {
 
   useEffect(() => {
     if (!unlocked || !keyboard.matrixTesterSupported) return;
-    let live = true;
-    const loop = async () => {
-      while (live) {
+    // On the keyboard's scheduler: no pile-up, pauses while the tab is hidden or
+    // an operation writes, and its polls go behind the user's own requests.
+    const task = keyboard.scheduler.every(
+      intervalMs,
+      async () => {
         try {
-          const matrix = await keyboard.pollMatrix();
-          if (!live) return;
+          const matrix = await keyboard.pollMatrix({ priority: "low" });
           if (matrix === null) {
+            task.stop();
             keyboard.setUnlocked(false); // locked elsewhere (replug, Lock)
             return;
           }
@@ -43,16 +45,13 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30 }: Props) {
           setPressed(now);
           if (now.size > 0) setSeen((prev) => (hasAll(prev, now) ? prev : new Set([...prev, ...now])));
         } catch (err) {
-          if (live) onError(errorMessage(err));
-          return;
+          task.stop();
+          onError(errorMessage(err));
         }
-        await new Promise((r) => setTimeout(r, intervalMs));
-      }
-    };
-    void loop();
-    return () => {
-      live = false;
-    };
+      },
+      { name: "matrix tester", kind: "live", owner: "app" },
+    );
+    return () => task.stop();
   }, [keyboard, unlocked, intervalMs, onError]);
 
   if (!keyboard.matrixTesterSupported) {

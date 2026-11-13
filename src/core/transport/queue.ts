@@ -3,6 +3,9 @@
 // 32 bytes, send, wait for the reply, retry after 500 ms on failure. Every
 // command in the app goes through one queue per keyboard, so unlock and matrix
 // polling can never interleave with a keymap write.
+//
+// Deviation: two lanes. Low-priority requests (scheduled background work) wait
+// until no normal request is queued; vial-gui has one thread and no lanes.
 
 import { padTo } from "../util/bytes.ts";
 import { makeExchange, type Trace, type TraceExchange } from "./trace.ts";
@@ -11,6 +14,19 @@ import { DeviceDisconnectedError, MSG_LEN, type Transport } from "./types.ts";
 export interface RequestOptions {
   /** Attempts before giving up. vial-gui uses 20 for nearly every command. */
   retries?: number;
+  /**
+   * "low" for scheduled background work (matrix polling, an extension's
+   * scheduled task): it waits while any normal request is queued, so the
+   * user's own reads and writes go first.
+   */
+  priority?: "normal" | "low";
+}
+
+interface Job {
+  report: Uint8Array;
+  retries: number;
+  resolve: (reply: Uint8Array) => void;
+  reject: (error: unknown) => void;
 }
 
 export type QueueEvent =
@@ -32,7 +48,9 @@ const DEFAULT_RETRIES = 20;
 export class RequestQueue {
   readonly transport: Transport;
   private readonly retryDelayMs: number;
-  private chain: Promise<unknown> = Promise.resolve();
+  private readonly normal: Job[] = [];
+  private readonly low: Job[] = [];
+  private pumping = false;
   private disconnected = false;
   private readonly listeners = new Set<(event: QueueEvent) => void>();
   private readonly exchanges: TraceExchange[] = [];
@@ -67,9 +85,35 @@ export class RequestQueue {
       return Promise.reject(new Error(`message must be at most ${MSG_LEN} bytes, got ${bytes.length}`));
     }
     const report = padTo(bytes, MSG_LEN);
-    const run = this.chain.then(() => this.run(report, options.retries ?? DEFAULT_RETRIES));
-    this.chain = run.catch(() => undefined);
-    return run;
+    return new Promise<Uint8Array>((resolve, reject) => {
+      const job = { report, retries: options.retries ?? DEFAULT_RETRIES, resolve, reject };
+      (options.priority === "low" ? this.low : this.normal).push(job);
+      void this.pump();
+    });
+  }
+
+  /** True while a request is being sent or waiting to be. */
+  get busy(): boolean {
+    return this.pumping;
+  }
+
+  /** One request at a time: every normal request first, then low-priority ones, each lane in order. */
+  private async pump(): Promise<void> {
+    if (this.pumping) return;
+    this.pumping = true;
+    try {
+      for (;;) {
+        const job = this.normal.shift() ?? this.low.shift();
+        if (!job) return;
+        try {
+          job.resolve(await this.run(job.report, job.retries));
+        } catch (err) {
+          job.reject(err);
+        }
+      }
+    } finally {
+      this.pumping = false;
+    }
   }
 
   /** Exports every successful exchange so far as a replayable trace. */

@@ -93,6 +93,17 @@ export function App() {
     setStatus({ kind: "idle" });
   }, [status]);
 
+  // Background work pauses while the tab is hidden (core/scheduler.ts).
+  const scheduler = status.kind === "connected" ? status.connection.keyboard.scheduler : null;
+  useEffect(() => {
+    if (!scheduler) return;
+    const update = () =>
+      document.visibilityState === "hidden" ? scheduler.pause("hidden") : scheduler.resume("hidden");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, [scheduler]);
+
   // An unplug drops back to the connect screen with an explanation.
   useEffect(() => {
     if (status.kind !== "connected") return;
