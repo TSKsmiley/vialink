@@ -128,6 +128,18 @@ export function manifestProblems(exts: readonly Ext[]): string[] {
       points.add(point.id);
     }
   }
+  // Handling another extension's hook point means depending on it (requires or optional).
+  for (const ext of exts) {
+    const deps = [...(ext.requires ?? []), ...(ext.optional ?? [])];
+    for (const handler of ext.hooks ?? []) {
+      const owner = handler.hook.slice(0, handler.hook.indexOf("."));
+      if (ids.has(owner) && owner !== ext.id && !deps.includes(owner)) {
+        problems.push(
+          `${ext.id}: handles ${handler.hook} without listing "${owner}" in requires or optional.`,
+        );
+      }
+    }
+  }
   for (const ext of exts) {
     if (ext.group !== "nonstandard") continue;
     if (ext.commands.length === 0) problems.push(`${ext.id}: non-standard but declares no custom commands.`);

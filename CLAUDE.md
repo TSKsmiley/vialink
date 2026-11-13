@@ -44,5 +44,11 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
   - Loose above that: UI, validation, error handling, safety checks and code structure may improve
     on vial-gui when something can be better (e.g. cancellable unlock, truncating layer names at a
     character boundary). Note each such difference in the file's header comment.
+- Extensions talk to ViaLink only through the Extension API (README "Writing an extension"; plan
+  doc tab "Extension API"): `ctx` in, hooks out. Code outside `src/core/extensions/` and
+  `src/app/extensions/` never imports an extension module, only the registry, the framework
+  modules (`index`, `types`, `hooks`, `services`, `manifest`, `state`) or an extension's
+  `*.api.ts`; views never get the Keyboard; extension code never starts timers (`ctx.schedule`).
+  ESLint enforces all three; `manifest.test.ts` checks the manifests.
 - Licences: own code `GPL-2.0-or-later`; files adapted from Vialite are `GPL-2.0-only` and listed
   in `NOTICE.md`. Keep SPDX headers and credits accurate when borrowing more.

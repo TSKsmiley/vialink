@@ -8,7 +8,7 @@ import { SimulatedKeyboard } from "../sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../transport/queue.ts";
 import { OperationVetoedError, on } from "./hooks.ts";
 import { BUILTIN_EXTENSIONS } from "./index.ts";
-import { paste, pasteLayer, shareData, shareText } from "./layer-sharing.ts";
+import { paste, pasteLayer, shareData, shareText } from "./layer-sharing.api.ts";
 import { layerNamesExtension } from "./layerNames.ts";
 import type { KeyboardExtension } from "./types.ts";
 

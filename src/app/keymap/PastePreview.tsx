@@ -8,7 +8,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { planPaste, snapshotCounts, type LayerSnapshot, type PasteMode } from "../../core/layers.ts";
 import { OperationCancelledError } from "../../core/extensions/hooks.ts";
-import { pasteLayer } from "../../core/extensions/layer-sharing.ts";
+import { pasteLayer } from "../../core/extensions/layer-sharing.api.ts";
 import { layerNames } from "../../core/extensions/services.ts";
 import { KeyboardView } from "../components/KeyboardView.tsx";
 import { errorMessage } from "../hooks.ts";
