@@ -8,7 +8,7 @@
 // selected key slot is filled from the regular keycode picker under the form.
 
 import { useRef, useState, type KeyboardEvent } from "react";
-import { altRepeatKeyExtension } from "../../core/extensions/alt-repeat-key.ts";
+import { altRepeatKeyExtension, type AltRepeatKeys } from "../../core/extensions/alt-repeat-key.ts";
 import {
   AREP_ENABLED,
   AREP_OPTION_BIDIRECTIONAL,
@@ -17,8 +17,8 @@ import {
   type AltRepeatKeyEntry,
 } from "../../core/protocol/alt-repeat-key.ts";
 import { KeycodePicker } from "../components/KeycodePicker.tsx";
-import { errorMessage, useKeyboardVersion, pickerInfoOf } from "../hooks.ts";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import { errorMessage } from "../hooks.ts";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 import "./alt-repeat-key.css";
 
 /** ModsUI checkbox order: bit n of allowed_mods. Shown left mods on the first row, right on the second. */
@@ -33,18 +33,15 @@ const OPTIONS: [number, string][] = [
 
 type Slot = "keycode" | "altKeycode";
 
-function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const state = keyboard.extension(altRepeatKeyExtension);
+function AltRepeatKeyPanel({ ctx, state, ui }: PanelProps<AltRepeatKeys>) {
   const [index, setIndex] = useState(0);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [busy, setBusy] = useState(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  if (!state) return null;
 
   const idx = Math.min(index, state.count - 1);
   const entry = state.get(idx);
-  const table = keyboard.keycodes;
+  const table = ctx.board.keycodes;
   const n = idx + 1;
 
   const write = async (next: AltRepeatKeyEntry) => {
@@ -52,7 +49,7 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
     try {
       await state.set(idx, next);
     } catch (err) {
-      onError(errorMessage(err));
+      ctx.notify.error(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -199,7 +196,7 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
 
       <KeycodePicker
         hint="Select Last key or Alt key above, then pick a keycode."
-        info={pickerInfoOf(keyboard)}
+        info={ui.pickerInfo()}
         table={table}
         disabled={slot === null || busy}
         current={current}
@@ -212,13 +209,11 @@ function AltRepeatKeyPanel({ keyboard, onError }: PanelProps) {
 export const altRepeatKeyUi: AppExtension = {
   id: altRepeatKeyExtension.id,
   panels: [
-    {
+    panel<AltRepeatKeys>({
       id: "alt-repeat-key",
       title: "Alt repeat key",
       Component: AltRepeatKeyPanel,
-      count: (kb) =>
-        kb.extension(altRepeatKeyExtension)?.entries.filter((e) => e.keycode !== 0 || e.altKeycode !== 0)
-          .length ?? null,
-    },
+      count: (state) => state.entries.filter((e) => e.keycode !== 0 || e.altKeycode !== 0).length,
+    }),
   ],
 };

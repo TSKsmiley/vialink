@@ -67,7 +67,7 @@ export interface HistoryAccess {
   group<T>(label: string, action: () => Promise<T>): Promise<T>;
 }
 
-/** Messages for the user; ViaLink prefixes them with the extension's name. */
+/** Messages for the user, shown as ViaLink's own notices and errors. Say what happened in full. */
 export interface NotifyAccess {
   info(message: string): void;
   error(message: string): void;

@@ -14,15 +14,16 @@
 
 import { useState } from "react";
 import { combosExtension, describeCombo, type Combos } from "../../core/extensions/combos.ts";
-import { qmkSettingsExtension } from "../../core/extensions/qmk-settings.ts";
-import type { Keyboard } from "../../core/keyboard.ts";
+import { qmkSettingValues } from "../../core/extensions/qmk-settings.ts";
+import type { DeviceContext } from "../../core/extensions/types.ts";
+import type { KeycodeTable } from "../../core/keycodes/table.ts";
 import { COMBO_INPUTS, type ComboEntry } from "../../core/protocol/combos.ts";
-import { KeyboardView } from "../components/KeyboardView.tsx";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { errorMessage } from "../hooks.ts";
 import { KeySearch, keyText } from "../keymap/KeySearch.tsx";
 import { Button } from "../ui/index.ts";
 import { DetailCard, EntryList, FeatureLayout } from "./featureLayout.tsx";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import type { PanelKit } from "./kit.tsx";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 
 /** QMK settings qsid of "Time out period for combos" (qmk_settings.json, Combo tab). */
 const COMBO_TERM_QSID = 2;
@@ -30,8 +31,7 @@ const COMBO_TERM_QSID = 2;
 const isSet = (e: Readonly<ComboEntry>) => e.some((c) => c !== 0);
 const triggersOf = (e: Readonly<ComboEntry>) => e.slice(0, COMBO_INPUTS).filter((c) => c !== 0);
 
-function Chips({ keyboard, entry }: { keyboard: Keyboard; entry: Readonly<ComboEntry> }) {
-  const t = keyboard.keycodes;
+function Chips({ table: t, entry }: { table: KeycodeTable; entry: Readonly<ComboEntry> }) {
   const triggers = triggersOf(entry);
   return (
     <span className="flex flex-wrap items-center gap-1.5">
@@ -50,12 +50,9 @@ function Chips({ keyboard, entry }: { keyboard: Keyboard; entry: Readonly<ComboE
   );
 }
 
-export function CombosPanel({ keyboard, onError, onOpen }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const combos = keyboard.extension(combosExtension);
-  const used = combos ? combos.entries.flatMap((e, i) => (isSet(e) ? [i] : [])) : [];
+export function CombosPanel({ ctx, state: combos, ui, onOpen }: PanelProps<Combos>) {
+  const used = combos.entries.flatMap((e, i) => (isSet(e) ? [i] : []));
   const [selected, setSelected] = useState<number>(used[0] ?? 0);
-  if (!combos) return null;
 
   const shown = used.includes(selected) ? used : [...used, selected].sort((a, b) => a - b);
   const free = combos.entries.findIndex((e, i) => !isSet(e) && i !== selected);
@@ -71,7 +68,7 @@ export function CombosPanel({ keyboard, onError, onOpen }: PanelProps) {
             id: i,
             title: `Combo ${i + 1}`,
             meta: "",
-            summary: <Chips keyboard={keyboard} entry={combos.get(i)} />,
+            summary: <Chips table={ctx.board.keycodes} entry={combos.get(i)} />,
           }))}
           selected={selected}
           onSelect={setSelected}
@@ -79,40 +76,32 @@ export function CombosPanel({ keyboard, onError, onOpen }: PanelProps) {
           onNew={free === -1 ? undefined : () => setSelected(free)}
         />
       }
-      detail={
-        <ComboDetail
-          key={selected}
-          keyboard={keyboard}
-          combos={combos}
-          idx={selected}
-          onError={onError}
-          onOpen={onOpen}
-        />
-      }
+      detail={<ComboDetail key={selected} ctx={ctx} ui={ui} combos={combos} idx={selected} onOpen={onOpen} />}
     />
   );
 }
 
 function ComboDetail({
-  keyboard,
+  ctx,
+  ui,
   combos,
   idx,
-  onError,
   onOpen,
 }: {
-  keyboard: Keyboard;
+  ctx: DeviceContext;
+  ui: PanelKit;
   combos: Combos;
   idx: number;
-  onError: (m: string) => void;
   onOpen?: (view: string) => void;
 }) {
+  const onError = ctx.notify.error;
   const [busy, setBusy] = useState(false);
   const entry = combos.get(idx);
-  const table = keyboard.keycodes;
+  const table = ctx.board.keycodes;
   const triggers = triggersOf(entry);
   const output = entry[COMBO_INPUTS];
-  const settings = keyboard.extension(qmkSettingsExtension);
-  const term = settings?.get(COMBO_TERM_QSID);
+  // QMK settings is optional for combos: the term shows when it runs.
+  const term = ctx.use(qmkSettingValues)?.get(COMBO_TERM_QSID);
 
   const write = async (nextTriggers: number[], nextOutput: number) => {
     const next = [...nextTriggers, 0, 0, 0, 0].slice(0, COMBO_INPUTS) as number[];
@@ -162,13 +151,12 @@ function ComboDetail({
           Click keys on your keyboard below to add or remove them. Up to {COMBO_INPUTS}.
         </span>
         <div className="board-wrap small rounded-lg border border-kumo-line bg-kumo-base p-2">
-          <KeyboardView
-            keyboard={keyboard}
+          <ui.KeyboardView
             layer={0}
             label="Base layer: click keys to add or remove them"
-            isSelected={(s) => s.kind === "key" && triggers.includes(keyboard.getKey(0, s.row, s.col) ?? 0)}
+            isSelected={(s) => s.kind === "key" && triggers.includes(ctx.keymap.get(0, s.row, s.col) ?? 0)}
             onSelect={(s) => {
-              if (s?.kind === "key") toggle(keyboard.getKey(0, s.row, s.col) ?? 0);
+              if (s?.kind === "key") toggle(ctx.keymap.get(0, s.row, s.col) ?? 0);
             }}
           />
         </div>
@@ -243,12 +231,12 @@ function ComboDetail({
 export const combosUi: AppExtension = {
   id: combosExtension.id,
   panels: [
-    {
+    panel<Combos>({
       id: "combos",
       modern: true,
       title: "Combos",
       Component: CombosPanel,
-      count: (kb) => kb.extension(combosExtension)?.entries.filter(isSet).length ?? null,
-    },
+      count: (combos) => combos.entries.filter(isSet).length,
+    }),
   ],
 };

@@ -269,13 +269,13 @@ describe("extension groups limit device access", () => {
     );
   });
 
-  it("prefixes notices with the extension's name", async () => {
+  it("passes notices and errors on to the app", async () => {
     const { kb, ctx } = await contextOf(ext("Key notes"));
     const got: string[] = [];
     kb.notifyHandler = (kind, message) => got.push(`${kind}: ${message}`);
     ctx.notify.info("Saved 3 labels");
     ctx.notify.error("No room");
-    expect(got).toEqual(["info: Key notes: Saved 3 labels", "error: Key notes: No room"]);
+    expect(got).toEqual(["info: Saved 3 labels", "error: No room"]);
   });
 
   it("reports manifests that don't fit their group", () => {

@@ -12,8 +12,8 @@ import {
   type QmkSettingField,
   type QmkSettings,
 } from "../../core/extensions/qmk-settings.ts";
-import { errorMessage, useKeyboardVersion } from "../hooks.ts";
-import type { AppExtension, PanelProps } from "./registry.tsx";
+import { errorMessage } from "../hooks.ts";
+import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
 import "./qmk-settings.css";
 
 interface FieldProps {
@@ -92,13 +92,11 @@ function IntegerField({ settings, field, busy, run }: FieldProps) {
   );
 }
 
-function QmkSettingsPanel({ keyboard, onError, onNotice }: PanelProps) {
-  useKeyboardVersion(keyboard);
-  const settings = keyboard.extension(qmkSettingsExtension);
+function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
+  const { error: onError, info: onNotice } = ctx.notify;
   const [tabName, setTabName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  if (!settings) return <p className="hint">This keyboard has no QMK settings.</p>;
 
   const tabs = settings.tabs;
   const tab = tabs.find((t) => t.name === tabName) ?? tabs[0];
@@ -183,5 +181,5 @@ function QmkSettingsPanel({ keyboard, onError, onNotice }: PanelProps) {
 
 export const qmkSettingsUi: AppExtension = {
   id: qmkSettingsExtension.id,
-  panels: [{ id: "qmk-settings", title: "QMK settings", Component: QmkSettingsPanel }],
+  panels: [panel<QmkSettings>({ id: "qmk-settings", title: "QMK settings", Component: QmkSettingsPanel })],
 };

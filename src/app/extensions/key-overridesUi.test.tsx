@@ -9,6 +9,7 @@ import { KO_ENABLED, KO_OPTION_ONE_MOD } from "../../core/protocol/key-overrides
 import { defaultKeyOverride, installKeyOverrides } from "../../core/sim/key-overrides.ts";
 import { SimulatedKeyboard } from "../../core/sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../../core/transport/queue.ts";
+import { ExtensionView } from "./ExtensionView.tsx";
 import { Editor } from "../components/Editor.tsx";
 import { keyOverridesUi } from "./key-overridesUi.tsx";
 
@@ -36,8 +37,8 @@ async function setup(keyOverride = 2) {
 
 function renderPanel(kb: Keyboard) {
   const onError = vi.fn();
-  const Panel = keyOverridesUi.panels![0].Component;
-  render(<Panel keyboard={kb} onError={onError} onNotice={() => undefined} />);
+  kb.notifyHandler = (kind, message) => kind === "error" && onError(message);
+  render(<ExtensionView keyboard={kb} view={keyOverridesUi.panels![0].id} />);
   return { onError };
 }
 
