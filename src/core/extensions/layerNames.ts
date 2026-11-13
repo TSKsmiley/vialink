@@ -8,8 +8,14 @@
 // the reply untouched (0xFE in byte 0), so a status of 0 means "supported".
 
 import { normalizeLayerName, vialGetLayerName, vialSetLayerName } from "../protocol/commands.ts";
-import { VIAL_PROTOCOL_DYNAMIC } from "../protocol/constants.ts";
-import type { ExtensionContext, KeyboardExtension } from "./types.ts";
+import {
+  CMD_VIA_VIAL_PREFIX,
+  CMD_VIAL_DYNAMIC_ENTRY_OP,
+  DYNAMIC_VIAL_LAYER_NAME_GET,
+  DYNAMIC_VIAL_LAYER_NAME_SET,
+  VIAL_PROTOCOL_DYNAMIC,
+} from "../protocol/constants.ts";
+import type { DeviceContext, KeyboardExtension } from "./types.ts";
 
 export class LayerNameError extends Error {
   constructor(message: string) {
@@ -19,10 +25,10 @@ export class LayerNameError extends Error {
 }
 
 export class LayerNames {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly values: string[];
 
-  constructor(ctx: ExtensionContext, names: string[]) {
+  constructor(ctx: DeviceContext, names: string[]) {
     this.ctx = ctx;
     this.values = names;
   }
@@ -40,20 +46,20 @@ export class LayerNames {
    * Needs an unlocked board; see Keyboard.ensureUnlocked.
    */
   async set(layer: number, name: string): Promise<void> {
-    const { keyboard, queue } = this.ctx;
-    if (layer < 0 || layer >= keyboard.layers) throw new LayerNameError(`layer ${layer} does not exist`);
+    const { board, device } = this.ctx;
+    if (layer < 0 || layer >= board.layers) throw new LayerNameError(`layer ${layer} does not exist`);
     const wanted = normalizeLayerName(name);
     const old = this.get(layer);
     if (wanted === old) return;
-    await keyboard.ensureUnlocked("Renaming a layer");
-    const reply = vialSetLayerName.decode(await queue.request(vialSetLayerName.encode(layer, wanted)));
+    await device.ensureUnlocked("Renaming a layer");
+    const reply = vialSetLayerName.decode(await device.request(vialSetLayerName.encode(layer, wanted)));
     if (!reply.ok) throw new LayerNameError(`the keyboard rejected the layer name (status ${reply.status})`);
-    const check = vialGetLayerName.decode(await queue.request(vialGetLayerName.encode(layer)));
+    const check = vialGetLayerName.decode(await device.request(vialGetLayerName.encode(layer)));
     if (!check.ok || check.name !== wanted) {
       throw new LayerNameError(`layer name did not verify: sent "${wanted}", read back "${check.name}"`);
     }
     this.values[layer] = wanted;
-    this.ctx.record({
+    this.ctx.history.record({
       label: old ? `Rename layer ${layer} from “${old}” to “${wanted}”` : `Name layer ${layer} “${wanted}”`,
       undo: () => this.set(layer, old),
       redo: () => this.set(layer, wanted),
@@ -67,17 +73,34 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
   id: "layer-names",
   name: "Layer names",
   description:
-    "Names for layers, stored on the keyboard. Needs firmware with the Theis194 dynamic-layer-names extension.",
+    "Names for layers, stored on the board. Needs firmware with the Theis194 dynamic-layer-names extension.",
+  group: "nonstandard",
   firmware: { label: "Theis194/vial-qmk", url: "https://github.com/Theis194/vial-qmk" },
+  commands: [
+    {
+      name: "Get layer name",
+      kind: "read",
+      bytes: [CMD_VIA_VIAL_PREFIX, CMD_VIAL_DYNAMIC_ENTRY_OP, DYNAMIC_VIAL_LAYER_NAME_GET],
+      reply: vialGetLayerName.decode,
+      describe: (request) => `Get layer name ${request[3] ?? 0}`,
+    },
+    {
+      name: "Set layer name",
+      kind: "write",
+      bytes: [CMD_VIA_VIAL_PREFIX, CMD_VIAL_DYNAMIC_ENTRY_OP, DYNAMIC_VIAL_LAYER_NAME_SET],
+      reply: vialSetLayerName.decode,
+      describe: (request) => `Set layer name ${request[3] ?? 0}`,
+    },
+  ],
 
   async probe(ctx) {
-    const { keyboard, queue } = ctx;
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_DYNAMIC || keyboard.layers === 0) return null;
-    const first = vialGetLayerName.decode(await queue.request(vialGetLayerName.encode(0), { retries: 3 }));
+    const { board, device } = ctx;
+    if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || board.layers === 0) return null;
+    const first = vialGetLayerName.decode(await device.request(vialGetLayerName.encode(0), { retries: 3 }));
     if (!first.ok) return null;
     const names = [first.name];
-    for (let layer = 1; layer < keyboard.layers; layer++) {
-      const reply = vialGetLayerName.decode(await queue.request(vialGetLayerName.encode(layer)));
+    for (let layer = 1; layer < board.layers; layer++) {
+      const reply = vialGetLayerName.decode(await device.request(vialGetLayerName.encode(layer)));
       names.push(reply.ok ? reply.name : "");
     }
     return new LayerNames(ctx, names);

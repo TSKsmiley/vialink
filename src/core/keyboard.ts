@@ -16,7 +16,15 @@ import { packLayoutOptions, unpackLayoutOptions, type LayoutLabel } from "./defi
 import { BUILTIN_EXTENSIONS } from "./extensions/index.ts";
 import { dependencyOrder, resolveActive, type ExtensionStatus } from "./extensions/manifest.ts";
 import { History } from "./history.ts";
-import type { ActiveExtension, ExtensionContext, KeyboardExtension } from "./extensions/types.ts";
+import {
+  ExtensionCommandError,
+  type ActiveExtension,
+  type BoardView,
+  type DeviceContext,
+  type HostContext,
+  type KeyboardExtension,
+} from "./extensions/types.ts";
+import { isStandardCommand, startsWith } from "./protocol/standard.ts";
 import { KeycodeTable, RESET_KEYCODE } from "./keycodes/table.ts";
 import {
   viaGetLayerCount,
@@ -133,6 +141,8 @@ export class Keyboard {
   macroMemory = 0;
   capabilities!: Capabilities;
   keycodes!: KeycodeTable;
+  /** Set by the app to show an extension's notices and errors (ctx.notify). */
+  notifyHandler: ((kind: "info" | "error", message: string) => void) | null = null;
   /** Set by the app to show the unlock dialog when an operation needs it. */
   unlockHandler: UnlockHandler | null = null;
   /** Last known lock state; null until first checked. Updated by every status check, unlock and lock. */
@@ -400,7 +410,7 @@ export class Keyboard {
   async supportsExtension(ext: KeyboardExtension<unknown>): Promise<boolean> {
     const known = this.supported.get(ext.id);
     if (known !== undefined) return known;
-    const ok = (await ext.probe(this.extensionContext())) !== null;
+    const ok = (await ext.probe(this.extensionContext(ext))) !== null;
     this.supported.set(ext.id, ok);
     return ok;
   }
@@ -419,7 +429,6 @@ export class Keyboard {
    * Running extensions keep their state; newly running ones get a fresh probe.
    */
   private async refreshExtensions(onProgress?: (p: LoadProgress) => void): Promise<void> {
-    const ctx = this.extensionContext();
     const ordered = this.enabledList;
     const fresh = new Map<string, unknown>();
     const candidates = new Set<string>();
@@ -428,7 +437,7 @@ export class Keyboard {
       const ext = ordered[i];
       if (!(ext.requires ?? []).every((id) => candidates.has(id))) continue;
       if (!this.supported.has(ext.id)) {
-        const state = await ext.probe(ctx);
+        const state = await ext.probe(this.extensionContext(ext));
         this.supported.set(ext.id, state !== null);
         if (state !== null) fresh.set(ext.id, state);
       }
@@ -445,7 +454,11 @@ export class Keyboard {
         continue;
       }
       const kept = this.active.get(ext.id);
-      const state = kept ? kept.state : fresh.has(ext.id) ? fresh.get(ext.id) : await ext.probe(ctx);
+      const state = kept
+        ? kept.state
+        : fresh.has(ext.id)
+          ? fresh.get(ext.id)
+          : await ext.probe(this.extensionContext(ext));
       if (state === null) {
         this.supported.set(ext.id, false);
         statuses.set(ext.id, { kind: "unsupported" });
@@ -459,14 +472,106 @@ export class Keyboard {
     this.changed();
   }
 
-  private extensionContext(): ExtensionContext {
-    return {
-      keyboard: this,
-      queue: this.queue,
+  /**
+   * The context one extension gets: everything through it, device access
+   * limited by its group (none for "compatible"; standard Vial commands, plus
+   * declared custom commands for "nonstandard").
+   */
+  private extensionContext(ext: KeyboardExtension<unknown>): DeviceContext {
+    const host: HostContext = {
+      board: this.boardView,
+      keymap: {
+        get: (layer, row, col) => this.getKey(layer, row, col),
+        set: (layer, row, col, code) => this.setKey(layer, row, col, code),
+        getEncoder: (layer, index, direction) => this.getEncoder(layer, index, direction),
+        setEncoder: (layer, index, direction, code) => this.setEncoder(layer, index, direction, code),
+      },
+      history: {
+        record: (write) => this.history.record(write),
+        group: (label, action) => this.history.group(label, action),
+      },
+      notify: {
+        info: (message) => this.notifyHandler?.("info", `${ext.name}: ${message}`),
+        error: (message) => this.notifyHandler?.("error", `${ext.name}: ${message}`),
+      },
       changed: () => this.changed(),
-      record: (write) => this.history.record(write),
+    };
+    // A compatible extension's probe is typed without `device`; leaving it out
+    // at run time too keeps a cast from getting around that.
+    if (ext.group === "compatible") return host as DeviceContext;
+    const custom = ext.group === "nonstandard" ? ext.commands : [];
+    return {
+      ...host,
+      device: {
+        request: (data, options) => {
+          if (!isStandardCommand(data) && !custom.some((c) => startsWith(data, c.bytes))) {
+            const head = [...data.slice(0, 3)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+            return Promise.reject(
+              new ExtensionCommandError(
+                `${ext.name} tried to send a command it hasn't declared (${head} …); nothing was sent.`,
+              ),
+            );
+          }
+          return this.queue.request(data, options);
+        },
+        ensureUnlocked: (reason) => this.ensureUnlocked(reason),
+      },
     };
   }
+
+  /** The read-only view extensions get; getters, so it stays current. */
+  private readonly boardView: BoardView = (() => {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const kb = this;
+    return Object.freeze({
+      get viaProtocol() {
+        return kb.viaProtocol;
+      },
+      get vialProtocol() {
+        return kb.vialProtocol;
+      },
+      get uid() {
+        return kb.uid;
+      },
+      get rows() {
+        return kb.rows;
+      },
+      get cols() {
+        return kb.cols;
+      },
+      get layers() {
+        return kb.layers;
+      },
+      get encoderCount() {
+        return kb.encoderCount;
+      },
+      get keys() {
+        return kb.keys;
+      },
+      get encoders() {
+        return kb.encoders;
+      },
+      get layoutLabels() {
+        return kb.layoutLabels;
+      },
+      get layoutOptions() {
+        return kb.layoutOptions;
+      },
+      get macroCount() {
+        return kb.macroCount;
+      },
+      get macroMemory() {
+        return kb.macroMemory;
+      },
+      get capabilities() {
+        return kb.capabilities;
+      },
+      get keycodes() {
+        return kb.keycodes;
+      },
+      codeName: (code: number) => kb.codeName(code),
+    });
+  })();
 
   private changed(): void {
     this.revision++;

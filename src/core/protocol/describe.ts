@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Readable names for raw HID requests, for the HID log (design board 6).
 // ViaLink-only: vial-gui logs bytes. Covers every command ViaLink sends
-// (commands.ts and the extensions' protocol files); anything else is named
-// by its bytes.
+// (commands.ts and the extensions' protocol files) plus the custom commands
+// extensions declare; anything else is named by its bytes.
 
 import * as C from "./constants.ts";
+import { startsWith } from "./standard.ts";
 
 export type CommandKind = "read" | "write" | "unlock" | "poll";
 
@@ -27,15 +28,28 @@ const DYNAMIC: Record<number, [string, CommandKind]> = {
   [C.DYNAMIC_VIAL_KEY_OVERRIDE_SET]: ["Set key override", "write"],
   [C.DYNAMIC_VIAL_ALT_REPEAT_KEY_GET]: ["Get alt repeat key", "read"],
   [C.DYNAMIC_VIAL_ALT_REPEAT_KEY_SET]: ["Set alt repeat key", "write"],
-  [C.DYNAMIC_VIAL_LAYER_NAME_GET]: ["Get layer name", "read"],
-  [C.DYNAMIC_VIAL_LAYER_NAME_SET]: ["Set layer name", "write"],
 };
+
+/** A custom command a non-standard extension declares (core/extensions/types.ts CustomCommand). */
+export interface DeclaredCommand {
+  readonly name: string;
+  readonly kind: "read" | "write";
+  readonly bytes: readonly number[];
+  readonly describe?: (request: Uint8Array) => string;
+}
 
 /**
  * Names a request. `keycode` turns a keycode into a QMK name for "Set key"
- * (the keyboard's table); without it, keycodes show as hex.
+ * (the keyboard's table); without it, keycodes show as hex. `custom` names the
+ * commands extensions declare beyond standard Vial (e.g. layer names).
  */
-export function describeRequest(req: Uint8Array, keycode?: (code: number) => string): CommandDescription {
+export function describeRequest(
+  req: Uint8Array,
+  keycode?: (code: number) => string,
+  custom: readonly DeclaredCommand[] = [],
+): CommandDescription {
+  const declared = custom.find((c) => startsWith(req, c.bytes));
+  if (declared) return { name: declared.describe?.(req) ?? declared.name, kind: declared.kind };
   const kc = (code: number) => (keycode ? keycode(code) : hex(code, 4));
   const r = (name: string): CommandDescription => ({ name, kind: "read" });
   const w = (name: string): CommandDescription => ({ name, kind: "write" });

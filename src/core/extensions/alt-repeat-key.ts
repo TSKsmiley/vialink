@@ -31,7 +31,7 @@ import {
   type AltRepeatKeyEntry,
 } from "../protocol/alt-repeat-key.ts";
 import { VIAL_PROTOCOL_DYNAMIC } from "../protocol/constants.ts";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export class AltRepeatKeyError extends Error {
   constructor(message: string) {
@@ -64,12 +64,12 @@ export interface AltRepeatKeyVilParse {
 }
 
 export class AltRepeatKeys {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly values: AltRepeatKeyEntry[];
   /** Per entry, the .vil spelling of its keycodes when it was last set by a restore. */
   private readonly vilKeycodes: (AltRepeatKeyVilKeycodes | undefined)[] = [];
 
-  constructor(ctx: ExtensionContext, entries: AltRepeatKeyEntry[]) {
+  constructor(ctx: DeviceContext, entries: AltRepeatKeyEntry[]) {
     this.ctx = ctx;
     this.values = entries.map(normalizeAltRepeatKeyEntry);
   }
@@ -108,12 +108,12 @@ export class AltRepeatKeys {
     const wanted = normalizeAltRepeatKeyEntry(entry);
     if (altRepeatKeyEntriesEqual(wanted, current)) return;
 
-    const { keyboard, queue } = this.ctx;
-    const boot = keyboard.keycodes.resolve(RESET_KEYCODE);
+    const { board, device } = this.ctx;
+    const boot = board.keycodes.resolve(RESET_KEYCODE);
     if (wanted.keycode === boot || wanted.altKeycode === boot) {
-      await keyboard.ensureUnlocked("Assigning QK_BOOT (bootloader) to an alt repeat key");
+      await device.ensureUnlocked("Assigning QK_BOOT (bootloader) to an alt repeat key");
     }
-    const reply = vialAltRepeatKeySet.decode(await queue.request(vialAltRepeatKeySet.encode(idx, wanted)));
+    const reply = vialAltRepeatKeySet.decode(await device.request(vialAltRepeatKeySet.encode(idx, wanted)));
     if (!reply.ok) {
       throw new AltRepeatKeyError(`the keyboard rejected alt repeat key ${idx + 1} (status ${reply.status})`);
     }
@@ -121,8 +121,8 @@ export class AltRepeatKeys {
     this.values[idx] = wanted;
     this.vilKeycodes[idx] = vilKeycodes ? { ...vilKeycodes } : undefined;
     const old = { ...current };
-    this.ctx.record({
-      label: `Alt repeat key ${idx + 1}: ${keyboard.codeName(wanted.keycode)} → ${keyboard.codeName(wanted.altKeycode)}`,
+    this.ctx.history.record({
+      label: `Alt repeat key ${idx + 1}: ${board.codeName(wanted.keycode)} → ${board.codeName(wanted.altKeycode)}`,
       undo: () => this.set(idx, old, oldVil),
       redo: () => this.set(idx, wanted, vilKeycodes),
       isCurrent: () => altRepeatKeyEntriesEqual(this.get(idx), wanted),
@@ -132,7 +132,7 @@ export class AltRepeatKeys {
 
   /** save_alt_repeat_key(): AltRepeatKeyEntry.save() per entry. */
   save(): AltRepeatKeyVilEntry[] {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     return this.values.map((e, idx) => ({
       keycode: this.vilKeycodes[idx]?.keycode ?? kc.serialize(e.keycode),
       alt_keycode: this.vilKeycodes[idx]?.alt_keycode ?? kc.serialize(e.altKeycode),
@@ -155,7 +155,7 @@ export class AltRepeatKeys {
     const options = d.options;
     if (!Number.isInteger(mods) || (mods as number) < 0 || (mods as number) > 0xff) return null;
     if (!Number.isInteger(options)) return null;
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     const keycode = kc.deserialize(d.keycode as string | number);
     const altKeycode = kc.deserialize(d.alt_keycode as string | number);
     if (keycode > 0xffff || altKeycode > 0xffff) return null;
@@ -172,7 +172,7 @@ export class AltRepeatKeys {
   }
 
   describe(idx: number, entry: AltRepeatKeyEntry): string {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     const state = entry.options & AREP_ENABLED ? "enabled" : "disabled";
     return `Set alt repeat key ${idx + 1}: ${kc.serialize(entry.keycode)} → ${kc.serialize(entry.altKeycode)} (${state})`;
   }
@@ -186,15 +186,15 @@ export const altRepeatKeyExtension: KeyboardExtension<AltRepeatKeys> = {
     "Pairs of keys for QMK's Alt Repeat Key: after the last key, the alt repeat key sends its alternate.",
 
   async probe(ctx) {
-    const { keyboard, queue } = ctx;
-    const count = keyboard.capabilities.dynamic?.altRepeatKey ?? 0;
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_DYNAMIC || count === 0) return null;
+    const { board, device } = ctx;
+    const count = board.capabilities.dynamic?.altRepeatKey ?? 0;
+    if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || count === 0) return null;
     // reload_alt_repeat_key → _retrieve_dynamic_entries: every entry, retries=20,
     // and a non-zero status aborts the load.
     const entries: AltRepeatKeyEntry[] = [];
     for (let idx = 0; idx < count; idx++) {
       const reply = vialAltRepeatKeyGet.decode(
-        await queue.request(vialAltRepeatKeyGet.encode(idx), { retries: 20 }),
+        await device.request(vialAltRepeatKeyGet.encode(idx), { retries: 20 }),
       );
       if (!reply.ok) {
         throw new AltRepeatKeyError(`failed retrieving alt repeat key entry ${idx} from the device`);

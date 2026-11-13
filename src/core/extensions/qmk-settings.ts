@@ -35,7 +35,7 @@ import {
   vialQmkSettingsSet,
 } from "../protocol/qmk-settings.ts";
 import defs from "./data/qmk_settings.json";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 // ── The settings description (QmkSettings.initialize) ───────────────────────
 
@@ -107,16 +107,16 @@ export class QmkSettingsError extends Error {
   }
 }
 
-async function readValue(ctx: ExtensionContext, qsid: number): Promise<number | null> {
-  const reply = vialQmkSettingsGet.decode(await ctx.queue.request(vialQmkSettingsGet.encode(qsid)));
+async function readValue(ctx: DeviceContext, qsid: number): Promise<number | null> {
+  const reply = vialQmkSettingsGet.decode(await ctx.device.request(vialQmkSettingsGet.encode(qsid)));
   return reply.ok ? decodeQsidValue(reply.data, qsidWidth(qsid)) : null;
 }
 
 export class QmkSettings {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly current: Map<number, number>;
 
-  constructor(ctx: ExtensionContext, values: Map<number, number>) {
+  constructor(ctx: DeviceContext, values: Map<number, number>) {
     this.ctx = ctx;
     this.current = values;
   }
@@ -155,14 +155,14 @@ export class QmkSettings {
     } catch {
       throw new QmkSettingsError(`${value} is not a valid value for ${qsidLabel(qsid)}`);
     }
-    const reply = vialQmkSettingsSet.decode(await this.ctx.queue.request(request));
+    const reply = vialQmkSettingsSet.decode(await this.ctx.device.request(request));
     if (!reply.ok) {
       throw new QmkSettingsError(
         `the keyboard rejected ${qsidLabel(qsid)} = ${value} (status ${reply.status})`,
       );
     }
     this.current.set(qsid, value);
-    this.ctx.record({
+    this.ctx.history.record({
       label: `QMK setting ${qsidLabel(qsid)}: ${old} → ${value}`,
       undo: () => this.set(qsid, old),
       redo: () => this.set(qsid, value),
@@ -190,7 +190,7 @@ export class QmkSettings {
   /** Resets every setting to the firmware defaults, then reads them back (reset_settings). */
   async reset(): Promise<void> {
     // keyboard_comm.py qmk_settings_reset sends this once, without retries.
-    await this.ctx.queue.request(vialQmkSettingsReset.encode(), { retries: 1 });
+    await this.ctx.device.request(vialQmkSettingsReset.encode(), { retries: 1 });
     await this.reload();
   }
 
@@ -225,13 +225,13 @@ export const qmkSettingsExtension: KeyboardExtension<QmkSettings> = {
     "Tap-hold timing, Magic, Auto Shift, combos, one-shot and mouse keys settings stored on the keyboard (Vial protocol 4+).",
 
   async probe(ctx) {
-    const { keyboard } = ctx;
+    const { board } = ctx;
     // QmkSettings.valid(): Vial protocol ≥ 4 and at least one supported qsid.
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_QMK_SETTINGS) return null;
+    if (board.vialProtocol < VIAL_PROTOCOL_QMK_SETTINGS) return null;
     const values = new Map<number, number>();
     // reload_settings: GET every qsid the board reports and the JSON describes;
     // keep the ones whose status is 0.
-    for (const qsid of keyboard.capabilities.qmkSettings) {
+    for (const qsid of board.capabilities.qmkSettings) {
       if (!isQsidSupported(qsid)) continue;
       const value = await readValue(ctx, qsid);
       if (value !== null) values.set(qsid, value);

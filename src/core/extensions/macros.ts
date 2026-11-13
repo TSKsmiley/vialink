@@ -39,13 +39,13 @@ import {
   type MacroAction,
 } from "../protocol/macros.ts";
 import { concat } from "../util/bytes.ts";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export { MacroError };
 
 /** Reads the macro buffer the way reload_macros_late does (cleaned up when memory > 0). */
 export async function readMacroBuffer(
-  ctx: ExtensionContext,
+  ctx: DeviceContext,
   count: number,
   memory: number,
 ): Promise<Uint8Array> {
@@ -54,7 +54,7 @@ export async function readMacroBuffer(
   let data: Uint8Array = new Uint8Array(0);
   for (let x = 0; x < memory; x += BUFFER_FETCH_CHUNK) {
     const sz = Math.min(BUFFER_FETCH_CHUNK, memory - x);
-    const reply = await ctx.queue.request(viaMacroGetBuffer.encode(x, sz));
+    const reply = await ctx.device.request(viaMacroGetBuffer.encode(x, sz));
     chunks.push(reply.slice(4, 4 + sz));
     data = concat(chunks);
     if (enoughMacrosRead(data, count)) break;
@@ -63,12 +63,12 @@ export async function readMacroBuffer(
 }
 
 export class Macros {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   readonly count: number;
   readonly memory: number;
   private data: Uint8Array;
 
-  constructor(ctx: ExtensionContext, count: number, memory: number, buffer: Uint8Array) {
+  constructor(ctx: DeviceContext, count: number, memory: number, buffer: Uint8Array) {
     this.ctx = ctx;
     this.count = count;
     this.memory = memory;
@@ -76,7 +76,7 @@ export class Macros {
   }
 
   get vialProtocol(): number {
-    return this.ctx.keyboard.vialProtocol;
+    return this.ctx.board.vialProtocol;
   }
 
   /** The buffer as last read from or written to the board (keyboard.macro in vial-gui). */
@@ -86,7 +86,7 @@ export class Macros {
 
   /** Every macro, decoded afresh (callers may edit the result). */
   get macros(): MacroAction[][] {
-    return deserializeMacros(this.data, this.count, this.vialProtocol, this.ctx.keyboard.keycodes);
+    return deserializeMacros(this.data, this.count, this.vialProtocol, this.ctx.board.keycodes);
   }
 
   /** The raw bytes of each macro on the board, without terminators. */
@@ -96,17 +96,17 @@ export class Macros {
 
   /** macros_serialize for this board; throws MacroError on actions it cannot encode. */
   serialize(macros: readonly (readonly MacroAction[])[]): Uint8Array {
-    return serializeMacros(macros, this.count, this.vialProtocol, this.ctx.keyboard.keycodes);
+    return serializeMacros(macros, this.count, this.vialProtocol, this.ctx.board.keycodes);
   }
 
   /** Bytes one macro takes, without its terminator. */
   serializeMacro(actions: readonly MacroAction[]): Uint8Array {
-    return serializeMacro(actions, this.vialProtocol, this.ctx.keyboard.keycodes);
+    return serializeMacro(actions, this.vialProtocol, this.ctx.board.keycodes);
   }
 
   /** decode then encode, as MacroRecorder.on_stop does to merge adjacent actions. */
   normalize(actions: readonly MacroAction[]): MacroAction[] {
-    return deserializeMacro(this.serializeMacro(actions), this.vialProtocol, this.ctx.keyboard.keycodes);
+    return deserializeMacro(this.serializeMacro(actions), this.vialProtocol, this.ctx.board.keycodes);
   }
 
   /** MacroRecorder.on_save: writes every macro when the result differs from the board. */
@@ -123,15 +123,15 @@ export class Macros {
       throw new MacroError(`the macro is too big: got ${data.length} max ${this.memory}`);
     }
     if (equalBytes(data, this.data)) return;
-    await this.ctx.keyboard.ensureUnlocked("Saving macros");
+    await this.ctx.device.ensureUnlocked("Saving macros");
     for (let off = 0; off < data.length; off += BUFFER_FETCH_CHUNK) {
       const chunk = data.slice(off, off + BUFFER_FETCH_CHUNK);
-      await this.ctx.queue.request(viaMacroSetBuffer.encode(off, chunk));
+      await this.ctx.device.request(viaMacroSetBuffer.encode(off, chunk));
     }
     const old = this.data;
     const now = data.slice();
     this.data = now;
-    this.ctx.record({
+    this.ctx.history.record({
       label: "Save macros",
       undo: () => this.writeBuffer(old),
       redo: () => this.writeBuffer(now),
@@ -175,7 +175,7 @@ export const macrosExtension: KeyboardExtension<Macros> = {
   description: "Edit the keyboard's dynamic macros (M0, M1, ...) and keep them in .vil files.",
 
   async probe(ctx) {
-    const { macroCount, macroMemory } = ctx.keyboard;
+    const { macroCount, macroMemory } = ctx.board;
     if (macroCount <= 0 || macroMemory <= 0) return null;
     const buffer = await readMacroBuffer(ctx, macroCount, macroMemory);
     return new Macros(ctx, macroCount, macroMemory, buffer);

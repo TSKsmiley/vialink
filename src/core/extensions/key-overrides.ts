@@ -24,7 +24,7 @@ import {
   type KeyOverrideEntry,
 } from "../protocol/key-overrides.ts";
 import { VIAL_PROTOCOL_KEY_OVERRIDE } from "../protocol/constants.ts";
-import type { ExtensionContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
 
 export type { KeyOverrideEntry } from "../protocol/key-overrides.ts";
 
@@ -82,12 +82,12 @@ function checkEntry(e: KeyOverrideEntry): void {
 }
 
 export class KeyOverrides {
-  private readonly ctx: ExtensionContext;
+  private readonly ctx: DeviceContext;
   private readonly values: KeyOverrideEntry[];
   /** Writes run one after another, so an update always starts from the latest entry. */
   private chain: Promise<unknown> = Promise.resolve();
 
-  constructor(ctx: ExtensionContext, entries: KeyOverrideEntry[]) {
+  constructor(ctx: DeviceContext, entries: KeyOverrideEntry[]) {
     this.ctx = ctx;
     this.values = entries.map(normalize);
   }
@@ -128,7 +128,7 @@ export class KeyOverrides {
 
   /** KeyOverrideEntry.save() for every entry: keycodes as QMK ids. */
   toVil(): KeyOverrideVilEntry[] {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     return this.values.map((e) => ({
       trigger: kc.serialize(e.trigger),
       replacement: kc.serialize(e.replacement),
@@ -147,7 +147,7 @@ export class KeyOverrides {
   parseVil(data: unknown): KeyOverrideEntry | null {
     if (typeof data !== "object" || data === null) return null;
     const d = data as Record<string, unknown>;
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     const keycode = (v: unknown): number | null => {
       if (typeof v === "string") return kc.deserialize(v);
       return isUint(v, 0xffff) ? v : null;
@@ -171,7 +171,7 @@ export class KeyOverrides {
 
   /** Short summary for restore confirmations, e.g. "KC_A → KC_B, enabled". */
   describe(e: KeyOverrideEntry): string {
-    const kc = this.ctx.keyboard.keycodes;
+    const kc = this.ctx.board.keycodes;
     const state = e.options & KO_ENABLED ? "enabled" : "disabled";
     return `${kc.serialize(e.trigger)} → ${kc.serialize(e.replacement)}, ${state}`;
   }
@@ -183,21 +183,21 @@ export class KeyOverrides {
   }
 
   private async write(index: number, wanted: KeyOverrideEntry): Promise<void> {
-    const { keyboard, queue } = this.ctx;
+    const { board, device } = this.ctx;
     const current = this.get(index);
     checkEntry(wanted);
     const entry = normalize(wanted);
     if (sameKeyOverride(entry, current)) return;
-    if (entry.replacement === keyboard.keycodes.resolve(RESET_KEYCODE)) {
-      await keyboard.ensureUnlocked("Assigning QK_BOOT (bootloader) to a key override");
+    if (entry.replacement === board.keycodes.resolve(RESET_KEYCODE)) {
+      await device.ensureUnlocked("Assigning QK_BOOT (bootloader) to a key override");
     }
-    const reply = vialKeyOverrideSet.decode(await queue.request(vialKeyOverrideSet.encode(index, entry)));
+    const reply = vialKeyOverrideSet.decode(await device.request(vialKeyOverrideSet.encode(index, entry)));
     if (!reply.ok) {
       throw new KeyOverrideError(`the keyboard rejected key override ${index + 1} (status ${reply.status})`);
     }
     this.values[index] = entry;
     const old = { ...current };
-    this.ctx.record({
+    this.ctx.history.record({
       label: `Key override ${index + 1}: ${this.describe(entry)}`,
       undo: () => this.set(index, old),
       redo: () => this.set(index, entry),
@@ -214,13 +214,13 @@ export const keyOverridesExtension: KeyboardExtension<KeyOverrides> = {
   description: "Replace a key while certain modifiers are held (QMK key overrides). Needs Vial protocol 5.",
 
   async probe(ctx) {
-    const { keyboard, queue } = ctx;
-    if (keyboard.vialProtocol < VIAL_PROTOCOL_KEY_OVERRIDE) return null;
-    const count = keyboard.capabilities.dynamic?.keyOverride ?? 0;
+    const { board, device } = ctx;
+    if (board.vialProtocol < VIAL_PROTOCOL_KEY_OVERRIDE) return null;
+    const count = board.capabilities.dynamic?.keyOverride ?? 0;
     if (count === 0) return null;
     const entries: KeyOverrideEntry[] = [];
     for (let i = 0; i < count; i++) {
-      const reply = vialKeyOverrideGet.decode(await queue.request(vialKeyOverrideGet.encode(i)));
+      const reply = vialKeyOverrideGet.decode(await device.request(vialKeyOverrideGet.encode(i)));
       if (!reply.ok) {
         if (i === 0) return null;
         throw new KeyOverrideError(
