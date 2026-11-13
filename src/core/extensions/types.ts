@@ -40,6 +40,17 @@ export interface ExtensionVilSupport<State> {
   restore(state: State, file: Readonly<Record<string, unknown>>): ExtensionRestoreStep[];
 }
 
+/**
+ * Hooks into layer operations, so per-layer data an extension keeps follows
+ * the keys. Each hook is awaited inside the operation's undo group: writes it
+ * records (via ExtensionContext.record) join the same undo step, and an error
+ * stops the operation and is shown to the user.
+ */
+export interface ExtensionLayerHooks<State> {
+  /** "Clear layer": reset this extension's data for `layer` (e.g. remove its name). */
+  clear?(state: State, layer: number): Promise<void>;
+}
+
 export type ExtensionGroup = "standard" | "compatible" | "nonstandard";
 
 export interface KeyboardExtension<State = unknown> {
@@ -65,6 +76,7 @@ export interface KeyboardExtension<State = unknown> {
    */
   probe(ctx: ExtensionContext): Promise<State | null>;
   readonly vil?: ExtensionVilSupport<State>;
+  readonly layers?: ExtensionLayerHooks<State>;
 }
 
 /** An extension that probed successfully on the connected board. */

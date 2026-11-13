@@ -93,11 +93,13 @@ describe("layer operations", () => {
     await menuItem("Raise", /Clear layer/);
     await waitFor(() => expect(sim.getKeycode(2, p.row, p.col)).toBe(KC_TRNS));
     expect(kb.history.nextUndo?.label).toBe("Clear Raise");
+    // The layer names extension's clear hook removed the name in the same step.
+    expect(sim.layerNames?.[2]).toBe("");
 
     await menuItem("Nav", "Duplicate to empty layer");
-    // Layer 2 (Raise) is named, so the first empty one is 3; the view opens it.
-    await waitFor(() => expect(sim.getKeycode(3, p.row, p.col)).toBe(0x04));
-    expect(screen.getByRole("tab", { name: "3: Layer 3" }).getAttribute("aria-selected")).toBe("true");
+    // Cleared and unnamed, layer 2 is now the first empty one; the view opens it.
+    await waitFor(() => expect(sim.getKeycode(2, p.row, p.col)).toBe(0x04));
+    expect(screen.getByRole("tab", { name: "2: Layer 2" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("shares a layer as text and pastes it back from Ctrl+V anywhere", async () => {

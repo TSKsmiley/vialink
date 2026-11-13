@@ -7,6 +7,8 @@ import { SimulatedKeyboard } from "../sim/simulatedKeyboard.ts";
 import { RequestQueue } from "../transport/queue.ts";
 import { toHex } from "../util/bytes.ts";
 import { parseVil, planVilRestore, saveVil } from "../vil.ts";
+import { KC_TRNS } from "../layerInfo.ts";
+import { clearLayer } from "../layers.ts";
 import { layerNamesExtension } from "./layerNames.ts";
 
 const xz = new Uint8Array(
@@ -49,6 +51,22 @@ describe("layer names extension", () => {
     const { kb } = await board({ extensions: [] });
     expect(kb.extension(layerNamesExtension)).toBeNull();
     expect(saveVil(kb)).not.toContain("layer_names");
+  });
+
+  it("hooks into Clear layer: the name goes with the keys, in one undo step", async () => {
+    const { sim, kb } = await board();
+    sim.unlocked = true;
+    const names = kb.extension(layerNamesExtension)!;
+    await kb.setKey(1, 0, 0, 0x04);
+    await clearLayer(kb, 1, "Clear Nav");
+    expect(sim.layerNames).toEqual(["Base", ""]);
+    expect(kb.getKey(1, 0, 0)).toBe(KC_TRNS);
+    expect(kb.history.nextUndo?.label).toBe("Clear Nav");
+
+    await kb.history.undo();
+    expect(sim.layerNames).toEqual(["Base", "Nav"]);
+    expect(names.get(1)).toBe("Nav");
+    expect(kb.getKey(1, 0, 0)).toBe(0x04);
   });
 
   it("asks for an unlock before renaming, and verifies the write", async () => {

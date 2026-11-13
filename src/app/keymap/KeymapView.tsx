@@ -17,7 +17,7 @@ import { keyCount, reachSummary, visiblePositions } from "../../core/layerInfo.t
 import {
   applyLayerWrites,
   firstEmptyLayer,
-  planClear,
+  clearLayer,
   planPaste,
   snapshotCounts,
   snapshotLayer,
@@ -194,8 +194,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
           }
         });
       }),
-    onClear: (l: number) =>
-      void run(() => applyLayerWrites(keyboard, l, planClear(keyboard, l), `Clear ${layerName(l)}`)),
+    onClear: (l: number) => void run(() => clearLayer(keyboard, l, `Clear ${layerName(l)}`)),
   };
 
   // Ctrl+C copies the selected keys, or the whole layer; Ctrl+Shift+C copies the layer as text.

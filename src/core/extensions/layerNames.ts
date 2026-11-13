@@ -83,6 +83,11 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     return new LayerNames(ctx, names);
   },
 
+  layers: {
+    // A cleared layer loses its name too, so it reads as empty again.
+    clear: (state, layer) => state.set(layer, ""),
+  },
+
   vil: {
     keys: ["layer_names"],
     save: (state) => ({ layer_names: [...state.names] }),
