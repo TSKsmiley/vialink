@@ -15,7 +15,8 @@ import {
   type Connection,
   type ConnectTarget,
 } from "./connection.ts";
-import { isDesktop } from "./desktop.ts";
+import { isDesktop, tauriUpdater } from "./desktop.ts";
+import { browserPrefs, Updater } from "./updates.ts";
 import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
@@ -38,9 +39,15 @@ import { DevicePanel } from "./shell/DevicePanel.tsx";
 import { SidePanelTaken } from "./shell/sidePanelSlot.ts";
 import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
+import { UpdateNotice } from "./shell/UpdateNotice.tsx";
 import { useHistory } from "./shell/useHistory.ts";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 import { BUILTIN_EXTENSIONS } from "../core/extensions/index.ts";
+
+/** The desktop app's updater (offered, never forced); none in the browser. */
+const updater = isDesktop() ? new Updater(tauriUpdater, browserPrefs) : null;
+/** The quiet update check waits this long after launch, so it never competes with startup. */
+const UPDATE_CHECK_DELAY_MS = 5000;
 
 type Status =
   | { kind: "idle" }
@@ -119,6 +126,10 @@ export function App() {
     },
     [disabledExtensions],
   );
+
+  useEffect(() => {
+    void updater?.start(UPDATE_CHECK_DELAY_MS);
+  }, []);
 
   // The desktop app connects on its own when exactly one keyboard is plugged
   // in, so launching it goes straight to the keymap. Only once per launch: after
@@ -216,6 +227,7 @@ export function App() {
           onExtensions={() => setShowExtensions(true)}
           onDisconnect={() => void disconnect()}
           onError={setError}
+          updater={updater}
         />
 
         {/* The device panel docks under the top bar on the right (board 6): the
@@ -315,6 +327,7 @@ export function App() {
             </main>
 
             <UndoToast keyboard={kb} controls={history} />
+            {updater && <UpdateNotice updater={updater} busy={restoring} />}
 
             <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
               Built on{" "}

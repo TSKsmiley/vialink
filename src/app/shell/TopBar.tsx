@@ -24,6 +24,8 @@ import { setThemeChoice, useThemeChoice, type ThemeChoice } from "../theme.ts";
 import { ExtensionSlot } from "../extensions/ExtensionSlot.tsx";
 import { Button, DropdownMenu } from "../ui/index.ts";
 import type { HistoryControls } from "./useHistory.ts";
+import type { Updater } from "../updates.ts";
+import { useUpdater } from "./useUpdater.ts";
 
 interface Props {
   keyboard: Keyboard | null;
@@ -35,6 +37,8 @@ interface Props {
   onExtensions: () => void;
   onDisconnect: () => void;
   onError: (message: string) => void;
+  /** The desktop app's updater; null in the browser. */
+  updater?: Updater | null;
 }
 
 export function TopBar({
@@ -46,6 +50,7 @@ export function TopBar({
   onExtensions,
   onDisconnect,
   onError,
+  updater = null,
 }: Props) {
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -88,6 +93,7 @@ export function TopBar({
           <ThemeItems />
           <DropdownMenu.Separator />
           <KeyboardLayoutItems />
+          {updater && <UpdateItems updater={updater} />}
           {keyboard && (
             <>
               <DropdownMenu.Separator />
@@ -128,6 +134,33 @@ function KeyboardLayoutItems() {
         </DropdownMenu.RadioGroup>
       </DropdownMenu.SubContent>
     </DropdownMenu.Sub>
+  );
+}
+
+/** Desktop app only, in builds that can update themselves. */
+function UpdateItems({ updater }: { updater: Updater }) {
+  useUpdater(updater);
+  if (!updater.enabled) return null;
+  const ready = updater.readyInBackground;
+  return (
+    <>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Label>ViaLink {__APP_VERSION__}</DropdownMenu.Label>
+      {ready ? (
+        <DropdownMenu.Item onClick={() => updater.showReady()}>
+          Restart to update to {ready}
+        </DropdownMenu.Item>
+      ) : (
+        <DropdownMenu.Item onClick={() => void updater.check(true)}>Check for updates</DropdownMenu.Item>
+      )}
+      <DropdownMenu.CheckboxItem
+        checked={updater.autoCheck}
+        onCheckedChange={(on: boolean) => updater.setAutoCheck(on)}
+        closeOnClick={false}
+      >
+        Check for updates at launch
+      </DropdownMenu.CheckboxItem>
+    </>
   );
 }
 
