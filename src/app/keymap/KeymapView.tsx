@@ -87,7 +87,8 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
   const busy = writing || locked;
   const [clipboard, setClipboard] = useState<PasteSource | null>(null);
   const [pasting, setPasting] = useState<{ source: PasteSource; target: number } | null>(null);
-  const [importing, setImporting] = useState<{ text: string } | null>(null);
+  // target: the layer whose menu opened it; none (Ctrl+V) aims at the first empty layer.
+  const [importing, setImporting] = useState<{ text: string; target?: number } | null>(null);
   // Copy, paste and share are layer sharing's (layer commands); renaming comes from a layer name provider.
   const sharing = keyboard.extensionStatus("layer-sharing").kind === "active";
   const namer = keyboard.provided(layerNames).find((p) => p.rename);
@@ -191,9 +192,9 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
     layerName,
     copy: (l: number) => copy(l),
     copyAsText: copyAsText,
-    pasteFromText: () => {
+    pasteFromText: (target?: number) => {
       setPasting(null);
-      setImporting({ text: "" });
+      setImporting({ text: "", target });
     },
     paste: clipboard ? pasteOnto : undefined,
     canDuplicate: emptyLayer !== null,
@@ -388,7 +389,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
             key={importing.text}
             keyboard={keyboard}
             initialText={importing.text}
-            defaultTarget={firstEmptyLayer(keyboard, (l) => named(l) !== null) ?? layer}
+            defaultTarget={importing.target ?? firstEmptyLayer(keyboard, (l) => named(l) !== null) ?? layer}
             layerName={layerName}
             onError={onError}
             onClose={(onto) => {

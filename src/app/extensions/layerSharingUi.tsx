@@ -57,7 +57,7 @@ export const layerSharingUi: AppExtension = {
       id: "paste-text",
       title: "Paste layer from text…",
       section: "text",
-      run: (_layer, env) => env.pasteFromText(),
+      run: (layer, env) => env.pasteFromText(layer),
     },
     {
       id: "clear",
