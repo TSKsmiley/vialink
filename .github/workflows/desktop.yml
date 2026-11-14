@@ -10,6 +10,11 @@ name: Desktop app
 # the Actions tab, and on desktop-v* tags, which also attach the installers to
 # a draft GitHub release. Not signed with a certificate yet, so macOS and
 # Windows ask the user to confirm the first time it opens.
+#
+# Updates: once the updater key is set up (README, "Releasing the desktop
+# app"), builds carry the updater and signed update files, and a tag's draft
+# release gets the latest.json that installed apps read once it is published.
+# Without the key the builds simply have no updater.
 
 on:
   pull_request:
@@ -56,6 +61,11 @@ jobs:
             runner: windows-latest
             args: ""
     runs-on: ${{ matrix.runner }}
+    env:
+      # Empty until the updater key is set up; see the comment at the top.
+      VIALINK_UPDATER_PUBKEY: ${{ vars.VIALINK_UPDATER_PUBKEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     permissions:
       contents: write # only used to attach installers to a draft release on desktop-v* tags
     steps:
@@ -77,6 +87,13 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: pnpm install --frozen-lockfile
+      - name: The tag names the app's version
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: test "desktop-v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Updater config (once the updater key is set up)
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        run: node scripts/updater-config.mjs
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +102,9 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || '' }}
           releaseName: ViaLink desktop ${{ github.ref_name }}
           releaseDraft: true
-          args: ${{ matrix.args }}
+          # Update files only when the private key is there to sign them.
+          args: ${{ matrix.args }}${{ env.TAURI_SIGNING_PRIVATE_KEY != '' && ' --config src-tauri/tauri.updater.conf.json' || '' }}
+          updaterJsonPreferNsis: true
       - uses: actions/upload-artifact@v4
         with:
           name: ViaLink-${{ matrix.name }}
@@ -97,3 +116,5 @@ jobs:
             src-tauri/target/**/release/bundle/**/*.dmg
             src-tauri/target/**/release/bundle/**/*.msi
             src-tauri/target/**/release/bundle/**/*.exe
+            src-tauri/target/**/release/bundle/**/*.sig
+            src-tauri/target/**/release/bundle/**/*.app.tar.gz

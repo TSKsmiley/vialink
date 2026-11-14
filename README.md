@@ -90,6 +90,32 @@ Artifacts:
 
 Pushing a `desktop-v*` tag also attaches them to a draft GitHub release.
 
+### Releasing the desktop app
+
+Installed desktop apps look for a newer version a few seconds after they start (the ⋯ menu turns
+that off, or checks by hand) and offer it: **Update**, **Later** or **Skip this version**. Nothing
+downloads or installs until the user says so, and the restart is theirs to pick too. Updates come
+from the newest published GitHub release, and the app installs only what the release key signed.
+An AppImage replaces itself; a `.deb` or `.rpm` install asks for the password to update.
+
+One-time setup of the release key. Keep the key file and its password safe: without them,
+installed apps can't be updated.
+
+```sh
+pnpm tauri signer generate -w ~/.tauri/vialink-updater.key   # asks for a password
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/vialink-updater.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD             # the same password
+gh variable set VIALINK_UPDATER_PUBKEY < ~/.tauri/vialink-updater.key.pub
+```
+
+Builds made without the key (local ones, and CI before this setup) have no updater. Each release:
+
+1. Set the new version in `package.json` and merge it to `master`.
+2. Tag it: `git tag desktop-v0.2.0 && git push origin desktop-v0.2.0`. The workflow checks that
+   the tag names the version, then builds and signs the installers and attaches them, with the
+   `latest.json` the apps read, to a draft release.
+3. Look over the draft and publish it. Installed apps offer the update from their next start.
+
 ### Layout
 
 - `src/core/`: framework-free protocol code. It never imports React or the DOM and runs under

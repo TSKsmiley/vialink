@@ -5,8 +5,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
 import type { NativeHidBridge, NativeKeyboard } from "../core/transport/native.ts";
 import { BatchError, DeviceDisconnectedError, TransportTimeoutError } from "../core/transport/types.ts";
+import type { UpdaterBackend } from "./updates.ts";
 
 /** True inside the Tauri desktop app. */
 export function isDesktop(): boolean {
@@ -69,6 +71,36 @@ export const tauriHid: NativeHidBridge = {
     return () => {
       stopped = true;
       unlisten?.();
+    };
+  },
+};
+
+/** The updater plugin (registered only in builds with the release key; see src-tauri/src/lib.rs). */
+export const tauriUpdater: UpdaterBackend = {
+  enabled: () => invoke<boolean>("updater_enabled"),
+  async check() {
+    const update = await check({ timeout: 15_000 });
+    if (!update) return null;
+    return {
+      version: update.version,
+      notes: update.body ?? "",
+      download: (onProgress) => {
+        let done = 0;
+        let total: number | null = null;
+        return update.download((event) => {
+          if (event.event === "Started") total = event.data.contentLength ?? null;
+          else if (event.event === "Progress") {
+            done += event.data.chunkLength;
+            onProgress(done, total);
+          }
+        });
+      },
+      // On Windows install() hands over to the installer, which closes the app
+      // and starts the new version; elsewhere the app restarts itself.
+      installAndRestart: async () => {
+        await update.install();
+        await invoke("restart_app");
+      },
     };
   },
 };
