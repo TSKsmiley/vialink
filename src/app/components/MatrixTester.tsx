@@ -23,6 +23,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
+import { SidePanelLayout } from "../shell/SidePanelLayout.tsx";
 import { Button, Switch } from "../ui/index.ts";
 import { KeyboardView } from "./KeyboardView.tsx";
 
@@ -203,183 +204,172 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30, releaseHoldMs
   const untestedNames = untested.map((p) => name(p.row, p.col));
   const hasKnobs = keyboard.encoders.length > 0;
 
-  return (
-    <section
-      ref={section}
-      aria-label="Matrix tester"
-      // Fills the editor area edge to edge (cancelling its padding), so the side
-      // panel runs down the right edge as in the design.
-      className="matrix-tester -m-4 flex min-w-0 flex-1 flex-col bg-kumo-canvas md:-m-5 xl:flex-row"
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
-            <h1 className="m-0 text-xl font-semibold">Matrix tester</h1>
-            <p className="m-0 text-sm leading-snug text-kumo-subtle">
-              Press every key once. A key lights up while you hold it and stays marked once it has worked.
-            </p>
-          </div>
-          {unlocked && (
-            <div className="flex items-center gap-3.5">
-              <div className="flex w-52 flex-col gap-1.5">
-                <span className="flex justify-between gap-2 text-sm">
-                  <strong className="font-semibold">
-                    {tested} of {total} tested
-                  </strong>
-                  <span className="text-kumo-subtle">
-                    {tested === total ? "All done" : `${total - tested} to go`}
-                  </span>
-                </span>
-                <div
-                  role="progressbar"
-                  aria-label="Keys tested"
-                  aria-valuemin={0}
-                  aria-valuemax={total}
-                  aria-valuenow={tested}
-                  className="h-1.5 overflow-hidden rounded-full bg-kumo-line"
-                >
-                  <div
-                    className="h-full rounded-full bg-success transition-[width]"
-                    style={{ width: `${total === 0 ? 0 : (tested / total) * 100}%` }}
-                  />
-                </div>
-              </div>
-              <Button
-                icon={ArrowCounterClockwiseIcon}
-                onClick={startOver}
-                disabled={seen.size === 0 && recent.length === 0}
-              >
-                Start over
-              </Button>
-            </div>
-          )}
+  const details = unlocked ? (
+    <aside aria-label="Test details" className="flex min-w-0 flex-col gap-7">
+      <section aria-labelledby="mt-untested" className="flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between">
+          <h2 id="mt-untested" className={HEADING}>
+            Not tested yet
+          </h2>
+          <span className="text-xs text-kumo-subtle">{untested.length}</span>
         </div>
-
-        {unlocked ? (
-          <CaptureBanner
-            capturing={capturing}
-            fullscreen={fullscreen}
-            canFullscreen={canLockSystemKeys()}
-            onCapture={setCapturing}
-            onFullscreen={() => void enterFullscreen()}
-            onExitFullscreen={() => void document.exitFullscreen().catch(() => undefined)}
-          />
+        {untested.length === 0 ? (
+          <p className="m-0 text-sm">Every key has worked.</p>
         ) : (
-          <div className="flex flex-wrap items-center gap-3.5 rounded-xl border border-kumo-line bg-kumo-elevated px-4 py-3">
-            <p className="m-0 flex-[1_1_320px] text-sm">
-              The keyboard must be unlocked to read its switch matrix.
-            </p>
+          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+            {untested.map((p, i) => {
+              const label = untestedNames[i];
+              const twin = untestedNames.indexOf(label) !== untestedNames.lastIndexOf(label);
+              return (
+                <li
+                  key={`${p.row},${p.col}`}
+                  title={`Row ${p.row}, column ${p.col}`}
+                  className="rounded-md border border-kumo-line bg-kumo-control px-2 py-1 text-xs"
+                >
+                  {label}
+                  {twin && (
+                    <span className="ml-1 font-mono text-kumo-subtle">
+                      {p.row},{p.col}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="mt-recent" className="flex flex-col gap-2.5">
+        <h2 id="mt-recent" className={HEADING}>
+          Recent presses
+        </h2>
+        {recent.length === 0 ? (
+          <p className="m-0 text-sm text-kumo-subtle">Nothing pressed yet.</p>
+        ) : (
+          <ol className="m-0 flex list-none flex-col p-0">
+            {recent.map((p) => (
+              <li
+                key={`${p.id}@${p.at}`}
+                className="grid grid-cols-[minmax(3.5rem,auto)_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-kumo-line py-2"
+              >
+                <strong className="max-w-28 truncate font-semibold">{name(p.row, p.col)}</strong>
+                <span className="font-mono text-xs text-kumo-subtle">
+                  row {p.row} · col {p.col}
+                </span>
+                {p.ms === null ? (
+                  <span className="text-xs font-semibold text-accent-link">held now</span>
+                ) : (
+                  <span className="text-xs text-kumo-subtle tabular-nums">{p.ms} ms</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="m-0 text-xs leading-snug text-kumo-subtle">
+          Row and column are the switch&apos;s place in the keyboard&apos;s wiring, useful when a key
+          doesn&apos;t register. Hold times are rounded to the {intervalMs} ms check.
+        </p>
+      </section>
+    </aside>
+  ) : undefined;
+
+  return (
+    <SidePanelLayout ref={section} label="Matrix tester" at="xl" className="matrix-tester" panel={details}>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+          <h1 className="m-0 text-xl font-semibold">Matrix tester</h1>
+          <p className="m-0 text-sm leading-snug text-kumo-subtle">
+            Press every key once. A key lights up while you hold it and stays marked once it has worked.
+          </p>
+        </div>
+        {unlocked && (
+          <div className="flex items-center gap-3.5">
+            <div className="flex w-52 flex-col gap-1.5">
+              <span className="flex justify-between gap-2 text-sm">
+                <strong className="font-semibold">
+                  {tested} of {total} tested
+                </strong>
+                <span className="text-kumo-subtle">
+                  {tested === total ? "All done" : `${total - tested} to go`}
+                </span>
+              </span>
+              <div
+                role="progressbar"
+                aria-label="Keys tested"
+                aria-valuemin={0}
+                aria-valuemax={total}
+                aria-valuenow={tested}
+                className="h-1.5 overflow-hidden rounded-full bg-kumo-line"
+              >
+                <div
+                  className="h-full rounded-full bg-success transition-[width]"
+                  style={{ width: `${total === 0 ? 0 : (tested / total) * 100}%` }}
+                />
+              </div>
+            </div>
             <Button
-              variant="primary"
-              onClick={() =>
-                void keyboard.ensureUnlocked("The matrix tester").catch((e) => onError(errorMessage(e)))
-              }
+              icon={ArrowCounterClockwiseIcon}
+              onClick={startOver}
+              disabled={seen.size === 0 && recent.length === 0}
             >
-              Unlock
+              Start over
             </Button>
           </div>
         )}
-
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className="board-wrap matrix-board rounded-xl border border-kumo-line bg-kumo-elevated p-3 md:px-5 md:pt-8 md:pb-7">
-            <KeyboardView
-              keyboard={keyboard}
-              layer={0}
-              label="Matrix tester"
-              highlight={(r, c) => {
-                const id = `${r},${c}`;
-                if (pressed.has(id)) return "held";
-                if (seen.has(id)) return "tested";
-                return null;
-              }}
-              tick={(r, c) => seen.has(`${r},${c}`) && !pressed.has(`${r},${c}`)}
-            />
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
-            <Swatch className="border-(--key-stroke) bg-(--key)">Not tested yet</Swatch>
-            <Swatch className="border-accent-link bg-accent">Held now</Swatch>
-            <Swatch className="border-success bg-success-tint">Tested</Swatch>
-            {hasKnobs && (
-              <Swatch className="rounded-full border-dashed border-kumo-line">
-                Knob turns aren&apos;t in the switch matrix: press the knob to test it
-              </Swatch>
-            )}
-          </div>
-        </div>
       </div>
 
-      {unlocked && (
-        <aside
-          aria-label="Test details"
-          className="flex min-w-0 flex-col gap-7 border-t border-kumo-line bg-kumo-elevated px-5 py-6 xl:w-80 xl:shrink-0 xl:border-t-0 xl:border-l"
-        >
-          <section aria-labelledby="mt-untested" className="flex flex-col gap-2.5">
-            <div className="flex items-baseline justify-between">
-              <h2 id="mt-untested" className={HEADING}>
-                Not tested yet
-              </h2>
-              <span className="text-xs text-kumo-subtle">{untested.length}</span>
-            </div>
-            {untested.length === 0 ? (
-              <p className="m-0 text-sm">Every key has worked.</p>
-            ) : (
-              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-                {untested.map((p, i) => {
-                  const label = untestedNames[i];
-                  const twin = untestedNames.indexOf(label) !== untestedNames.lastIndexOf(label);
-                  return (
-                    <li
-                      key={`${p.row},${p.col}`}
-                      title={`Row ${p.row}, column ${p.col}`}
-                      className="rounded-md border border-kumo-line bg-kumo-control px-2 py-1 text-xs"
-                    >
-                      {label}
-                      {twin && (
-                        <span className="ml-1 font-mono text-kumo-subtle">
-                          {p.row},{p.col}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          <section aria-labelledby="mt-recent" className="flex flex-col gap-2.5">
-            <h2 id="mt-recent" className={HEADING}>
-              Recent presses
-            </h2>
-            {recent.length === 0 ? (
-              <p className="m-0 text-sm text-kumo-subtle">Nothing pressed yet.</p>
-            ) : (
-              <ol className="m-0 flex list-none flex-col p-0">
-                {recent.map((p) => (
-                  <li
-                    key={`${p.id}@${p.at}`}
-                    className="grid grid-cols-[minmax(3.5rem,auto)_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-kumo-line py-2"
-                  >
-                    <strong className="max-w-28 truncate font-semibold">{name(p.row, p.col)}</strong>
-                    <span className="font-mono text-xs text-kumo-subtle">
-                      row {p.row} · col {p.col}
-                    </span>
-                    {p.ms === null ? (
-                      <span className="text-xs font-semibold text-accent-link">held now</span>
-                    ) : (
-                      <span className="text-xs text-kumo-subtle tabular-nums">{p.ms} ms</span>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            )}
-            <p className="m-0 text-xs leading-snug text-kumo-subtle">
-              Row and column are the switch&apos;s place in the keyboard&apos;s wiring, useful when a key
-              doesn&apos;t register. Hold times are rounded to the {intervalMs} ms check.
-            </p>
-          </section>
-        </aside>
+      {unlocked ? (
+        <CaptureBanner
+          capturing={capturing}
+          fullscreen={fullscreen}
+          canFullscreen={canLockSystemKeys()}
+          onCapture={setCapturing}
+          onFullscreen={() => void enterFullscreen()}
+          onExitFullscreen={() => void document.exitFullscreen().catch(() => undefined)}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-3.5 rounded-xl border border-kumo-line bg-kumo-elevated px-4 py-3">
+          <p className="m-0 flex-[1_1_320px] text-sm">
+            The keyboard must be unlocked to read its switch matrix.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() =>
+              void keyboard.ensureUnlocked("The matrix tester").catch((e) => onError(errorMessage(e)))
+            }
+          >
+            Unlock
+          </Button>
+        </div>
       )}
-    </section>
+
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="board-wrap matrix-board rounded-xl border border-kumo-line bg-kumo-elevated p-3 md:px-5 md:pt-8 md:pb-7">
+          <KeyboardView
+            keyboard={keyboard}
+            layer={0}
+            label="Matrix tester"
+            highlight={(r, c) => {
+              const id = `${r},${c}`;
+              if (pressed.has(id)) return "held";
+              if (seen.has(id)) return "tested";
+              return null;
+            }}
+            tick={(r, c) => seen.has(`${r},${c}`) && !pressed.has(`${r},${c}`)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-kumo-subtle">
+          <Swatch className="border-(--key-stroke) bg-(--key)">Not tested yet</Swatch>
+          <Swatch className="border-accent-link bg-accent">Held now</Swatch>
+          <Swatch className="border-success bg-success-tint">Tested</Swatch>
+          {hasKnobs && (
+            <Swatch className="rounded-full border-dashed border-kumo-line">
+              Knob turns aren&apos;t in the switch matrix: press the knob to test it
+            </Swatch>
+          )}
+        </div>
+      </div>
+    </SidePanelLayout>
   );
 }
 

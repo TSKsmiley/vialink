@@ -51,7 +51,11 @@ describe("Combos view", () => {
     );
     expect(screen.getByText("1 of 3 used")).toBeTruthy();
     expect(within(detail(1)).getByRole("heading", { name: "A + S sends Esc" })).toBeTruthy();
-    expect(within(detail(1)).getByText("KC_A + KC_S → KC_ESCAPE")).toBeTruthy();
+    const sends = within(detail(1)).getByRole("button", { name: "Key it sends: Esc. Change" });
+    expect(sends.getAttribute("title")).toBe("KC_ESCAPE");
+    expect(within(detail(1)).queryByLabelText("Output key")).toBeNull();
+    fireEvent.click(sends);
+    expect(within(detail(1)).getByLabelText("Output key")).toBeTruthy();
   });
 
   it("adds triggers from the keyboard, packed, and sets the output by search", async () => {
@@ -86,6 +90,7 @@ describe("Combos view", () => {
     const onError = vi.fn();
     kb.notifyHandler = (kind, message) => kind === "error" && onError(message);
     render(<ExtensionView keyboard={kb} view="combos" />);
+    fireEvent.click(screen.getByRole("button", { name: /^Key it sends: / }));
     choose("Output key", "QK_BOOT");
     await waitFor(() => expect(onError).toHaveBeenCalledOnce());
     expect(onError.mock.calls[0][0]).toMatch(/^Combo 1: .*unlocked/);
