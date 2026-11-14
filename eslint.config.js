@@ -31,7 +31,7 @@ const NO_TIMER_PROPERTIES = ["setInterval", "setTimeout", "requestAnimationFrame
 }));
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "scripts", ".claude", ".memory"] },
+  { ignores: ["dist", "node_modules", "scripts", ".claude", ".memory", "src-tauri"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

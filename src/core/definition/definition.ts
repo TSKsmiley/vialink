@@ -84,14 +84,16 @@ export async function fetchCompressedDefinition(
     throw new DefinitionError(`keyboard reported an implausible definition size of ${size} bytes`);
   }
   const pages = Math.ceil(size / MSG_LEN);
-  const chunks: Uint8Array[] = [];
-  let remaining = size;
-  for (let page = 0; page < pages; page++) {
-    const data = vialGetDefinitionPage.decode(await queue.request(vialGetDefinitionPage.encode(page)));
-    chunks.push(remaining < MSG_LEN ? data.slice(0, remaining) : data);
-    remaining -= MSG_LEN;
-    onProgress?.(page + 1, pages);
-  }
+  onProgress?.(0, pages);
+  const replies = await queue.requestMany(
+    Array.from({ length: pages }, (_, page) => vialGetDefinitionPage.encode(page)),
+  );
+  const chunks = replies.map((reply, page) => {
+    const data = vialGetDefinitionPage.decode(reply);
+    const remaining = size - page * MSG_LEN;
+    return remaining < MSG_LEN ? data.slice(0, remaining) : data;
+  });
+  onProgress?.(pages, pages);
   return concat(chunks);
 }
 

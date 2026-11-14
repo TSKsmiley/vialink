@@ -9,8 +9,9 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 };
 
 export default defineConfig(({ command, isPreview }) => ({
-  // GitHub Pages serves the site from https://tsksmiley.github.io/vialink/.
-  base: command === "build" || isPreview ? "/vialink/" : "/",
+  // GitHub Pages serves the site from https://tsksmiley.github.io/vialink/; the
+  // desktop app (Tauri sets TAURI_ENV_PLATFORM for its build) from its own root.
+  base: (command === "build" || isPreview) && !process.env.TAURI_ENV_PLATFORM ? "/vialink/" : "/",
   plugins: [react(), tailwindcss()],
   // ViaLink's version, written into .vialink files (manifest.app).
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },

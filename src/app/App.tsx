@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoadProgress } from "../core/keyboard.ts";
+import type { NativeKeyboard } from "../core/transport/native.ts";
 import type { RequestQueue } from "../core/transport/queue.ts";
 import {
   connect,
   demoTransport,
+  listNativeKeyboards,
+  nativeTransport,
   NoDeviceSelectedError,
   requestDevice,
   webHidSupported,
   webHidTransport,
   type Connection,
+  type ConnectTarget,
 } from "./connection.ts";
+import { isDesktop } from "./desktop.ts";
 import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
@@ -61,20 +66,33 @@ export function App() {
   } | null>(null);
 
   const start = useCallback(
-    async (demo: boolean) => {
+    async (target: ConnectTarget) => {
       setError(null);
       setNotice(null);
       try {
-        const transport = demo ? await demoTransport() : webHidTransport(await requestDevice());
+        const transport =
+          target.kind === "demo"
+            ? await demoTransport()
+            : target.kind === "native"
+              ? nativeTransport(target.device)
+              : webHidTransport(await requestDevice());
         setStatus({ kind: "connecting", progress: null });
-        const connection = await connect(transport, {
-          demo,
-          onQueue: setQueue,
-          onProgress: (progress) => setStatus({ kind: "connecting", progress }),
-          extensions: enabledExtensions(disabledExtensions),
-          recency: extensionRecency,
-          browserStorage: extensionBrowserStorage,
-        });
+        // At most one progress render per frame: a render after every request
+        // delays the next one past its USB frame and nearly doubles the load.
+        const progress = latestPerFrame((p: LoadProgress) => setStatus({ kind: "connecting", progress: p }));
+        let connection: Connection;
+        try {
+          connection = await connect(transport, {
+            demo: target.kind === "demo",
+            onQueue: setQueue,
+            onProgress: progress.push,
+            extensions: enabledExtensions(disabledExtensions),
+            recency: extensionRecency,
+            browserStorage: extensionBrowserStorage,
+          });
+        } finally {
+          progress.cancel();
+        }
         const kb = connection.keyboard;
         kb.notifyHandler = (kind, message) => (kind === "error" ? setError(message) : setNotice(message));
         kb.confirmHandler = (messages) =>
@@ -100,6 +118,21 @@ export function App() {
     },
     [disabledExtensions],
   );
+
+  // The desktop app connects on its own when exactly one keyboard is plugged
+  // in, so launching it goes straight to the keymap. Only once per launch: after
+  // an unplug or a disconnect the connect screen stays put.
+  const autoConnectTried = useRef(false);
+  useEffect(() => {
+    if (!isDesktop() || autoConnectTried.current) return;
+    autoConnectTried.current = true;
+    void listNativeKeyboards().then(
+      (found) => {
+        if (found.length === 1) void start({ kind: "native", device: found[0] });
+      },
+      () => undefined,
+    );
+  }, [start]);
 
   const disconnect = useCallback(async () => {
     if (status.kind === "connected") await status.connection.queue.close().catch(() => undefined);
@@ -262,7 +295,7 @@ export function App() {
         )}
 
         <main className="flex min-h-0 flex-1 flex-col">
-          {status.kind === "idle" && <ConnectScreen onConnect={(demo) => void start(demo)} />}
+          {status.kind === "idle" && <ConnectScreen onConnect={(target) => void start(target)} />}
           {status.kind === "connecting" && <Connecting progress={status.progress} />}
           {status.kind === "connected" && (
             <Editor
@@ -298,12 +331,66 @@ export function App() {
   );
 }
 
-function ConnectScreen({ onConnect }: { onConnect: (demo: boolean) => void }) {
+/** Calls `fn` with the latest pushed value at most once per animation frame, until cancelled. */
+function latestPerFrame<T>(fn: (value: T) => void) {
+  let latest: { value: T } | null = null;
+  let frame = 0;
+  return {
+    push(value: T) {
+      latest = { value };
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const pending = latest;
+        latest = null;
+        if (pending) fn(pending.value);
+      });
+    },
+    cancel() {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      latest = null;
+    },
+  };
+}
+
+/** The desktop app's keyboards, looked up again every second while the connect screen shows. */
+function useNativeKeyboards(enabled: boolean): NativeKeyboard[] | null {
+  const [keyboards, setKeyboards] = useState<NativeKeyboard[] | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const refresh = () =>
+      listNativeKeyboards().then(
+        (found) => alive && setKeyboards(found),
+        () => alive && setKeyboards([]),
+      );
+    void refresh();
+    const timer = setInterval(refresh, 1000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [enabled]);
+  return keyboards;
+}
+
+function ConnectScreen({ onConnect }: { onConnect: (target: ConnectTarget) => void }) {
+  const desktop = isDesktop();
+  const keyboards = useNativeKeyboards(desktop);
   const supported = webHidSupported();
   return (
     <section className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center">
       <h2 className="m-0 text-xl font-semibold">Connect a Vial keyboard</h2>
-      {supported ? (
+      {desktop ? (
+        <p className="m-0 text-kumo-subtle">
+          {keyboards === null
+            ? "Looking for keyboards…"
+            : keyboards.length === 0
+              ? "No keyboard found yet. Plug one in and it shows up here."
+              : "Choose a keyboard."}
+        </p>
+      ) : supported ? (
         <p className="m-0 text-kumo-subtle">
           Plug in your keyboard and choose it in the browser's device list.
         </p>
@@ -315,10 +402,18 @@ function ConnectScreen({ onConnect }: { onConnect: (demo: boolean) => void }) {
         />
       )}
       <div className="mt-2 flex flex-wrap justify-center gap-3">
-        <Button variant="primary" disabled={!supported} onClick={() => onConnect(false)}>
-          Connect keyboard
-        </Button>
-        <Button onClick={() => onConnect(true)}>Try the demo keyboard</Button>
+        {desktop ? (
+          keyboards?.map((device) => (
+            <Button key={device.path} variant="primary" onClick={() => onConnect({ kind: "native", device })}>
+              Connect {device.productName}
+            </Button>
+          ))
+        ) : (
+          <Button variant="primary" disabled={!supported} onClick={() => onConnect({ kind: "webhid" })}>
+            Connect keyboard
+          </Button>
+        )}
+        <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>
       </div>
     </section>
   );

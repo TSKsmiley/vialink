@@ -26,6 +26,7 @@ pnpm check          # TypeScript (tsc -b)
 pnpm lint           # ESLint
 pnpm format         # Prettier
 pnpm build
+pnpm tauri dev      # desktop app (src-tauri/, needs Rust); native HID instead of WebHID
 ```
 
 pnpm lives at `~/.local/bin/pnpm`; there is no system npm.

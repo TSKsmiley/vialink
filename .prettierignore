@@ -6,3 +6,5 @@ fixtures
 LICENSE
 .claude
 .memory
+src-tauri/target
+src-tauri/gen

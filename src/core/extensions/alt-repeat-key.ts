@@ -32,6 +32,7 @@ import {
 } from "../protocol/alt-repeat-key.ts";
 import { VIAL_PROTOCOL_DYNAMIC } from "../protocol/constants.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import { range } from "../util/range.ts";
 
 export class AltRepeatKeyError extends Error {
   constructor(message: string) {
@@ -192,10 +193,12 @@ export const altRepeatKeyExtension: KeyboardExtension<AltRepeatKeys> = {
     // reload_alt_repeat_key → _retrieve_dynamic_entries: every entry, retries=20,
     // and a non-zero status aborts the load.
     const entries: AltRepeatKeyEntry[] = [];
-    for (let idx = 0; idx < count; idx++) {
-      const reply = vialAltRepeatKeyGet.decode(
-        await device.request(vialAltRepeatKeyGet.encode(idx), { retries: 20 }),
-      );
+    const replies = await device.requestMany(
+      range(0, count).map((idx) => vialAltRepeatKeyGet.encode(idx)),
+      { retries: 20 },
+    );
+    for (const [idx, raw] of replies.entries()) {
+      const reply = vialAltRepeatKeyGet.decode(raw);
       if (!reply.ok) {
         throw new AltRepeatKeyError(`failed retrieving alt repeat key entry ${idx} from the device`);
       }

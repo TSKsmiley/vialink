@@ -82,6 +82,13 @@ export interface DeviceAccess {
    * {@link ExtensionCommandError} without reaching the keyboard.
    */
   request(data: Uint8Array, options?: RequestOptions): Promise<Uint8Array>;
+  /**
+   * Sends several requests as one job and resolves with the replies in order;
+   * the same rules as `request` apply to each, checked before anything is
+   * sent. Use it for a run of reads (every entry, every layer): the desktop
+   * app sends them back to back, much faster than one `request` at a time.
+   */
+  requestMany(data: readonly Uint8Array[], options?: RequestOptions): Promise<Uint8Array[]>;
   /** Makes sure the board is unlocked, asking the user; throws when it stays locked. */
   ensureUnlocked(reason: string): Promise<void>;
 }

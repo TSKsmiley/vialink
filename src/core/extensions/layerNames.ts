@@ -22,6 +22,7 @@ import { on } from "./hooks.ts";
 import { paste, shareText } from "./layer-sharing.api.ts";
 import { layerNames, provide } from "./services.ts";
 import type { DeviceContext, KeyboardExtension } from "./types.ts";
+import { range } from "../util/range.ts";
 
 export class LayerNameError extends Error {
   constructor(message: string) {
@@ -105,9 +106,14 @@ export const layerNamesExtension: KeyboardExtension<LayerNames> = {
     const first = vialGetLayerName.decode(await device.request(vialGetLayerName.encode(0), { retries: 3 }));
     if (!first.ok) return null;
     const names = [first.name];
-    for (let layer = 1; layer < board.layers; layer++) {
-      const reply = vialGetLayerName.decode(await device.request(vialGetLayerName.encode(layer)));
-      names.push(reply.ok ? reply.name : "");
+    if (board.layers > 1) {
+      const replies = await device.requestMany(
+        range(1, board.layers).map((layer) => vialGetLayerName.encode(layer)),
+      );
+      for (const raw of replies) {
+        const reply = vialGetLayerName.decode(raw);
+        names.push(reply.ok ? reply.name : "");
+      }
     }
     return new LayerNames(ctx, names);
   },

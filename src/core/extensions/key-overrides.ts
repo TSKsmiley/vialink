@@ -25,6 +25,7 @@ import {
 } from "../protocol/key-overrides.ts";
 import { VIAL_PROTOCOL_KEY_OVERRIDE } from "../protocol/constants.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import { range } from "../util/range.ts";
 
 export type { KeyOverrideEntry } from "../protocol/key-overrides.ts";
 
@@ -219,8 +220,12 @@ export const keyOverridesExtension: KeyboardExtension<KeyOverrides> = {
     const count = board.capabilities.dynamic?.keyOverride ?? 0;
     if (count === 0) return null;
     const entries: KeyOverrideEntry[] = [];
-    for (let i = 0; i < count; i++) {
-      const reply = vialKeyOverrideGet.decode(await device.request(vialKeyOverrideGet.encode(i)));
+    // Entry 0 alone first: a failure there means the board has none.
+    const first = await device.request(vialKeyOverrideGet.encode(0));
+    const rest =
+      count > 1 ? await device.requestMany(range(1, count).map((i) => vialKeyOverrideGet.encode(i))) : [];
+    for (const [i, raw] of [first, ...rest].entries()) {
+      const reply = vialKeyOverrideGet.decode(raw);
       if (!reply.ok) {
         if (i === 0) return null;
         throw new KeyOverrideError(
