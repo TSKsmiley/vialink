@@ -48,7 +48,7 @@ export function tapDanceSummary(table: KeycodeTable, e: Readonly<TapDanceEntry>)
   return parts.length ? parts.join(" · ") : "Not set up";
 }
 
-export function TapDancePanel({ ctx, state, ui }: PanelProps<TapDance>) {
+export function TapDancePanel({ ctx, state, ui, onPlace }: PanelProps<TapDance>) {
   const used = state.entries.flatMap((e, i) => (isSet(e) ? [i] : []));
   const [selected, setSelected] = useState<number>(used[0] ?? 0);
   const [slot, setSlot] = useState<TapDanceKeyField | null>(null);
@@ -95,6 +95,7 @@ export function TapDancePanel({ ctx, state, ui }: PanelProps<TapDance>) {
           idx={selected}
           slot={slot}
           onSlot={setSlot}
+          onPlace={onPlace}
         />
       }
     />
@@ -108,6 +109,7 @@ function TapDanceDetail({
   idx,
   slot,
   onSlot,
+  onPlace,
 }: {
   ctx: DeviceContext;
   ui: PanelKit;
@@ -115,6 +117,7 @@ function TapDanceDetail({
   idx: number;
   slot: TapDanceKeyField | null;
   onSlot: (s: TapDanceKeyField | null) => void;
+  onPlace?: (code: number, what: string) => void;
 }) {
   const onError = ctx.notify.error;
   const id = useId();
@@ -152,11 +155,12 @@ function TapDanceDetail({
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="m-0 text-lg font-semibold">TD {idx}</h2>
         <span className="text-sm text-kumo-subtle">
-          {places.length
-            ? `Placed on ${places.join("; ")}`
-            : "Not on any key yet: use the Tap dance tab of the key inspector"}
+          {places.length ? `Placed on ${places.join("; ")}` : "Not on any key yet"}
         </span>
         <div className="flex-1" />
+        {onPlace && (
+          <Button onClick={() => onPlace(table.parse(`TD(${idx})`), `TD ${idx}`)}>Place on a key…</Button>
+        )}
         <Button
           variant="secondary-destructive"
           disabled={busy || !isSet(entry)}

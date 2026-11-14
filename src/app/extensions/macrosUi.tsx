@@ -112,8 +112,8 @@ function toAction(d: DraftAction): MacroAction {
   return { type: d.type, keys: d.keys.map((k) => k.trim()) };
 }
 
-function MacrosPanel({ ctx, state, ui }: PanelProps<Macros>) {
-  return <MacroEditor ctx={ctx} ui={ui} macros={state} />;
+function MacrosPanel({ ctx, state, ui, onPlace }: PanelProps<Macros>) {
+  return <MacroEditor ctx={ctx} ui={ui} macros={state} onPlace={onPlace} />;
 }
 
 /** A step in words: "Type “hi”", "Tap Ctrl + C", "Hold Shift", "Wait 100 ms". */
@@ -145,7 +145,17 @@ const VERBS: Record<ActionType, string> = {
 /** How many draft states the step-level undo keeps. */
 const STEP_UNDO_LIMIT = 100;
 
-function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; macros: Macros }) {
+function MacroEditor({
+  ctx,
+  ui,
+  macros,
+  onPlace,
+}: {
+  ctx: DeviceContext;
+  ui: PanelKit;
+  macros: Macros;
+  onPlace?: (code: number, what: string) => void;
+}) {
   const board = ctx.board;
   const { error: onError, info: onNotice } = ctx.notify;
   const [base, setBase] = useState(macros.buffer);
@@ -338,11 +348,12 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="m-0 text-lg font-semibold">M{selected}</h2>
             <span className="text-sm text-kumo-subtle">
-              {places.length
-                ? `Placed on ${places.join("; ")}`
-                : "Not on any key yet: use the Macro tab of the key inspector"}
+              {places.length ? `Placed on ${places.join("; ")}` : "Not on any key yet"}
             </span>
             <div className="flex-1" />
+            {onPlace && macroCode(selected) !== -1 && (
+              <Button onClick={() => onPlace(macroCode(selected), `M${selected}`)}>Place on a key…</Button>
+            )}
             {!unchanged && <span className="text-sm text-kumo-warning">Unsaved changes</span>}
             <div role="group" aria-label="Macro edits" className="inline-flex gap-1">
               <Button

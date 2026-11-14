@@ -23,6 +23,12 @@ interface Props {
 export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
   useKeyboardVersion(keyboard);
   const [view, setView] = useState("keymap");
+  // "Place on a key…" from a feature view: the keymap puts this code on the next key clicked.
+  const [placing, setPlacing] = useState<{ code: number; what: string } | null>(null);
+  const open = (next: string) => {
+    setView(next);
+    if (next !== "keymap") setPlacing(null);
+  };
 
   // Extensions' notices and errors (ctx.notify) show like the editor's own.
   useEffect(() => {
@@ -46,7 +52,7 @@ export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 max-md:flex-col">
-      <Sidebar sections={sections} current={shown} onSelect={setView} />
+      <Sidebar sections={sections} current={shown} onSelect={open} />
       <div
         role="tabpanel"
         aria-label={sections.find((v) => v.id === shown)?.title}
@@ -58,9 +64,24 @@ export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
         {shown === "matrix" ? (
           <MatrixTester keyboard={keyboard} onError={onError} />
         ) : panel ? (
-          <ExtensionView keyboard={keyboard} view={panel.id} onOpen={setView} />
+          <ExtensionView
+            keyboard={keyboard}
+            view={panel.id}
+            onOpen={open}
+            onPlace={(code, what) => {
+              setPlacing({ code, what });
+              setView("keymap");
+            }}
+          />
         ) : (
-          <KeymapView keyboard={keyboard} onError={onError} onNotice={onNotice} locked={locked} />
+          <KeymapView
+            keyboard={keyboard}
+            onError={onError}
+            onNotice={onNotice}
+            locked={locked}
+            placing={placing}
+            onPlaced={() => setPlacing(null)}
+          />
         )}
       </div>
     </div>

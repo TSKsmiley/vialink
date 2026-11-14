@@ -39,6 +39,11 @@ export interface PanelProps<State = unknown> {
   ui: PanelKit;
   /** Opens another view of the editor by id ("keymap", "qmk-settings", …). */
   onOpen?: (view: string) => void;
+  /**
+   * Opens the keymap to put `code` on the key the user clicks next ("Place on a
+   * key…"); `what` names it there, e.g. "TD 0".
+   */
+  onPlace?: (code: number, what: string) => void;
 }
 
 /** A whole editor view, shown as a tab next to Keymap and Matrix tester. */

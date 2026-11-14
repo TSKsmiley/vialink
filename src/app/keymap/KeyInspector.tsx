@@ -412,7 +412,7 @@ function LayerPanel({
               aria-label={`Hold for layer ${l}: ${layerName(l)}`}
               onClick={() => onPick(build(l, tap))}
               className={
-                "min-h-9 cursor-pointer rounded-lg border px-3 py-1 text-sm disabled:cursor-default disabled:opacity-50 " +
+                "min-h-10 cursor-pointer rounded-lg border px-3.5 py-1.5 text-sm disabled:cursor-default disabled:opacity-50 " +
                 (held === l
                   ? "border-accent bg-accent-tint font-semibold"
                   : "border-kumo-line hover:bg-kumo-tint")
@@ -464,7 +464,7 @@ function LayerPanel({
         )}
       </fieldset>
 
-      <details className="rounded-lg border border-kumo-line px-3 py-2 [&_.layer-builder]:mt-2">
+      <details className="border-t border-kumo-line pt-3 [&_.layer-builder]:mt-2">
         <summary className="cursor-pointer text-sm">
           Other layer behaviours: toggle, switch to, one-shot…
         </summary>

@@ -29,6 +29,7 @@ import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.api.t
 import { shortcutOf, type LayerCommandEnv } from "../extensions/commands.ts";
 import { decorationsOf, layerCommandsOf } from "../extensions/registry.tsx";
 import { errorMessage, pickerInfoOf, sharedLayerName, useKeyboardVersion } from "../hooks.ts";
+import { Button } from "../ui/index.ts";
 import { KeyInspector } from "./KeyInspector.tsx";
 import { SidePanelLayout } from "../shell/SidePanelLayout.tsx";
 import { LayerRail } from "./LayerRail.tsx";
@@ -71,9 +72,13 @@ interface Props {
   onError: (message: string) => void;
   onNotice: (message: string) => void;
   locked: boolean;
+  /** "Place on a key…" from a feature view: the next key clicked gets this code. */
+  placing?: { code: number; what: string } | null;
+  /** Placing is done or cancelled. */
+  onPlaced?: () => void;
 }
 
-export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
+export function KeymapView({ keyboard, onError, onNotice, locked, placing = null, onPlaced }: Props) {
   useKeyboardVersion(keyboard);
   const [layer, setLayer] = useState(0);
   const [peek, setPeek] = useState<number | null>(null);
@@ -120,6 +125,14 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
   }, []);
 
   const select = (s: Selection, shift: boolean) => {
+    if (s && placing) {
+      setTargets([s]);
+      void run(async () => {
+        await write(s, placing.code);
+        onPlaced?.();
+      });
+      return;
+    }
     if (!s) return setTargets([]);
     if (!shift) return setTargets([s]);
     setTargets((prev) =>
@@ -439,6 +452,19 @@ export function KeymapView({ keyboard, onError, onNotice, locked }: Props) {
                   Move to the next key after assigning
                 </label>
               </div>
+              {placing && (
+                <div
+                  role="status"
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-accent/40 bg-accent-tint px-4 py-2.5 text-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    Click a key on {layerName(layer)} to put <strong>{placing.what}</strong> on it.
+                  </span>
+                  <Button size="sm" onClick={() => onPlaced?.()}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
               <div
                 className={
                   "board-wrap rounded-xl border border-kumo-line bg-kumo-elevated p-2 md:p-3 " +
