@@ -18,6 +18,23 @@ const hex = (n: number, width = 2) => `0x${n.toString(16).padStart(width, "0")}`
 const u16be = (b: Uint8Array, i: number) => ((b[i] ?? 0) << 8) | (b[i + 1] ?? 0);
 const u16le = (b: Uint8Array, i: number) => (b[i] ?? 0) | ((b[i + 1] ?? 0) << 8);
 
+// Lighting value ids (protocol/lighting.ts); VialRGB's 0x41 means "mode" both ways.
+const LIGHTING_COMMON: Record<number, string> = {
+  0x09: "backlight brightness",
+  0x0a: "backlight effect",
+  0x80: "underglow brightness",
+  0x81: "underglow effect",
+  0x82: "underglow speed",
+  0x83: "underglow colour",
+  0x41: "RGB mode",
+};
+const LIGHTING_GET: Record<number, string> = {
+  ...LIGHTING_COMMON,
+  0x40: "RGB info",
+  0x42: "supported RGB effects",
+};
+const LIGHTING_SET: Record<number, string> = LIGHTING_COMMON;
+
 const DYNAMIC: Record<number, [string, CommandKind]> = {
   [C.DYNAMIC_VIAL_GET_NUMBER_OF_ENTRIES]: ["Get number of tap dances, combos, key overrides…", "read"],
   [C.DYNAMIC_VIAL_TAP_DANCE_GET]: ["Get tap dance", "read"],
@@ -68,9 +85,9 @@ export function describeRequest(
     case C.CMD_VIA_SET_KEYCODE:
       return w(`Set key L${req[1]} R${req[2]} C${req[3]} → ${kc(u16be(req, 4))}`);
     case C.CMD_VIA_LIGHTING_SET_VALUE:
-      return w("Set lighting value");
+      return w(`Set ${LIGHTING_SET[req[1]] ?? `lighting value ${hex(req[1] ?? 0)}`}`);
     case C.CMD_VIA_LIGHTING_GET_VALUE:
-      return r("Get lighting value");
+      return r(`Get ${LIGHTING_GET[req[1]] ?? `lighting value ${hex(req[1] ?? 0)}`}`);
     case C.CMD_VIA_LIGHTING_SAVE:
       return w("Save lighting");
     case C.CMD_VIA_MACRO_GET_COUNT:

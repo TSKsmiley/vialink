@@ -156,8 +156,24 @@ export class Keyboard {
   macroMemory = 0;
   capabilities!: Capabilities;
   keycodes!: KeycodeTable;
-  /** Set by the app to show an extension's notices and errors (ctx.notify). */
-  notifyHandler: ((kind: "info" | "error", message: string) => void) | null = null;
+  private notifier: ((kind: "info" | "error", message: string) => void) | null = null;
+  /** Notices sent while no handler was set (an extension's probe during load), shown once one is. */
+  private heldNotices: ["info" | "error", string][] = [];
+  /**
+   * Set by the app to show an extension's notices and errors (ctx.notify).
+   * Notices from before it was set (e.g. from probes during load) are passed on
+   * when it is.
+   */
+  get notifyHandler(): ((kind: "info" | "error", message: string) => void) | null {
+    return this.notifier;
+  }
+  set notifyHandler(handler: ((kind: "info" | "error", message: string) => void) | null) {
+    this.notifier = handler;
+    if (!handler) return;
+    const held = this.heldNotices;
+    this.heldNotices = [];
+    for (const [kind, message] of held) handler(kind, message);
+  }
   /**
    * Set by the app to ask the user the questions of an operation's before
    * handlers (requireConfirm), all at once; resolves true to go on. Without
@@ -519,7 +535,7 @@ export class Keyboard {
         }
       }
     });
-    for (const w of warnings) this.notifyHandler?.("info", w);
+    for (const w of warnings) this.notify("info", w);
   }
 
   /**
@@ -545,10 +561,7 @@ export class Keyboard {
           );
         } catch (err) {
           delete out[extension.id];
-          this.notifyHandler?.(
-            "error",
-            `${extension.name}: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          this.notify("error", `${extension.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     }
@@ -609,6 +622,11 @@ export class Keyboard {
     if (next.length === this.overlayList.length) return;
     this.overlayList = next;
     this.changed();
+  }
+
+  private notify(kind: "info" | "error", message: string): void {
+    if (this.notifier) this.notifier(kind, message);
+    else this.heldNotices.push([kind, message]);
   }
 
   /** Sets {@link notifyHandler} (for React code, which may not assign to a prop). */
@@ -738,8 +756,8 @@ export class Keyboard {
         group: (label, action) => this.history.group(label, action),
       },
       notify: {
-        info: (message) => this.notifyHandler?.("info", message),
-        error: (message) => this.notifyHandler?.("error", message),
+        info: (message) => this.notify("info", message),
+        error: (message) => this.notify("error", message),
       },
       ui: {
         confirm: async (message) => (await this.confirmHandler?.([message])) ?? false,

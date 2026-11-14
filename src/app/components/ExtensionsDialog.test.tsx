@@ -76,7 +76,7 @@ describe("Extensions dialog", () => {
     const standard = screen.getByRole("group", { name: "Standard Vial" });
     const other = screen.getByRole("group", { name: "Non-standard Vial" });
     expect(standard.hasAttribute("open")).toBe(false); // folded at first
-    expect(within(standard).getByText("6 of 6 on")).toBeTruthy();
+    expect(within(standard).getByText("7 of 7 on")).toBeTruthy();
     for (const name of [
       "Macros",
       "Tap dance",

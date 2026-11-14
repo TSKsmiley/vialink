@@ -19,6 +19,7 @@ import { installCombos } from "../core/sim/combos.ts";
 import { installKeyOverrides } from "../core/sim/key-overrides.ts";
 import { installMacroSimulator } from "../core/sim/macros.ts";
 import { installQmkSettings } from "../core/sim/qmk-settings.ts";
+import { installLighting, simVialRgb } from "../core/sim/lighting.ts";
 import { SimulatedKeyboard } from "../core/sim/simulatedKeyboard.ts";
 import { installTapDanceSimulator } from "../core/sim/tap-dance.ts";
 import { RequestQueue } from "../core/transport/queue.ts";
@@ -132,6 +133,7 @@ export async function demoTransport(): Promise<Transport> {
   installKeyOverrides(sim, { count: 4 });
   installAltRepeatKey(sim, { count: 4 });
   installQmkSettings(sim);
+  installLighting(sim, { vialrgb: simVialRgb() }); // the KLOR definition says "vialrgb"
 
   // Nobody can hold the keys of a simulated board: "hold" them once an unlock
   // starts, and let them go again when it finishes.
