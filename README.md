@@ -77,8 +77,18 @@ pnpm tauri build                # installers in src-tauri/target/release/bundle/
 VIALINK_TRACE=1 pnpm tauri dev  # also log startup and every HID request's timing
 ```
 
-The "Desktop app" GitHub workflow builds the Linux, macOS and Windows installers (run it from
-the Actions tab, or push a `desktop-v*` tag for a draft release). They are not code-signed yet.
+The "Desktop app" GitHub workflow builds the installers on every pull request and push to
+`master` that touches the app (or by hand from the Actions tab); download them from the run's
+Artifacts:
+
+- **Linux**: `.deb` and `.rpm` (about 2 MB, using the system's WebKitGTK), or an `.AppImage` that
+  runs on most distributions. All need Vial's udev rule, as above.
+- **macOS**: one `.dmg` for Apple Silicon and Intel. It is ad-hoc signed, not notarized: the first
+  time, open it from System Settings > Privacy & Security > "Open Anyway".
+- **Windows**: an `.exe` installer or an `.msi`. They are not code-signed: on the SmartScreen
+  warning, choose "More info" > "Run anyway".
+
+Pushing a `desktop-v*` tag also attaches them to a draft GitHub release.
 
 ### Layout
 
