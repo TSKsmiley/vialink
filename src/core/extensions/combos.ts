@@ -32,6 +32,7 @@ import { RESET_KEYCODE, type KeycodeTable } from "../keycodes/table.ts";
 import { COMBO_INPUTS, vialComboGet, vialComboSet, type ComboEntry } from "../protocol/combos.ts";
 import { VIAL_PROTOCOL_DYNAMIC } from "../protocol/constants.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import { range } from "../util/range.ts";
 
 /** vial-gui passes retries=20 to every combo request. */
 const RETRIES = 20;
@@ -120,8 +121,17 @@ export const combosExtension: KeyboardExtension<Combos> = {
     const count = board.capabilities.dynamic?.combo ?? 0;
     if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || count === 0) return null;
     const entries: ComboEntry[] = [];
-    for (let idx = 0; idx < count; idx++) {
-      const reply = vialComboGet.decode(await device.request(vialComboGet.encode(idx), { retries: RETRIES }));
+    // Entry 0 alone first: a failure there means the board has none.
+    const first = await device.request(vialComboGet.encode(0), { retries: RETRIES });
+    const rest =
+      count > 1
+        ? await device.requestMany(
+            range(1, count).map((idx) => vialComboGet.encode(idx)),
+            { retries: RETRIES },
+          )
+        : [];
+    for (const [idx, raw] of [first, ...rest].entries()) {
+      const reply = vialComboGet.decode(raw);
       if (!reply.ok) {
         if (idx === 0) return null;
         throw new ComboError(`failed retrieving combo entry ${idx} from the device`);

@@ -60,7 +60,7 @@ import {
   type DynamicEntryCounts,
 } from "./protocol/commands.ts";
 import * as C from "./protocol/constants.ts";
-import type { RequestQueue } from "./transport/queue.ts";
+import type { RequestOptions, RequestQueue } from "./transport/queue.ts";
 import { u16be } from "./util/bytes.ts";
 
 export class UnsupportedProtocolError extends Error {
@@ -803,28 +803,37 @@ export class Keyboard {
     // at run time too keeps a cast from getting around that.
     if (ext.group === "compatible") return host as DeviceContext;
     const custom = ext.group === "nonstandard" ? ext.commands : [];
+    /** Throws unless the extension may send this now; nothing is sent then. */
+    const check = (data: Uint8Array) => {
+      if (describeRequest(data, undefined, custom).kind === "write") writable("write to the keyboard");
+      if (!isStandardCommand(data) && !custom.some((c) => startsWith(data, c.bytes))) {
+        const head = [...data.slice(0, 3)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+        throw new ExtensionCommandError(
+          `${ext.name} tried to send a command it hasn't declared (${head} …); nothing was sent.`,
+        );
+      }
+    };
+    // Requests from the extension's scheduled work go behind the user's own.
+    const lane = (options?: RequestOptions): RequestOptions | undefined =>
+      this.scheduler.noteRequest(ext.id) ? { ...options, priority: "low" } : options;
     return {
       ...host,
       device: {
         request: (data, options) => {
-          if (describeRequest(data, undefined, custom).kind === "write") {
-            try {
-              writable("write to the keyboard");
-            } catch (err) {
-              return Promise.reject(err);
-            }
+          try {
+            check(data);
+          } catch (err) {
+            return Promise.reject(err);
           }
-          if (!isStandardCommand(data) && !custom.some((c) => startsWith(data, c.bytes))) {
-            const head = [...data.slice(0, 3)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
-            return Promise.reject(
-              new ExtensionCommandError(
-                `${ext.name} tried to send a command it hasn't declared (${head} …); nothing was sent.`,
-              ),
-            );
+          return this.queue.request(data, lane(options));
+        },
+        requestMany: (data, options) => {
+          try {
+            data.forEach(check);
+          } catch (err) {
+            return Promise.reject(err);
           }
-          // Requests from the extension's scheduled work go behind the user's own.
-          const scheduled = this.scheduler.noteRequest(ext.id);
-          return this.queue.request(data, scheduled ? { ...options, priority: "low" } : options);
+          return this.queue.requestMany(data, lane(options));
         },
         ensureUnlocked: (reason) => this.ensureUnlocked(reason),
       },
@@ -944,14 +953,20 @@ export class Keyboard {
 
     await this.reloadKeymap((done, total) => progress("keymap", done, total));
 
-    const indices = this.encoderIndices;
+    const encoders: { layer: number; index: number }[] = [];
     for (let layer = 0; layer < this.layers; layer++) {
-      for (const index of indices) {
-        progress("encoders", layer * indices.length + indices.indexOf(index), this.layers * indices.length);
-        const [ccw, cw] = vialGetEncoder.decode(await q.request(vialGetEncoder.encode(layer, index)));
+      for (const index of this.encoderIndices) encoders.push({ layer, index });
+    }
+    if (encoders.length > 0) {
+      progress("encoders", 0, encoders.length);
+      const replies = await q.requestMany(
+        encoders.map(({ layer, index }) => vialGetEncoder.encode(layer, index)),
+      );
+      encoders.forEach(({ layer, index }, i) => {
+        const [ccw, cw] = vialGetEncoder.decode(replies[i]);
         this.encoderMap.set(encId(layer, index, 0), ccw);
         this.encoderMap.set(encId(layer, index, 1), cw);
-      }
+      });
     }
 
     progress("layout options");
@@ -964,12 +979,16 @@ export class Keyboard {
   private async reloadKeymap(onProgress: (done: number, total: number) => void): Promise<void> {
     const size = this.layers * this.rows * this.cols * 2;
     const buffer = new Uint8Array(size);
+    const chunks: { offset: number; sz: number }[] = [];
     for (let offset = 0; offset < size; offset += C.BUFFER_FETCH_CHUNK) {
-      const sz = Math.min(size - offset, C.BUFFER_FETCH_CHUNK);
-      const reply = await this.queue.request(viaKeymapGetBuffer.encode(offset, sz));
-      buffer.set(reply.slice(4, 4 + sz), offset);
-      onProgress(offset + sz, size);
+      chunks.push({ offset, sz: Math.min(size - offset, C.BUFFER_FETCH_CHUNK) });
     }
+    onProgress(0, size);
+    const replies = await this.queue.requestMany(
+      chunks.map(({ offset, sz }) => viaKeymapGetBuffer.encode(offset, sz)),
+    );
+    chunks.forEach(({ offset, sz }, i) => buffer.set(replies[i].slice(4, 4 + sz), offset));
+    onProgress(size, size);
     const positions = this.matrixPositions;
     for (let layer = 0; layer < this.layers; layer++) {
       for (const { row, col } of positions) {

@@ -25,6 +25,7 @@ import {
 } from "../protocol/tap-dance.ts";
 import { keycodeDescriptions, provide } from "./services.ts";
 import type { DeviceContext, ExtensionRestoreStep, KeyboardExtension } from "./types.ts";
+import { range } from "../util/range.ts";
 
 export class TapDanceError extends Error {
   constructor(message: string) {
@@ -180,8 +181,9 @@ export const tapDanceExtension: KeyboardExtension<TapDance> = {
     const count = board.capabilities.dynamic?.tapDance ?? 0;
     if (board.vialProtocol < VIAL_PROTOCOL_DYNAMIC || !count) return null;
     const entries: TapDanceEntry[] = [];
-    for (let idx = 0; idx < count; idx++) {
-      const reply = vialTapDanceGet.decode(await device.request(vialTapDanceGet.encode(idx)));
+    const replies = await device.requestMany(range(0, count).map((idx) => vialTapDanceGet.encode(idx)));
+    for (const [idx, raw] of replies.entries()) {
+      const reply = vialTapDanceGet.decode(raw);
       if (!reply.ok) {
         throw new TapDanceError(`failed retrieving tap dance entry ${idx} from the device`);
       }

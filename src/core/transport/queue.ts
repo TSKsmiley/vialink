@@ -6,10 +6,15 @@
 //
 // Deviation: two lanes. Low-priority requests (scheduled background work) wait
 // until no normal request is queued; vial-gui has one thread and no lanes.
+//
+// Deviation: requestMany() sends a run of reads as one job, handed to the
+// transport in one go when it can (Transport.sendMany, the desktop app), so a
+// keymap load is not held to one round trip through the page per report. The
+// bytes on the wire and their order are the same as one request() each.
 
 import { padTo } from "../util/bytes.ts";
 import { makeExchange, type Trace, type TraceExchange } from "./trace.ts";
-import { DeviceDisconnectedError, MSG_LEN, type Transport } from "./types.ts";
+import { BatchError, DeviceDisconnectedError, MSG_LEN, type Transport } from "./types.ts";
 
 export interface RequestOptions {
   /** Attempts before giving up. vial-gui uses 20 for nearly every command. */
@@ -23,10 +28,8 @@ export interface RequestOptions {
 }
 
 interface Job {
-  report: Uint8Array;
-  retries: number;
-  resolve: (reply: Uint8Array) => void;
-  reject: (error: unknown) => void;
+  /** Runs the job and settles its promise; never rejects. */
+  execute: () => Promise<void>;
 }
 
 export type QueueEvent =
@@ -80,16 +83,45 @@ export class RequestQueue {
    * finished, and resolves with the 32-byte reply.
    */
   request(payload: Uint8Array | number[], options: RequestOptions = {}): Promise<Uint8Array> {
-    const bytes = payload instanceof Uint8Array ? payload : Uint8Array.from(payload);
-    if (bytes.length > MSG_LEN) {
-      return Promise.reject(new Error(`message must be at most ${MSG_LEN} bytes, got ${bytes.length}`));
+    let report: Uint8Array;
+    try {
+      report = toReport(payload);
+    } catch (err) {
+      return Promise.reject(err);
     }
-    const report = padTo(bytes, MSG_LEN);
+    const retries = options.retries ?? DEFAULT_RETRIES;
     return new Promise<Uint8Array>((resolve, reject) => {
-      const job = { report, retries: options.retries ?? DEFAULT_RETRIES, resolve, reject };
-      (options.priority === "low" ? this.low : this.normal).push(job);
-      void this.pump();
+      this.enqueue(options, () => this.run(report, retries).then(resolve, reject));
     });
+  }
+
+  /**
+   * Sends several requests as one job: nothing else is sent between them, and
+   * a transport that can takes them in one go (Transport.sendMany). Resolves
+   * with the replies in order. If the batch fails partway, the rest are sent
+   * one at a time with the usual retries, so the outcome is what a request()
+   * for each would give.
+   */
+  requestMany(
+    payloads: readonly (Uint8Array | number[])[],
+    options: RequestOptions = {},
+  ): Promise<Uint8Array[]> {
+    let reports: Uint8Array[];
+    try {
+      reports = payloads.map(toReport);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    if (reports.length === 0) return Promise.resolve([]);
+    const retries = options.retries ?? DEFAULT_RETRIES;
+    return new Promise<Uint8Array[]>((resolve, reject) => {
+      this.enqueue(options, () => this.runMany(reports, retries).then(resolve, reject));
+    });
+  }
+
+  private enqueue(options: RequestOptions, execute: () => Promise<void>): void {
+    (options.priority === "low" ? this.low : this.normal).push({ execute });
+    void this.pump();
   }
 
   /** True while a request is being sent or waiting to be. */
@@ -105,11 +137,7 @@ export class RequestQueue {
       for (;;) {
         const job = this.normal.shift() ?? this.low.shift();
         if (!job) return;
-        try {
-          job.resolve(await this.run(job.report, job.retries));
-        } catch (err) {
-          job.reject(err);
-        }
+        await job.execute();
       }
     } finally {
       this.pumping = false;
@@ -172,9 +200,51 @@ export class RequestQueue {
     );
   }
 
+  private async runMany(reports: Uint8Array[], retries: number): Promise<Uint8Array[]> {
+    const replies: Uint8Array[] = [];
+    if (reports.length > 1 && this.transport.sendMany && !this.disconnected) {
+      const start = Date.now();
+      let failure: unknown = null;
+      try {
+        replies.push(...(await this.transport.sendMany(reports)));
+      } catch (err) {
+        failure = err;
+        if (err instanceof BatchError) replies.push(...err.replies);
+      }
+      // The log gets a request and reply per report; their times are spread
+      // evenly over the batch, which is all the host reports back.
+      const end = Date.now();
+      const at = (i: number) => Math.round(start + ((end - start) * i) / reports.length);
+      replies.forEach((reply, i) => {
+        this.exchanges.push(makeExchange(reports[i], reply));
+        this.emit({ kind: "request", at: at(i), data: reports[i], attempt: 1 });
+        this.emit({ kind: "reply", at: at(i + 1), data: reply, request: reports[i] });
+      });
+      const cause = failure instanceof BatchError ? failure.error : failure;
+      if (cause instanceof DeviceDisconnectedError) {
+        this.disconnected = true;
+        const report = reports[replies.length];
+        this.emit({ kind: "request", at: end, data: report, attempt: 1 });
+        this.emit({ kind: "failed", at: end, request: report, error: cause.message });
+        throw cause;
+      }
+    }
+    // Whatever the batch did not answer (or every report, without sendMany).
+    for (let i = replies.length; i < reports.length; i++) replies.push(await this.run(reports[i], retries));
+    return replies;
+  }
+
   private emit(event: QueueEvent): void {
     for (const listener of this.listeners) listener(event);
   }
+}
+
+function toReport(payload: Uint8Array | number[]): Uint8Array {
+  const bytes = payload instanceof Uint8Array ? payload : Uint8Array.from(payload);
+  if (bytes.length > MSG_LEN) {
+    throw new Error(`message must be at most ${MSG_LEN} bytes, got ${bytes.length}`);
+  }
+  return padTo(bytes, MSG_LEN);
 }
 
 function sleep(ms: number): Promise<void> {

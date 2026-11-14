@@ -1,0 +1,26 @@
+[package]
+name = "vialink"
+version = "0.1.0"
+description = "ViaLink desktop app: a Vial keyboard configurator"
+license = "GPL-2.0-or-later"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "vialink_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["sync"] }
+hidapi = "2.6"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+panic = "abort"

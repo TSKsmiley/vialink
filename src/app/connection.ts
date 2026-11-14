@@ -23,8 +23,10 @@ import { installLighting, simVialRgb } from "../core/sim/lighting.ts";
 import { SimulatedKeyboard } from "../core/sim/simulatedKeyboard.ts";
 import { installTapDanceSimulator } from "../core/sim/tap-dance.ts";
 import { RequestQueue } from "../core/transport/queue.ts";
+import { NativeHidTransport, type NativeKeyboard } from "../core/transport/native.ts";
 import type { Transport } from "../core/transport/types.ts";
 import { WebHidTransport } from "../core/transport/webhid.ts";
+import { tauriHid } from "./desktop.ts";
 
 export function webHidSupported(): boolean {
   return typeof navigator !== "undefined" && "hid" in navigator;
@@ -89,6 +91,23 @@ export async function connect(
 
 export function webHidTransport(device: HIDDevice): Transport {
   return new WebHidTransport(device);
+}
+
+/** What the connect screen can connect to. */
+export type ConnectTarget =
+  | { kind: "demo" }
+  /** The browser's device chooser. */
+  | { kind: "webhid" }
+  /** A keyboard the desktop app found (no WebHID there). */
+  | { kind: "native"; device: NativeKeyboard };
+
+/** Keyboards with the VIA/Vial raw-HID interface, in the desktop app. */
+export function listNativeKeyboards(): Promise<NativeKeyboard[]> {
+  return tauriHid.list();
+}
+
+export function nativeTransport(device: NativeKeyboard): Transport {
+  return new NativeHidTransport(tauriHid, device);
 }
 
 /** A simulated KLOR running the layer-names firmware, with a small starter keymap. */

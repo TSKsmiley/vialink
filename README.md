@@ -60,12 +60,42 @@ pnpm build          # production build in dist/
 On Linux the browser needs read/write access to the keyboard's hidraw device; Vial's
 [udev rule](https://get.vial.today/manual/linux-udev.html) covers this.
 
+### Desktop app
+
+For people whose browser has no WebHID (Firefox, Safari), ViaLink also builds as a desktop app
+with [Tauri](https://tauri.app): the same web app in the system's webview, with raw HID from the
+app's own process (`src-tauri/src/hid.rs`, using hidapi) instead of WebHID. With one keyboard
+plugged in it connects on its own at launch; runs of reads (keymap, definition, entries) go to
+the keyboard back to back, so a load runs at USB speed. The Linux packages are about 2 MB.
+
+It needs Rust and Tauri's [system packages](https://tauri.app/start/prerequisites/) (on Linux
+WebKitGTK 4.1, plus libudev for hidapi). The keyboard needs the same udev rule as in the browser.
+
+```sh
+pnpm tauri dev                  # the desktop app with hot reload (Vite on port 1420)
+pnpm tauri build                # installers in src-tauri/target/release/bundle/
+VIALINK_TRACE=1 pnpm tauri dev  # also log startup and every HID request's timing
+```
+
+The "Desktop app" GitHub workflow builds the installers on every pull request and push to
+`master` that touches the app (or by hand from the Actions tab); download them from the run's
+Artifacts:
+
+- **Linux**: `.deb` and `.rpm` (about 2 MB, using the system's WebKitGTK), or an `.AppImage` that
+  runs on most distributions. All need Vial's udev rule, as above.
+- **macOS**: one `.dmg` for Apple Silicon and Intel. It is ad-hoc signed, not notarized: the first
+  time, open it from System Settings > Privacy & Security > "Open Anyway".
+- **Windows**: an `.exe` installer or an `.msi`. They are not code-signed: on the SmartScreen
+  warning, choose "More info" > "Run anyway".
+
+Pushing a `desktop-v*` tag also attaches them to a draft GitHub release.
+
 ### Layout
 
 - `src/core/`: framework-free protocol code. It never imports React or the DOM and runs under
   Node in tests.
-  - `transport/`: the `Transport` interface, the WebHID and replay transports, and the
-    single-flight `RequestQueue` every command goes through.
+  - `transport/`: the `Transport` interface, the WebHID, native (desktop app) and replay
+    transports, and the single-flight `RequestQueue` every command goes through.
   - `protocol/`: command constants and pure encode/decode functions per command.
   - `definition/`: fetching and decompressing `vial.json`, the KLE parser, layout options and
     geometry.
@@ -81,6 +111,7 @@ On Linux the browser needs read/write access to the keyboard's hidraw device; Vi
 - `src/app/`: the React UI. `shell/` is the top bar, sidebar, undo and device panel; `keymap/` the
   keymap view; `extensions/` the feature views; `ui/` wraps the Kumo components ViaLink uses;
   `theme.css` holds the colour tokens.
+- `src-tauri/`: the desktop app's shell (Rust): window, app icons and the native HID commands.
 - `fixtures/`: keyboard definitions and `.vil` files used by tests.
 - `scripts/`: `dump_keycodes.py` and `dump_keymaps.py` regenerate the keycode tables and the
   keyboard layouts (Danish, German, …) in `src/core/keycodes/data/` from a vial-gui checkout.
@@ -102,7 +133,8 @@ an extension calls, and hooks ViaLink calls. The design is in the plan doc's "Ex
 2. **Manifest**: `requires` / `optional` (other extensions, by id; they probe first),
    `conflicts`, and `provides` (services from `defineService`/`provide`, hook points from
    `defineHook`; ids start with the extension's id).
-3. **Through `ctx` only**: `ctx.board` (read-only facts), `ctx.keymap`, `ctx.device` (by group),
+3. **Through `ctx` only**: `ctx.board` (read-only facts), `ctx.keymap`, `ctx.device` (by group;
+   `requestMany` for a run of reads, which the desktop app sends back to back),
    `ctx.history` (record every write for undo), `ctx.state(name, { persist })` (saved state;
    `"layout"` by default, `"browser"` for this browser only), `ctx.schedule` (every, once, idle;
    never your own timers), `ctx.use(service)`, `ctx.notify`, `ctx.ui` (confirm, overlay).

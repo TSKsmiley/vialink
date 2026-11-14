@@ -240,11 +240,12 @@ export const qmkSettingsExtension: KeyboardExtension<QmkSettings> = {
     const values = new Map<number, number>();
     // reload_settings: GET every qsid the board reports and the JSON describes;
     // keep the ones whose status is 0.
-    for (const qsid of board.capabilities.qmkSettings) {
-      if (!isQsidSupported(qsid)) continue;
-      const value = await readValue(ctx, qsid);
-      if (value !== null) values.set(qsid, value);
-    }
+    const qsids = board.capabilities.qmkSettings.filter(isQsidSupported);
+    const replies = await ctx.device.requestMany(qsids.map((qsid) => vialQmkSettingsGet.encode(qsid)));
+    qsids.forEach((qsid, i) => {
+      const reply = vialQmkSettingsGet.decode(replies[i]);
+      if (reply.ok) values.set(qsid, decodeQsidValue(reply.data, qsidWidth(qsid)));
+    });
     return values.size > 0 ? new QmkSettings(ctx, values) : null;
   },
 
