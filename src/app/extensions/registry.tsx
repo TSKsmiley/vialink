@@ -25,6 +25,7 @@ import { combosUi } from "./combosUi.tsx";
 import { keyOverridesUi } from "./key-overridesUi.tsx";
 import { altRepeatKeyUi } from "./alt-repeat-keyUi.tsx";
 import { qmkSettingsUi } from "./qmk-settingsUi.tsx";
+import { lightingUi } from "./lightingUi.tsx";
 
 /**
  * What an extension's view gets: its own context (ctx: board, keymap, history,
@@ -121,6 +122,7 @@ export const APP_EXTENSIONS: readonly AppExtension[] = [
   keyOverridesUi,
   altRepeatKeyUi,
   qmkSettingsUi,
+  lightingUi,
 ];
 
 /** UI entries whose core extension is active on this keyboard. */

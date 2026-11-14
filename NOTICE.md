@@ -26,6 +26,10 @@ they follow in their header comment.
   `scripts/dump_keycodes.py`; the source commit is recorded in that file.
 - `src/core/definition/`: `kle_serial.py`, `editor/layout_editor.py`,
   `widgets/keyboard_widget.py`
+- `src/core/extensions/lighting.ts`, `src/core/protocol/lighting.ts`: the
+  effect tables of `editor/rgb_configurator.py` and the lighting commands of
+  `protocol/keyboard_comm.py`; `src/core/sim/lighting.ts` answers like
+  vial-qmk's `quantum/via.c` and `quantum/vialrgb.c` (GPL-2.0-or-later)
 - `src/core/vil.ts`: the `.vil` format of `save_layout()` / `restore_layout()`
 - `src/core/sim/simulatedKeyboard.ts`: modelled on `protocol/dummy_keyboard.py`
   and `test/test_keyboard.py`

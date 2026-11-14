@@ -34,12 +34,14 @@ See [NOTICE.md](NOTICE.md) for what comes from where.
   keys and QMK settings are editable too.
 - **Layer names** on boards running the
   [Theis194 layer-names firmware](https://github.com/Theis194/vial-qmk).
+- **Lighting:** backlight, underglow and VialRGB effects, brightness, speed and colour, shown on
+  the keyboard while you drag and undoable; Save stores them on the keyboard.
 - Save and load `.vil` files compatible with desktop Vial, or keep layouts in the browser.
 - A device panel with a readable HID log (filters, export as a replayable trace) and a matrix tester.
 - Light and dark theme (follows the system, or pick one in the ⋯ menu); built with Cloudflare's
   [Kumo](https://github.com/cloudflare/kumo) components.
 
-Not yet: lighting and the firmware flasher.
+Not yet: the firmware flasher.
 
 ## Development
 

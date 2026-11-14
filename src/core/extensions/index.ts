@@ -7,6 +7,7 @@ import { keyOverridesExtension } from "./key-overrides.ts";
 import { altRepeatKeyExtension } from "./alt-repeat-key.ts";
 import { qmkSettingsExtension } from "./qmk-settings.ts";
 import { layerSharingExtension } from "./layer-sharing.ts";
+import { lightingExtension } from "./lighting.ts";
 import type { CustomCommand, KeyboardExtension } from "./types.ts";
 
 export type {
@@ -33,6 +34,7 @@ export const BUILTIN_EXTENSIONS: readonly KeyboardExtension<unknown>[] = [
   keyOverridesExtension as KeyboardExtension<unknown>,
   altRepeatKeyExtension as KeyboardExtension<unknown>,
   qmkSettingsExtension as KeyboardExtension<unknown>,
+  lightingExtension as KeyboardExtension<unknown>,
   layerSharingExtension as KeyboardExtension<unknown>,
 ];
 
