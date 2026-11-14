@@ -263,6 +263,7 @@ export function LayerRail({
                     env={menu}
                     open={menuFor === l}
                     at={menuFor === l ? menuAt : null}
+                    onRename={rename ? () => setEditing(l) : undefined}
                     onOpenChange={(o) => {
                       if (o && menuFor !== l) setMenuAt(null);
                       setMenuFor(o ? l : null);
