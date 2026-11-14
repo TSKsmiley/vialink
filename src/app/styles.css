@@ -377,27 +377,59 @@ svg.keyboard {
   stroke: #c58a00;
   stroke-width: 2.5;
 }
-.key.pressed rect,
-.key.pressed circle {
-  fill: var(--accent);
-  stroke: var(--accent);
+/*
+ * Matrix tester: keys not tested yet keep the plain look with a quiet label,
+ * held keys are mint, tested keys blue with a tick. Knob turns aren't in the
+ * switch matrix, so encoders are drawn dashed and dimmed.
+ */
+.matrix-board .key .key-label,
+.matrix-board .key .key-label .inner {
+  fill: var(--muted);
 }
-.key.pressed .key-label {
-  fill: #fff;
+.matrix-board .key:hover rect,
+.matrix-board .key:hover circle {
+  stroke: var(--key-stroke);
 }
-.key.seen rect,
-.key.seen circle {
-  fill: var(--notice-bg);
-  stroke: #4c9a52;
+.matrix-board .key.tested rect {
+  fill: var(--vl-success-tint);
+  stroke: var(--vl-success);
 }
-.matrix-tester .toolbar p {
-  margin: 0;
+.matrix-board .key.tested .key-label,
+.matrix-board .key.tested .key-label .inner {
+  fill: var(--vl-success-text);
 }
-.matrix-tester .capture-keys {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
+.matrix-board .key.held rect {
+  fill: var(--vl-accent);
+  stroke: var(--vl-accent-link);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px var(--vl-accent-ring));
+}
+.matrix-board .key.held .key-label,
+.matrix-board .key.held .key-label .inner {
+  fill: var(--vl-on-accent);
+  font-weight: 600;
+}
+.matrix-board .key-tick {
+  fill: none;
+  stroke: var(--vl-success-text);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.matrix-board .key.encoder circle {
+  fill: none;
+  stroke: var(--border);
+  stroke-dasharray: 4 3;
+}
+.matrix-board .key.encoder .key-label,
+.matrix-board .key.encoder .key-label .inner,
+.matrix-board .encoder-dir {
+  fill: var(--muted);
+  opacity: 0.6;
+}
+.matrix-tester:fullscreen {
+  background: var(--bg);
+  overflow: auto;
 }
 
 .field {

@@ -4,6 +4,8 @@
 // switch and Disconnect.
 //
 // The device pill opens the device side bar with the HID log (DevicePanel).
+// The bar stays at the top while the page scrolls, and publishes its height
+// as --vl-top-bar so the device panel can sit right under it.
 
 import {
   ArrowArcLeftIcon,
@@ -13,7 +15,7 @@ import {
   LockSimpleIcon,
   LockSimpleOpenIcon,
 } from "@phosphor-icons/react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { KEYBOARD_LAYOUTS } from "../../core/keycodes/keymaps.ts";
@@ -45,8 +47,25 @@ export function TopBar({
   onDisconnect,
   onError,
 }: Props) {
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty("--vl-top-bar", `${el.offsetHeight}px`);
+    publish();
+    const watch = new ResizeObserver(publish);
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      root.style.removeProperty("--vl-top-bar");
+    };
+  }, []);
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-kumo-line bg-kumo-elevated px-4 py-3 md:px-5">
+    <header
+      ref={bar}
+      className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-kumo-line bg-kumo-elevated px-4 py-3 md:px-5"
+    >
       <strong className="text-[17px] tracking-tight">ViaLink</strong>
       {keyboard ? (
         <>

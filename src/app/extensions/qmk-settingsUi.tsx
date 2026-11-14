@@ -4,7 +4,8 @@
 // boolean field and a number box per integer field, and a Reset button that
 // asks first. Deviation: changes are written straight away (vial-gui collects
 // them behind Save/Undo buttons); number boxes write on Enter or when they
-// lose focus, and only values within the field's min/max.
+// lose focus, and only values within the field's min/max. Styled like the
+// redesigned views: a heading, tab chips and one card of settings rows.
 
 import { useRef, useState } from "react";
 import {
@@ -13,8 +14,11 @@ import {
   type QmkSettings,
 } from "../../core/extensions/qmk-settings.ts";
 import { errorMessage } from "../hooks.ts";
+import { Button } from "../ui/index.ts";
 import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
-import "./qmk-settings.css";
+
+const ROW =
+  "flex min-h-11 items-center justify-between gap-6 border-t border-kumo-line py-2 first:border-t-0";
 
 interface FieldProps {
   settings: QmkSettings;
@@ -28,11 +32,14 @@ const fieldId = (field: QmkSettingField) => `qmk-setting-${field.qsid}-${field.b
 function BooleanField({ settings, field, busy, run }: FieldProps) {
   const id = fieldId(field);
   return (
-    <div className="qmk-setting">
-      <label htmlFor={id}>{field.title}</label>
+    <div className={ROW}>
+      <label htmlFor={id} className="text-sm [overflow-wrap:anywhere]">
+        {field.title}
+      </label>
       <input
         id={id}
         type="checkbox"
+        className="size-[18px] shrink-0 accent-accent"
         checked={settings.isChecked(field)}
         disabled={busy}
         onChange={(e) => void run(() => settings.setBit(field.qsid, field.bit ?? 0, e.target.checked))}
@@ -61,9 +68,16 @@ function IntegerField({ settings, field, busy, run }: FieldProps) {
   };
 
   return (
-    <div className="qmk-setting">
-      <label htmlFor={id}>{field.title}</label>
-      <span className="qmk-setting-value">
+    <div className={ROW}>
+      <label htmlFor={id} className="text-sm [overflow-wrap:anywhere]">
+        {field.title}
+      </label>
+      <span className="flex shrink-0 items-center gap-2">
+        {invalid && (
+          <span id={`${id}-error`} className="text-xs text-kumo-danger">
+            {min}–{max}
+          </span>
+        )}
         <input
           id={id}
           type="number"
@@ -81,12 +95,11 @@ function IntegerField({ settings, field, busy, run }: FieldProps) {
             if (e.key === "Enter") void commit();
             if (e.key === "Escape") setDraft(String(value));
           }}
+          className={
+            "w-24 rounded-md border bg-kumo-control px-2 py-1 text-right font-mono text-sm " +
+            (invalid ? "border-kumo-danger" : "border-kumo-line")
+          }
         />
-        {invalid && (
-          <span id={`${id}-error`} className="error">
-            {min}–{max}
-          </span>
-        )}
       </span>
     </div>
   );
@@ -121,8 +134,15 @@ function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
   };
 
   return (
-    <section className="qmk-settings" aria-label="QMK settings">
-      <div className="tabs" role="tablist" aria-label="QMK settings groups">
+    <section className="flex max-w-2xl flex-col gap-4" aria-label="QMK settings">
+      <div className="flex flex-col gap-1">
+        <h1 className="m-0 text-xl font-semibold">QMK settings</h1>
+        <p className="m-0 text-sm leading-snug text-kumo-subtle">
+          Settings stored on the keyboard: tap-hold timing, Magic, Auto Shift, combos, one-shot keys and more.
+          Changes are written straight away.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="QMK settings groups">
         {tabs.map((t, i) => (
           <button
             key={t.name}
@@ -130,7 +150,12 @@ function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
             role="tab"
             aria-selected={t === tab}
             aria-controls="qmk-settings-tabpanel"
-            className={t === tab ? "active" : ""}
+            className={
+              "min-h-10 cursor-pointer rounded-lg border px-3.5 text-sm " +
+              (t === tab
+                ? "border-accent bg-accent-tint font-semibold"
+                : "border-kumo-line hover:bg-kumo-tint")
+            }
             onClick={() => setTabName(t.name)}
           >
             {t.name}
@@ -139,7 +164,7 @@ function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
       </div>
       <div
         id="qmk-settings-tabpanel"
-        className="qmk-settings-fields"
+        className="flex flex-col rounded-xl border border-kumo-line bg-kumo-elevated px-5 py-2"
         role="tabpanel"
         aria-labelledby={`qmk-settings-tab-${tabIndex}`}
       >
@@ -158,21 +183,21 @@ function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
           ),
         )}
       </div>
-      <div className="qmk-settings-actions">
+      <div className="flex flex-wrap items-center gap-2">
         {confirming ? (
           <>
-            <span>Reset all settings to default values? This cannot be undone.</span>
-            <button className="primary" onClick={() => void reset()} disabled={busy}>
+            <span className="text-sm">Reset all settings to default values? This cannot be undone.</span>
+            <Button variant="secondary-destructive" onClick={() => void reset()} disabled={busy}>
               Reset
-            </button>
-            <button onClick={() => setConfirming(false)} disabled={busy}>
+            </Button>
+            <Button onClick={() => setConfirming(false)} disabled={busy}>
               Cancel
-            </button>
+            </Button>
           </>
         ) : (
-          <button onClick={() => setConfirming(true)} disabled={busy}>
+          <Button onClick={() => setConfirming(true)} disabled={busy}>
             Reset to defaults…
-          </button>
+          </Button>
         )}
       </div>
     </section>
@@ -181,5 +206,12 @@ function QmkSettingsPanel({ ctx, state: settings }: PanelProps<QmkSettings>) {
 
 export const qmkSettingsUi: AppExtension = {
   id: qmkSettingsExtension.id,
-  panels: [panel<QmkSettings>({ id: "qmk-settings", title: "QMK settings", Component: QmkSettingsPanel })],
+  panels: [
+    panel<QmkSettings>({
+      id: "qmk-settings",
+      modern: true,
+      title: "QMK settings",
+      Component: QmkSettingsPanel,
+    }),
+  ],
 };

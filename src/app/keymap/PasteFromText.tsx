@@ -93,6 +93,16 @@ export function PasteFromText({ keyboard, initialText, defaultTarget, layerName,
     </div>
   );
 
+  // Board 7: the same heading whether or not the text has been decoded yet.
+  const heading = (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <h1 className="m-0 text-xl font-semibold">Paste a layer from text</h1>
+      <span className="text-sm text-kumo-subtle">
+        Works like Paste: the text is the copied layer. Nothing is written until you press Paste.
+      </span>
+    </div>
+  );
+
   if (!decoded || "error" in decoded) {
     return (
       <>
@@ -100,12 +110,7 @@ export function PasteFromText({ keyboard, initialText, defaultTarget, layerName,
           aria-label="Paste a layer from text"
           className="flex min-w-0 flex-col gap-4 [grid-area:board]"
         >
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="m-0 text-xl font-semibold">Paste a layer from text</h1>
-            <span className="text-sm text-kumo-subtle">
-              Works like Paste: the text is the copied layer. Nothing is written until you press Paste.
-            </span>
-          </div>
+          {heading}
           {box}
           {decoded && "error" in decoded && (
             <p role="alert" className="m-0 rounded-lg border border-kumo-line bg-kumo-tint px-3 py-2 text-sm">
@@ -191,6 +196,7 @@ export function PasteFromText({ keyboard, initialText, defaultTarget, layerName,
       onError={onError}
       before={
         <div className="flex flex-col gap-3">
+          {heading}
           {box}
           <ul aria-label="Checks" className="m-0 flex list-none flex-col gap-1.5 p-0">
             {checks.map((c, i) => (

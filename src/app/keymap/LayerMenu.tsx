@@ -2,10 +2,12 @@
 // The ⋯ menu of a layer card (design board 5), also opened by right-clicking
 // the card. Its entries are the running extensions' layer commands
 // (extensions/commands.ts); layer sharing's are copy, paste, duplicate, swap,
-// share text and clear. Every entry that writes is one undo step.
+// share text and clear. Every entry that writes is one undo step. When layers
+// can be named, "Rename…" sits above the dangerous entries (Clear), as on the
+// board; it opens the card's name field.
 
 import { DotsThreeIcon } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { LayerCommand, LayerCommandEnv } from "../extensions/commands.ts";
 import { DropdownMenu } from "../ui/index.ts";
 
@@ -19,12 +21,37 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   /** Screen point to open at (right-click); null places it under the ⋯ button. */
   at?: { x: number; y: number } | null;
+  /** Opens the card's name field; absent when layers can't be named. */
+  onRename?: () => void;
 }
 
-export function LayerMenu({ layer, title, commands, env, open, onOpenChange, at = null }: Props) {
+export function LayerMenu({ layer, title, commands, env, open, onOpenChange, at = null, onRename }: Props) {
   const items: ReactNode[] = [];
   let section: string | undefined;
+  // Rename… opens a name field on the card: the menu must not hand focus
+  // back to its ⋯ button on closing, or the field loses it at once.
+  const renaming = useRef(false);
+  let renameAdded = !onRename;
+  const addRename = () => {
+    if (renameAdded) return;
+    renameAdded = true;
+    if (items.length > 0) items.push(<DropdownMenu.Separator key="sep-rename" />);
+    items.push(
+      <DropdownMenu.Item
+        key="rename"
+        onClick={() => {
+          renaming.current = true;
+          // After the menu has closed: while open it keeps focus inside itself.
+          window.setTimeout(() => onRename?.(), 0);
+        }}
+      >
+        Rename…
+      </DropdownMenu.Item>,
+    );
+    section = "\0rename";
+  };
   for (const { command, shortcut } of commands) {
+    if (command.danger) addRename();
     if (items.length > 0 && command.section !== section) {
       items.push(<DropdownMenu.Separator key={`sep-${command.id}`} />);
     }
@@ -57,6 +84,7 @@ export function LayerMenu({ layer, title, commands, env, open, onOpenChange, at 
       ),
     );
   }
+  addRename();
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenu.Trigger
@@ -70,19 +98,29 @@ export function LayerMenu({ layer, title, commands, env, open, onOpenChange, at 
           </button>
         }
       />
-      <DropdownMenu.Content
-        {...(at && {
-          // A zero-size virtual element at the pointer, like a native context menu.
-          anchor: {
-            getBoundingClientRect: () => DOMRect.fromRect({ x: at.x, y: at.y, width: 0, height: 0 }),
-          },
-          side: "bottom" as const,
-          align: "start" as const,
-          sideOffset: 2,
-        })}
-      >
-        {items}
-      </DropdownMenu.Content>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Positioner
+          {...(at && {
+            // A zero-size virtual element at the pointer, like a native context menu.
+            anchor: {
+              getBoundingClientRect: () => DOMRect.fromRect({ x: at.x, y: at.y, width: 0, height: 0 }),
+            },
+            side: "bottom" as const,
+            align: "start" as const,
+            sideOffset: 2,
+          })}
+        >
+          <DropdownMenu.Popup
+            finalFocus={() => {
+              const keep = !renaming.current;
+              renaming.current = false;
+              return keep;
+            }}
+          >
+            {items}
+          </DropdownMenu.Popup>
+        </DropdownMenu.Positioner>
+      </DropdownMenu.Portal>
     </DropdownMenu>
   );
 }

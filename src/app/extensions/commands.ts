@@ -24,7 +24,8 @@ export interface LayerCommandEnv {
   swap(layer: number, other: number): void;
   clear(layer: number): void;
   copyAsText(layer: number): void;
-  pasteFromText(): void;
+  /** Opens "Paste a layer from text", aimed at `layer` when given (the card whose menu was used). */
+  pasteFromText(layer?: number): void;
 }
 
 export interface LayerCommand {

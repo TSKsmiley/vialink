@@ -5,6 +5,9 @@
 // (core/protocol/describe.ts), read/write/error tags, filters, a switch to
 // hide polling, pause, copy, export as a replayable trace
 // (core/transport/trace.ts) and clear. Replaces the old DebugPanel.
+// It sits under the top bar down the right edge, where the board puts it in
+// place of the key inspector (App leaves it room; views drop their own side
+// panel while it is open). On a narrow screen it covers the page instead.
 
 import { XIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
@@ -168,7 +171,8 @@ export function DevicePanel({ queue, keyboard, onClose }: Props) {
   return (
     <aside
       aria-label="Device and HID log"
-      className="fixed top-0 right-0 bottom-0 z-30 flex w-[min(440px,100vw)] flex-col border-l border-kumo-line bg-kumo-elevated shadow-2xl"
+      style={{ top: "var(--vl-top-bar, 0px)" }}
+      className="fixed right-0 bottom-0 z-10 flex w-[min(440px,100vw)] flex-col border-l border-kumo-line bg-kumo-elevated shadow-2xl lg:shadow-none"
     >
       <div className="flex items-center gap-3 border-b border-kumo-line px-5 py-4">
         <span className="size-2.5 rounded-full bg-connected" aria-hidden="true" />

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Component tests for the alt repeat key tab, after vial-gui's
 // editor/alt_repeat_key.py on top of protocol/alt_repeat_key.py.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,59 +35,49 @@ async function setup(count = 3) {
   return { sim, arep, kb, onError };
 }
 
+const open = () => fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
+const detail = (n: number) => within(screen.getByRole("region", { name: `Alt repeat key ${n}` }));
+const choose = (label: string, text: string) => {
+  const box = screen.getByLabelText(label);
+  fireEvent.change(box, { target: { value: text } });
+  fireEvent.keyDown(box, { key: "Enter" });
+};
+
 describe("Alt repeat key panel", () => {
   it("has no tab on boards without alt repeat keys", async () => {
     await setup(0);
     expect(screen.queryByRole("tab", { name: "Alt repeat key" })).toBeNull();
   });
 
-  it("shows one tab per entry with the board's values", async () => {
+  it("lists the pairs in use and shows one with the board's values", async () => {
     await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
-    const entries = screen.getByRole("tablist", { name: "Alt repeat key entries" });
-    expect(entries.querySelectorAll('[role="tab"]')).toHaveLength(3);
-    expect((screen.getByLabelText("Enable") as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByRole("button", { name: "Last key for alt repeat key 1: KC_E" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Alt key for alt repeat key 1: KC_R" })).toBeTruthy();
+    open();
+    expect(screen.getByText("1 of 3 used")).toBeTruthy();
+    const list = screen.getByRole("list", { name: "Alt repeat key entries" });
+    expect(within(list).getByRole("button", { name: /Pair 1/ }).textContent).toContain("E → R");
+    expect(detail(1).getByRole("heading", { name: "After E, Alt Repeat sends R" })).toBeTruthy();
+    expect(detail(1).getByRole("switch", { name: "Enabled" }).getAttribute("aria-checked")).toBe("true");
+    expect(detail(1).getByRole("button", { name: "Last key for alt repeat key 1: KC_E" })).toBeTruthy();
+    expect(detail(1).getByRole("button", { name: "Alt key for alt repeat key 1: KC_R" })).toBeTruthy();
   });
 
-  it("wires the entry tabs as WAI-ARIA tabs with arrow-key navigation", async () => {
-    await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
-    const panel = screen.getByRole("tabpanel", { name: "Alt repeat key 1" });
-    const first = screen.getByRole("tab", { name: "1" });
-    expect(first.getAttribute("aria-controls")).toBe(panel.id);
-    expect(first.tabIndex).toBe(0);
-    expect(screen.getByRole("tab", { name: "2" }).tabIndex).toBe(-1);
-
-    fireEvent.keyDown(first, { key: "ArrowLeft" });
-    const third = screen.getByRole("tab", { name: "3" });
-    expect(third.getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(third);
-    expect(screen.getByRole("tabpanel", { name: "Alt repeat key 3" })).toBeTruthy();
-    fireEvent.keyDown(third, { key: "ArrowRight" });
-    expect(screen.getByRole("tab", { name: "1" }).getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("writes checkbox and keycode changes through to the board", async () => {
+  it("writes changes through to the board", async () => {
     const { arep } = await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
-    fireEvent.click(screen.getByRole("tab", { name: "2" }));
-
-    fireEvent.click(screen.getByLabelText("Enable"));
-    await waitFor(() => expect(arep.entries[1].options).toBe(0x08));
-    fireEvent.click(screen.getByLabelText("RShift"));
-    await waitFor(() => expect(arep.entries[1].allowedMods).toBe(1 << 5));
-    fireEvent.click(screen.getByLabelText("Bidirectional"));
-    await waitFor(() => expect(arep.entries[1].options).toBe(0x0a));
-
-    fireEvent.click(screen.getByRole("button", { name: /^Last key for alt repeat key 2/ }));
-    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "New pair" }));
+    const card = detail(2);
+    choose("Last key: choose a key", "a");
     await waitFor(() => expect(arep.entries[1].keycode).toBe(0x04));
 
-    fireEvent.click(screen.getByRole("button", { name: /^Alt key for alt repeat key 2/ }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "LSFT(KC_B)" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    fireEvent.click(card.getByRole("switch", { name: "Enabled" }));
+    await waitFor(() => expect(arep.entries[1].options).toBe(0x08));
+    fireEvent.click(card.getByRole("button", { name: "RShift" }));
+    await waitFor(() => expect(arep.entries[1].allowedMods).toBe(1 << 5));
+    fireEvent.click(card.getByLabelText("Bidirectional"));
+    await waitFor(() => expect(arep.entries[1].options).toBe(0x0a));
+
+    fireEvent.click(card.getByRole("button", { name: /^Alt key for alt repeat key 2/ }));
+    choose("Alt key: choose a key", "LSFT(KC_B)");
     await waitFor(() => expect(arep.entries[1].altKeycode).toBe(0x0205));
     // Entry 1 was left alone.
     expect(arep.entries[0]).toEqual({ keycode: 0x08, altKeycode: 0x15, allowedMods: 0, options: 0x08 });
@@ -95,10 +85,9 @@ describe("Alt repeat key panel", () => {
 
   it("reports errors, e.g. QK_BOOT on a locked board", async () => {
     const { arep, onError } = await setup();
-    fireEvent.click(screen.getByRole("tab", { name: "Alt repeat key" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Alt key for alt repeat key 1/ }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "QK_BOOT" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    open();
+    fireEvent.click(detail(1).getByRole("button", { name: /^Alt key for alt repeat key 1/ }));
+    choose("Alt key: choose a key", "QK_BOOT");
     await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.stringMatching(/unlocked/)));
     expect(arep.entries[0].altKeycode).toBe(0x15);
   });

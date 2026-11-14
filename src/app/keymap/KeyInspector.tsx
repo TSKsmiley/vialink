@@ -156,7 +156,7 @@ export function KeyInspector({
     <aside
       aria-label="Selected key"
       data-anchor="keymap.keyInspector"
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-kumo-line bg-kumo-elevated p-5"
+      className="flex min-w-0 flex-1 flex-col gap-[18px]"
     >
       {where === null ? (
         <div className="flex flex-col gap-1">
@@ -189,7 +189,7 @@ export function KeyInspector({
         </div>
       )}
 
-      <div role="tablist" aria-label="Key type" className="flex flex-wrap gap-1.5">
+      <div role="tablist" aria-label="Key type" className="grid grid-cols-3 gap-1.5">
         {kinds.map((k) => (
           <button
             key={k.id}
@@ -200,7 +200,7 @@ export function KeyInspector({
               setExtTabId(null);
             }}
             className={
-              "min-h-8 cursor-pointer rounded-lg border px-2.5 py-1 text-sm " +
+              "min-h-10 cursor-pointer rounded-lg border px-2 py-1 text-sm " +
               (!extTab && kind === k.id
                 ? "border-accent bg-accent-tint font-semibold"
                 : "border-kumo-line hover:bg-kumo-tint")
@@ -216,7 +216,7 @@ export function KeyInspector({
             aria-selected={extTab?.id === t.id}
             onClick={() => setExtTabId(t.id)}
             className={
-              "min-h-8 cursor-pointer rounded-lg border px-2.5 py-1 text-sm " +
+              "min-h-10 cursor-pointer rounded-lg border px-2 py-1 text-sm " +
               (extTab?.id === t.id
                 ? "border-accent bg-accent-tint font-semibold"
                 : "border-kumo-line hover:bg-kumo-tint")
@@ -298,7 +298,7 @@ export function KeyInspector({
         )}
       </div>
 
-      <div className="border-t border-kumo-line pt-4">
+      <div className="mt-auto border-t border-kumo-line pt-4">
         <KeySearch
           table={table}
           label="Replace with any key"
@@ -412,7 +412,7 @@ function LayerPanel({
               aria-label={`Hold for layer ${l}: ${layerName(l)}`}
               onClick={() => onPick(build(l, tap))}
               className={
-                "min-h-9 cursor-pointer rounded-lg border px-3 py-1 text-sm disabled:cursor-default disabled:opacity-50 " +
+                "min-h-10 cursor-pointer rounded-lg border px-3.5 py-1.5 text-sm disabled:cursor-default disabled:opacity-50 " +
                 (held === l
                   ? "border-accent bg-accent-tint font-semibold"
                   : "border-kumo-line hover:bg-kumo-tint")
@@ -464,7 +464,7 @@ function LayerPanel({
         )}
       </fieldset>
 
-      <details className="rounded-lg border border-kumo-line px-3 py-2 [&_.layer-builder]:mt-2">
+      <details className="border-t border-kumo-line pt-3 [&_.layer-builder]:mt-2">
         <summary className="cursor-pointer text-sm">
           Other layer behaviours: toggle, switch to, one-shot…
         </summary>
