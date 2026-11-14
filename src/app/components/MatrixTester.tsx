@@ -5,10 +5,12 @@
 // the tab is shown), the page ignores key presses while testing, so Tab, Space,
 // arrows or Ctrl+Z don't move focus, scroll or undo.
 // Deviations: capturing can be switched off, and holding Esc switches it off,
-// so someone using only the keyboard can leave the tester. The browser and the
-// system keep their own shortcuts (Ctrl+W, Ctrl+T, Alt+Tab, the Super key).
+// so someone using only the keyboard can leave the tester. A page can't stop
+// the browser's and the system's own shortcuts (Ctrl+W, Alt+Tab, the Super
+// key); Full screen asks the browser for them too (Keyboard Lock API, Chromium
+// only, page-requested full screen only), and leaving capture leaves it.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 import { KeyboardView } from "./KeyboardView.tsx";
@@ -24,13 +26,55 @@ interface Props {
 
 const KEY_EVENTS = ["keydown", "keyup", "keypress"] as const;
 
+/** navigator.keyboard (Keyboard Lock API); not in TypeScript's DOM types. */
+interface KeyboardLock {
+  lock(keyCodes?: string[]): Promise<void>;
+  unlock(): void;
+}
+
+const keyboardLock = (): KeyboardLock | undefined =>
+  (navigator as Navigator & { keyboard?: Partial<KeyboardLock> }).keyboard?.lock
+    ? (navigator as Navigator & { keyboard: KeyboardLock }).keyboard
+    : undefined;
+
+const canLockSystemKeys = () => document.fullscreenEnabled === true && keyboardLock() !== undefined;
+
 export function MatrixTester({ keyboard, onError, intervalMs = 30, releaseHoldMs = 1500 }: Props) {
   useKeyboardVersion(keyboard);
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const [capturing, setCapturing] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
+  const section = useRef<HTMLElement>(null);
   const unlocked = keyboard.unlocked === true;
   const capture = unlocked && capturing && keyboard.matrixTesterSupported;
+
+  useEffect(() => {
+    const onChange = () => {
+      const ours = document.fullscreenElement !== null && document.fullscreenElement === section.current;
+      setFullscreen(ours);
+      if (!ours) keyboardLock()?.unlock();
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      keyboardLock()?.unlock(); // the browser leaves full screen when the section goes
+    };
+  }, []);
+
+  useEffect(() => {
+    if (fullscreen && !capture) void document.exitFullscreen().catch(() => undefined);
+  }, [fullscreen, capture]);
+
+  const enterFullscreen = async () => {
+    setCapturing(true);
+    try {
+      await section.current?.requestFullscreen();
+      await keyboardLock()?.lock();
+    } catch (err) {
+      onError(errorMessage(err));
+    }
+  };
 
   useEffect(() => {
     if (!capture) return;
@@ -98,7 +142,7 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30, releaseHoldMs
 
   const total = keyboard.matrixPositions.length;
   return (
-    <section className="matrix-tester" aria-label="Matrix tester">
+    <section ref={section} className="matrix-tester" aria-label="Matrix tester">
       <div className="toolbar">
         {unlocked ? (
           <div>
@@ -107,9 +151,13 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30, releaseHoldMs
               {total}
             </p>
             <p className="hint" aria-live="polite">
-              {capturing
-                ? "The page ignores your keys while you test. Hold Esc to let them through."
-                : "Keys also reach the page."}
+              {!capturing
+                ? "Keys also reach the page."
+                : fullscreen
+                  ? "Your keys only reach the tester, system keys like Super and Alt+Tab too. Hold Esc to leave."
+                  : canLockSystemKeys()
+                    ? "The page ignores your keys while you test, but system keys like Super still work: use Full screen to capture them too. Hold Esc to let keys through."
+                    : "The page ignores your keys while you test, but system keys like Super still work. Hold Esc to let keys through."}
             </p>
           </div>
         ) : (
@@ -126,6 +174,15 @@ export function MatrixTester({ keyboard, onError, intervalMs = 30, releaseHoldMs
               Unlock
             </button>
           )}
+          {unlocked &&
+            canLockSystemKeys() &&
+            (fullscreen ? (
+              <button onClick={() => void document.exitFullscreen().catch(() => undefined)}>
+                Exit full screen
+              </button>
+            ) : (
+              <button onClick={() => void enterFullscreen()}>Full screen</button>
+            ))}
           {unlocked && (
             <label className="capture-keys">
               <input type="checkbox" checked={capturing} onChange={(e) => setCapturing(e.target.checked)} />

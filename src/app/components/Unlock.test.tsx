@@ -120,7 +120,7 @@ describe("MatrixTester", () => {
     sim.unlocked = true;
     await kb.isUnlocked();
     render(<MatrixTester keyboard={kb} onError={() => undefined} intervalMs={1} releaseHoldMs={30} />);
-    await screen.findByText(/Hold Esc to let them through/);
+    await screen.findByText(/Hold Esc to let keys through/);
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     fireEvent.keyUp(document.body, { key: "Escape" });
@@ -130,6 +130,46 @@ describe("MatrixTester", () => {
     fireEvent.keyDown(document.body, { key: "Escape" });
     await screen.findByText("Keys also reach the page.");
     expect(fireEvent.keyDown(document.body, { key: "Tab" })).toBe(true);
+  });
+
+  it("captures system keys in full screen, and leaves it when capture stops", async () => {
+    const { sim, kb } = await setup();
+    sim.unlocked = true;
+    await kb.isUnlocked();
+    const lock = vi.fn(async () => undefined);
+    const unlock = vi.fn();
+    let fullscreenElement: Element | null = null;
+    const setFullscreen = (el: Element | null) => {
+      fullscreenElement = el;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    };
+    Object.defineProperty(navigator, "keyboard", { value: { lock, unlock }, configurable: true });
+    Object.defineProperty(document, "fullscreenEnabled", { value: true, configurable: true });
+    Object.defineProperty(document, "fullscreenElement", {
+      get: () => fullscreenElement,
+      configurable: true,
+    });
+    document.exitFullscreen = vi.fn(async () => setFullscreen(null));
+    Element.prototype.requestFullscreen = vi.fn(async function (this: Element) {
+      setFullscreen(this);
+    });
+    try {
+      render(<MatrixTester keyboard={kb} onError={() => undefined} intervalMs={1} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Full screen" }));
+      await screen.findByRole("button", { name: "Exit full screen" });
+      expect(lock).toHaveBeenCalledWith();
+      expect(screen.getByText(/system keys like Super and Alt\+Tab too/)).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("checkbox", { name: "Capture keys" }));
+      await screen.findByRole("button", { name: "Full screen" });
+      expect(unlock).toHaveBeenCalled();
+    } finally {
+      for (const key of ["fullscreenEnabled", "fullscreenElement", "exitFullscreen"]) {
+        delete (document as unknown as Record<string, unknown>)[key];
+      }
+      delete (navigator as unknown as Record<string, unknown>).keyboard;
+      delete (Element.prototype as unknown as Record<string, unknown>).requestFullscreen;
+    }
   });
 
   it("doesn't capture keys while the board is locked", async () => {

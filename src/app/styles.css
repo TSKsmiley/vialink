@@ -393,6 +393,11 @@ svg.keyboard {
 .matrix-tester .toolbar p {
   margin: 0;
 }
+.matrix-tester:fullscreen {
+  background: var(--bg);
+  padding: 24px;
+  overflow: auto;
+}
 .matrix-tester .capture-keys {
   display: flex;
   align-items: center;
