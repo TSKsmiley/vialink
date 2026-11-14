@@ -18,7 +18,7 @@ const xz = new Uint8Array(
   readFileSync(new URL("../../fixtures/definitions/test_2x2_encoder.vial.json.xz", import.meta.url)),
 );
 
-async function board(opts: { vialProtocol?: number } = {}) {
+async function board(opts: { vialProtocol?: number; unlockKeys?: { row: number; col: number }[] } = {}) {
   const sim = new SimulatedKeyboard({
     compressedDefinition: xz,
     rows: 2,
@@ -26,6 +26,7 @@ async function board(opts: { vialProtocol?: number } = {}) {
     layers: 2,
     encoderCount: 1,
     vialProtocol: opts.vialProtocol,
+    unlockKeys: opts.unlockKeys,
   });
   await sim.open();
   const queue = new RequestQueue(sim, { retryDelayMs: 0 });
@@ -124,6 +125,21 @@ describe("unlock flow", () => {
 
     kb.unlockHandler = async () => false; // user cancelled
     await expect(kb.setKey(0, 0, 1, 0x7c00)).rejects.toBeInstanceOf(UnlockRequiredError);
+  });
+
+  it("knows a VIAL_INSECURE board: always unlocked, Lock ignored", async () => {
+    const secure = await board();
+    await secure.kb.isUnlocked();
+    expect(secure.kb.insecure).toBe(false);
+
+    const { sim, kb } = await board({ unlockKeys: [] });
+    expect(await kb.isUnlocked()).toBe(true);
+    expect(kb.insecure).toBe(true);
+    await kb.lock();
+    expect(sim.unlocked).toBe(true);
+    expect(kb.unlocked).toBe(true);
+    await kb.setKey(0, 0, 0, 0x7c00); // QK_BOOT needs no unlock dialog
+    expect(sim.getKeycode(0, 0, 0)).toBe(0x7c00);
   });
 
   it("polls the matrix only when unlocked", async () => {

@@ -192,6 +192,18 @@ function LockControls({ keyboard, onError }: { keyboard: Keyboard; onError: (m: 
     if (keyboard.unlocked === null) void keyboard.isUnlocked().catch(() => undefined);
   }, [keyboard]);
   if (keyboard.vialProtocol < 0 || keyboard.unlocked === null) return null;
+  if (keyboard.insecure && keyboard.unlocked) {
+    // VIAL_INSECURE firmware ignores Lock, so there is nothing to click.
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 text-sm text-kumo-subtle"
+        title="This keyboard's firmware was built with VIAL_INSECURE: it is always unlocked and can't be locked. Rebuild it without VIAL_INSECURE to use Vial's unlock keys."
+      >
+        <LockSimpleOpenIcon aria-hidden="true" />
+        Always unlocked
+      </span>
+    );
+  }
   return keyboard.unlocked ? (
     <Button
       variant="ghost"

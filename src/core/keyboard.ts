@@ -184,6 +184,12 @@ export class Keyboard {
   unlockHandler: UnlockHandler | null = null;
   /** Last known lock state; null until first checked. Updated by every status check, unlock and lock. */
   unlocked: boolean | null = null;
+  /**
+   * True when the firmware was built with VIAL_INSECURE: its unlock status lists
+   * no unlock keys, it is always unlocked and ignores Lock (vial-qmk vial.c).
+   * Null until the status was first read. ViaLink-only; vial-gui still offers Lock.
+   */
+  insecure: boolean | null = null;
   /** Undo/redo of every write made through this object; ends with it (on disconnect). */
   readonly history = new History();
   /**
@@ -377,14 +383,18 @@ export class Keyboard {
 
   async isUnlocked(): Promise<boolean> {
     if (this.vialProtocol < 0) return true;
-    const status = vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode()));
-    this.setUnlocked(status.unlocked);
-    return status.unlocked;
+    return (await this.unlockStatus()).unlocked;
   }
 
   /** Full unlock status, including whether an unlock was started and never finished. */
   async unlockStatus() {
     const status = vialGetUnlockStatus.decode(await this.queue.request(vialGetUnlockStatus.encode()));
+    // A secure build always lists its unlock keys, locked or not.
+    const insecure = status.keys.length === 0;
+    if (this.insecure !== insecure) {
+      this.insecure = insecure;
+      this.changed();
+    }
     this.setUnlocked(status.unlocked);
     return status;
   }

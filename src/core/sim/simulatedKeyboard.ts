@@ -84,7 +84,8 @@ export class SimulatedKeyboard implements Transport {
     this.vialProtocol = opts.vialProtocol ?? 6;
     this.uid = opts.uid ?? 0x1122334455667788n;
     this.layoutOptions = opts.layoutOptions ?? 0;
-    this.unlocked = opts.unlocked ?? false;
+    // vial.c: a VIAL_INSECURE build starts unlocked.
+    this.unlocked = opts.unlocked ?? opts.unlockKeys?.length === 0;
     this.layerNames = opts.layerNames ? [...opts.layerNames] : null;
     this.keymap = new Uint8Array(opts.layers * opts.rows * opts.cols * 2);
     opts.keymap?.forEach((layer, l) =>
@@ -281,7 +282,8 @@ export class SimulatedKeyboard implements Transport {
         return;
       }
       case C.CMD_VIAL_LOCK:
-        this.unlocked = false;
+        // vial.c: a VIAL_INSECURE build (no unlock keys) ignores Lock.
+        if (this.unlockKeys.length > 0) this.unlocked = false;
         return;
       case C.CMD_VIAL_QMK_SETTINGS_QUERY: {
         const cur = u16le(msg, 2);
