@@ -23,7 +23,10 @@ const notes: KeyboardExtension<unknown> = {
   probe: async (ctx) => ((notesCtx = ctx), {}),
 };
 
-async function board(extensions: KeyboardExtension<unknown>[] = [...BUILTIN_EXTENSIONS, notes]) {
+async function board(
+  extensions: KeyboardExtension<unknown>[] = [...BUILTIN_EXTENSIONS, notes],
+  layerNames: string[] | null = ["Base", "Nav"],
+) {
   const sim = new SimulatedKeyboard({
     compressedDefinition: xz,
     rows: 2,
@@ -31,7 +34,7 @@ async function board(extensions: KeyboardExtension<unknown>[] = [...BUILTIN_EXTE
     layers: 2,
     encoderCount: 1,
     uid: BIG_UID,
-    layerNames: ["Base", "Nav"],
+    layerNames,
   });
   await sim.open();
   sim.unlocked = true;
@@ -101,8 +104,8 @@ describe(".vialink layout files", () => {
     file.extensions["macro-recorder"] = { v: 3, recordings: [1, 2] };
     const off = await board(BUILTIN_EXTENSIONS.filter((e) => e.id !== "layer-names"));
     const plan = planLayoutRestore(off.kb, file, BUILTIN_EXTENSIONS);
+    expect(plan.turnOn).toEqual([{ id: "layer-names", name: "Layer names" }]);
     expect(plan.notes).toEqual([
-      "Turn on Layer names to load its data; it is kept for the next save.",
       "Data from an extension this ViaLink doesn't know (macro-recorder) is kept for the next save.",
     ]);
     await applyVilRestore(off.kb, plan);
@@ -112,5 +115,31 @@ describe(".vialink layout files", () => {
       "layer-names": { v: 1, names: ["Base", "Nav"] },
       "macro-recorder": { v: 3, recordings: [1, 2] },
     });
+  });
+
+  it("offers to turn on a switched-off extension, and loads its data once it runs", async () => {
+    const { kb } = await board();
+    const file = read(saveVialink(kb, { app: "t" }));
+    file.extensions["layer-names"] = { v: 1, names: ["Home", "Nav"] };
+    const off = await board(BUILTIN_EXTENSIONS.filter((e) => e.id !== "layer-names"));
+    expect(planLayoutRestore(off.kb, file, BUILTIN_EXTENSIONS).turnOn).toHaveLength(1);
+    const layerNames = BUILTIN_EXTENSIONS.find((e) => e.id === "layer-names")!;
+    expect(await off.kb.setExtensionEnabled(layerNames, true)).toBe(true);
+    const plan = planLayoutRestore(off.kb, file, BUILTIN_EXTENSIONS);
+    expect(plan.turnOn).toEqual([]);
+    expect(plan.ops.map((op) => (op.kind === "extension" ? op.description : op.kind))).toEqual([
+      'Rename layer 0 to "Home"',
+    ]);
+  });
+
+  it("says why an extension that is switched on can't load its data", async () => {
+    const { kb } = await board();
+    const file = read(saveVialink(kb, { app: "t" }));
+    const stock = await board(undefined, null); // firmware without layer names
+    const plan = planLayoutRestore(stock.kb, file, BUILTIN_EXTENSIONS);
+    expect(plan.turnOn).toEqual([]);
+    expect(plan.notes).toEqual([
+      "This keyboard's firmware doesn't support Layer names; its data is kept for the next save.",
+    ]);
   });
 });

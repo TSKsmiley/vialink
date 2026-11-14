@@ -3,9 +3,15 @@ import { useEffect, useState } from "react";
 import { BUILTIN_EXTENSIONS } from "../../core/extensions/index.ts";
 import type { ExtensionGroup, KeyboardExtension } from "../../core/extensions/types.ts";
 import type { Keyboard } from "../../core/keyboard.ts";
-import { conflicting, requirementsOf } from "../../core/extensions/manifest.ts";
 import { markTurnedOn, shortcutConflicts } from "../extensions/registry.tsx";
-import { nameList, planTurnOff, planTurnOn, type SwitchChange } from "../extensions/switches.ts";
+import {
+  nameList,
+  planTurnOff,
+  planTurnOnFor,
+  switchedOff,
+  switchesFor,
+  type SwitchChange,
+} from "../extensions/switches.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 
 const GROUPS: { id: ExtensionGroup; title: string; hint: string; open: boolean }[] = [
@@ -82,19 +88,12 @@ export function ExtensionsDialog({
 
   const apply = async (changes: readonly SwitchChange[]) => {
     setQuestion(null);
-    const next = new Set(disabled);
-    for (const { id, on } of changes) {
-      if (on) next.delete(id);
-      else next.add(id);
-    }
+    const next = switchedOff(disabled, changes);
     const turnedOn = changes.filter((c) => c.on).map((c) => c.id);
     if (turnedOn.length > 0) markTurnedOn(turnedOn);
     onChange(next);
     if (!keyboard) return;
-    const exts = changes.flatMap(({ id, on }) => {
-      const extension = extensions.find((e) => e.id === id);
-      return extension ? [{ extension, enabled: on }] : [];
-    });
+    const exts = switchesFor(changes, extensions);
     setChecking(changes[0].on ? changes[0].id : null);
     try {
       await keyboard.setExtensionsEnabled(exts);
@@ -109,34 +108,15 @@ export function ExtensionsDialog({
     let plan;
     if (!on) plan = planTurnOff(ext, extensions, disabled);
     else {
-      // Whether a conflict changes anything depends on what the keyboard supports.
-      const support = new Map<string, boolean>();
-      if (keyboard) {
-        setChecking(ext.id);
-        try {
-          const turningOn = [ext, ...requirementsOf(ext.id, extensions)];
-          const clashes = turningOn.filter((t) =>
-            extensions.some((o) => active.has(o.id) && conflicting(t, o)),
-          );
-          for (const t of clashes) {
-            for (const e of [t, ...requirementsOf(t.id, extensions)]) {
-              if (!support.has(e.id)) support.set(e.id, await keyboard.supportsExtension(e));
-            }
-          }
-        } catch (err) {
-          onError(`${ext.name}: ${errorMessage(err)}`);
-          return;
-        } finally {
-          setChecking(null);
-        }
+      setChecking(ext.id);
+      try {
+        plan = await planTurnOnFor(keyboard, ext, extensions, disabled);
+      } catch (err) {
+        onError(`${ext.name}: ${errorMessage(err)}`);
+        return;
+      } finally {
+        setChecking(null);
       }
-      plan = planTurnOn(
-        ext,
-        extensions,
-        disabled,
-        (id) => active.has(id),
-        (id) => support.get(id) ?? true,
-      );
     }
     if (plan.question) setQuestion({ text: plan.question, changes: plan.changes });
     else await apply(plan.changes);

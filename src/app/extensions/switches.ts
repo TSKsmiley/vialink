@@ -13,6 +13,7 @@
 
 import { conflicting, requiredBy, requirementsOf } from "../../core/extensions/manifest.ts";
 import type { KeyboardExtension } from "../../core/extensions/types.ts";
+import type { Keyboard } from "../../core/keyboard.ts";
 
 type Ext = KeyboardExtension<unknown>;
 
@@ -104,4 +105,57 @@ export function planTurnOff(target: Ext, all: readonly Ext[], disabled: Readonly
   const names = nameList(alsoOff.map((e) => e.name));
   const verb = alsoOff.length === 1 ? "needs" : "need";
   return { changes, question: `${names} ${verb} ${target.name}. Turn ${names} off too?` };
+}
+
+/**
+ * Plans switching `target` on for the connected keyboard (or none): asks the
+ * keyboard whether the extensions that would clash with a running one are
+ * supported, since a conflict only changes something when they would run.
+ * Used by the Extensions dialog and the layout-file load dialog.
+ */
+export async function planTurnOnFor(
+  keyboard: Keyboard | null,
+  target: Ext,
+  all: readonly Ext[],
+  disabled: ReadonlySet<string>,
+): Promise<SwitchPlan> {
+  const running = new Set(keyboard?.activeExtensions.map((a) => a.extension.id) ?? []);
+  const support = new Map<string, boolean>();
+  if (keyboard) {
+    const turningOn = [target, ...requirementsOf(target.id, all)];
+    const clashes = turningOn.filter((t) => all.some((o) => running.has(o.id) && conflicting(t, o)));
+    for (const t of clashes) {
+      for (const e of [t, ...requirementsOf(t.id, all)]) {
+        if (!support.has(e.id)) support.set(e.id, await keyboard.supportsExtension(e));
+      }
+    }
+  }
+  return planTurnOn(
+    target,
+    all,
+    disabled,
+    (id) => running.has(id),
+    (id) => support.get(id) ?? true,
+  );
+}
+
+/** The switched-off set after `changes`. */
+export function switchedOff(disabled: ReadonlySet<string>, changes: readonly SwitchChange[]): Set<string> {
+  const next = new Set(disabled);
+  for (const { id, on } of changes) {
+    if (on) next.delete(id);
+    else next.add(id);
+  }
+  return next;
+}
+
+/** `changes` as the keyboard's setExtensionsEnabled takes them (unknown ids left out). */
+export function switchesFor(
+  changes: readonly SwitchChange[],
+  all: readonly Ext[],
+): { extension: Ext; enabled: boolean }[] {
+  return changes.flatMap(({ id, on }) => {
+    const extension = all.find((e) => e.id === id);
+    return extension ? [{ extension, enabled: on }] : [];
+  });
 }

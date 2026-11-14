@@ -23,8 +23,10 @@ import {
   extensionBrowserStorage,
   extensionRecency,
   loadDisabledExtensions,
+  markTurnedOn,
   saveDisabledExtensions,
 } from "./extensions/registry.tsx";
+import { planTurnOnFor, switchedOff, switchesFor } from "./extensions/switches.ts";
 import { errorMessage } from "./hooks.ts";
 import { useKeyboardLayoutLabels } from "./keyboardLayout.ts";
 import { DevicePanel } from "./shell/DevicePanel.tsx";
@@ -32,6 +34,7 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { useHistory } from "./shell/useHistory.ts";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
+import { BUILTIN_EXTENSIONS } from "../core/extensions/index.ts";
 
 type Status =
   | { kind: "idle" }
@@ -133,6 +136,29 @@ export function App() {
   useKeyboardLayoutLabels(kb);
   const history = useHistory(kb, setError);
 
+  const setSwitches = (next: Set<string>) => {
+    setDisabledExtensions(next);
+    saveDisabledExtensions(next);
+  };
+
+  /** Turns an extension on from outside the Extensions dialog (a layout file's data), asking as it would. */
+  const turnOnExtension = async (id: string) => {
+    const ext = BUILTIN_EXTENSIONS.find((e) => e.id === id);
+    if (!kb || !ext) return;
+    const plan = await planTurnOnFor(kb, ext, BUILTIN_EXTENSIONS, disabledExtensions);
+    if (plan.question) {
+      const ok = await new Promise<boolean>((resolve) =>
+        setConfirmRequest({ messages: [plan.question!], resolve }),
+      );
+      if (!ok) return;
+    }
+    const turnedOn = plan.changes.filter((c) => c.on).map((c) => c.id);
+    if (turnedOn.length > 0) markTurnedOn(turnedOn);
+    setSwitches(switchedOff(disabledExtensions, plan.changes));
+    // When the keyboard can't run it after all, the load dialog's new plan says why.
+    await kb.setExtensionsEnabled(switchesFor(plan.changes, BUILTIN_EXTENSIONS));
+  };
+
   return (
     <TooltipProvider>
       <div className="flex min-h-screen flex-col bg-kumo-canvas text-kumo-default">
@@ -147,6 +173,7 @@ export function App() {
                 setBusy={setRestoring}
                 onError={setError}
                 onNotice={setNotice}
+                onTurnOn={turnOnExtension}
               />
             )
           }
@@ -229,10 +256,7 @@ export function App() {
             disabled={disabledExtensions}
             keyboard={kb}
             onError={setError}
-            onChange={(next) => {
-              setDisabledExtensions(next);
-              saveDisabledExtensions(next);
-            }}
+            onChange={setSwitches}
             onClose={() => setShowExtensions(false)}
           />
         )}
