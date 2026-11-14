@@ -39,6 +39,8 @@ interface Props {
   highlight?: (row: number, col: number) => string | null;
   /** Extensions' mark on a key (decorations): a dot and words for its tooltip. */
   mark?: (row: number, col: number) => KeyMark | null;
+  /** A small tick in the key's top-right corner, e.g. a key the matrix tester has seen work. */
+  tick?: (row: number, col: number) => boolean;
   /** Label for the whole view; defaults to "Layer n keymap". */
   label?: string;
 }
@@ -51,6 +53,7 @@ export function KeyboardView({
   onSelect,
   highlight,
   mark,
+  tick,
   label: viewLabel,
   fallthrough = false,
   codeAt,
@@ -144,6 +147,13 @@ export function KeyboardView({
             />
             {keyMark?.dot && (
               <circle className="key-mark" cx={(k.x + k.width) * U - GAP - 7} cy={k.y * U + GAP + 7} r={3} />
+            )}
+            {tick?.(k.row, k.col) && (
+              <path
+                className="key-tick"
+                aria-hidden="true"
+                d={`M${(k.x + k.width) * U - GAP - 13} ${k.y * U + GAP + 8}l3 3l5.5-5.5`}
+              />
             )}
             <KeyLabel
               x={k.x * U}

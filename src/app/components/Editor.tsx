@@ -51,7 +51,8 @@ export function Editor({ keyboard, onError, onNotice, locked = false }: Props) {
         role="tabpanel"
         aria-label={sections.find((v) => v.id === shown)?.title}
         className={
-          "editor min-w-0 flex-1 p-4 md:p-5" + (shown === "keymap" || panel?.modern ? "" : " legacy-view")
+          "editor min-w-0 flex-1 p-4 md:p-5" +
+          (shown === "keymap" || shown === "matrix" || panel?.modern ? "" : " legacy-view")
         }
       >
         {shown === "matrix" ? (
