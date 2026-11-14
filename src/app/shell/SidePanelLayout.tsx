@@ -3,9 +3,11 @@
 // with a line on its left, as in design boards 1 (the key inspector) and 10
 // (the matrix tester's details). It fills the editor area edge to edge,
 // cancelling the area's padding, and pads the main part itself. Below the
-// breakpoint the panel goes under the main part.
+// breakpoint the panel goes under the main part. While the device panel is
+// open it takes the slot (sidePanelSlot.ts) and the view's panel is left out.
 
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useContext, type ReactNode } from "react";
+import { SidePanelTaken } from "./sidePanelSlot.ts";
 
 interface Props {
   children: ReactNode;
@@ -29,6 +31,7 @@ export const SidePanelLayout = forwardRef<HTMLElement, Props>(function SidePanel
   { children, panel, at = "lg", label, className = "" },
   ref,
 ) {
+  const taken = useContext(SidePanelTaken);
   return (
     <section
       ref={ref}
@@ -36,7 +39,7 @@ export const SidePanelLayout = forwardRef<HTMLElement, Props>(function SidePanel
       className={`-m-4 flex min-w-0 flex-1 flex-col bg-kumo-canvas md:-m-5 ${ROW[at]} ${className}`}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-5">{children}</div>
-      {panel && (
+      {panel && !taken && (
         <div className={`flex min-w-0 flex-col border-t border-kumo-line bg-kumo-elevated p-5 ${PANEL[at]}`}>
           {panel}
         </div>
