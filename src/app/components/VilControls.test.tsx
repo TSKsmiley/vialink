@@ -77,4 +77,40 @@ describe("Layouts menu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Write to keyboard" }));
     await waitFor(() => expect(sim.layerNames).toEqual(["Base", "Symbols"]));
   });
+
+  it("offers to turn on a switched-off extension so the file's data loads too", async () => {
+    const { sim, kb } = await board();
+    const text = saveVialink(kb, { app: "t" }).replace('"Nav"', '"Symbols"');
+    const layerNames = BUILTIN_EXTENSIONS.find((e) => e.id === "layer-names")!;
+    await kb.setExtensionEnabled(layerNames, false);
+    const onTurnOn = vi.fn(async (id: string) => {
+      await kb.setExtensionEnabled(
+        BUILTIN_EXTENSIONS.find((e) => e.id === id)!,
+        true,
+      );
+    });
+    render(
+      <VilControls
+        keyboard={kb}
+        busy={false}
+        setBusy={() => undefined}
+        onError={vi.fn()}
+        onNotice={vi.fn()}
+        onTurnOn={onTurnOn}
+      />,
+    );
+    fireEvent.drop(window, {
+      dataTransfer: { files: [new File([text], "daily.vialink")], types: ["Files"] },
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Load daily.vialink?" });
+    expect(dialog.textContent).toContain("Layer names is turned off.");
+    expect(screen.getByRole("button", { name: "Write to keyboard" }).hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Turn on Layer names" }));
+    await waitFor(() => expect(dialog.textContent).toContain('Rename layer 1 to "Symbols"'));
+    expect(onTurnOn).toHaveBeenCalledWith("layer-names");
+    expect(dialog.textContent).not.toContain("is turned off");
+    fireEvent.click(screen.getByRole("button", { name: "Write to keyboard" }));
+    await waitFor(() => expect(sim.layerNames).toEqual(["Base", "Symbols"]));
+  });
 });

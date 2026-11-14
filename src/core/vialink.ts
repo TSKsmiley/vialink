@@ -34,8 +34,14 @@ export type LayoutFile = { kind: "vialink"; file: VialinkFile } | { kind: "vil";
 
 /** What a load plan says beyond the writes. */
 export interface LayoutRestorePlan extends RestorePlan {
-  /** Sections whose extension is off or unknown, for the load summary. */
+  /** Sections no running extension loads (unknown, unsupported, …), for the load summary. */
   notes: string[];
+  /**
+   * Extensions with a section in the file that are only switched off: turning
+   * one on and planning again loads its data too. Their sections are kept for
+   * the next save meanwhile.
+   */
+  turnOn: { id: string; name: string }[];
   /** Call once the plan was applied: keeps the sections nothing loaded for the next save. */
   afterApply(): void;
 }
@@ -128,17 +134,27 @@ export function planLayoutRestore(
   const vilText = JSON.stringify(file.vil).replace(/"uid":"(\d+)"/, '"uid":$1');
   const plan = planVilRestore(kb, parseVil(vilText));
   const notes: string[] = [];
+  const turnOn: { id: string; name: string }[] = [];
   const keep: Record<string, Record<string, unknown>> = {};
+  const nameOf = (id: string) => known.find((e) => e.id === id)?.name ?? id;
   for (const [id, section] of Object.entries(file.extensions)) {
     const running = kb.activeExtensions.find((a) => a.extension.id === id);
     if (!running) {
       keep[id] = section;
       const ext = known.find((e) => e.id === id);
-      notes.push(
-        ext
-          ? `Turn on ${ext.name} to load its data; it is kept for the next save.`
-          : `Data from an extension this ViaLink doesn't know (${id}) is kept for the next save.`,
-      );
+      const status = kb.extensionStatus(id);
+      const kept = "its data is kept for the next save.";
+      if (!ext)
+        notes.push(`Data from an extension this ViaLink doesn't know (${id}) is kept for the next save.`);
+      else if (status.kind === "off") turnOn.push({ id, name: ext.name });
+      else if (status.kind === "unsupported")
+        notes.push(`This keyboard's firmware doesn't support ${ext.name}; ${kept}`);
+      else if (status.kind === "needs")
+        notes.push(
+          `${ext.name} needs ${status.ids.map(nameOf).join(" and ")}, which ${status.ids.length === 1 ? "isn't" : "aren't"} running; ${kept}`,
+        );
+      else if (status.kind === "conflict")
+        notes.push(`${ext.name} isn't running because ${nameOf(status.with)} is on; ${kept}`);
       continue;
     }
     const { extension, state } = running;
@@ -158,7 +174,7 @@ export function planLayoutRestore(
     }
   }
   // Kept sections replace those of an earlier load, once this one is applied.
-  return { ...plan, notes, afterApply: () => void carried.set(kb, keep) };
+  return { ...plan, notes, turnOn, afterApply: () => void carried.set(kb, keep) };
 }
 
 /** Names of the running extensions whose data Export to Vial leaves out, for its notice. */

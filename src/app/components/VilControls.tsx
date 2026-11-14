@@ -28,12 +28,23 @@ interface Props {
   setBusy: (b: boolean) => void;
   onError: (message: string) => void;
   onNotice: (message: string) => void;
+  /**
+   * Turns an extension on as the Extensions dialog does (remembered, asking
+   * about requirements and conflicts), so a layout file can load its data.
+   */
+  onTurnOn?: (id: string) => Promise<void>;
 }
 
-export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Props) {
+export function VilControls({ keyboard, busy, setBusy, onError, onNotice, onTurnOn }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<{ name: string; plan: LayoutRestorePlan } | null>(null);
+  const [pending, setPending] = useState<{
+    name: string;
+    plan: LayoutRestorePlan;
+    /** Plans again (after an extension was turned on). */
+    replan: () => LayoutRestorePlan;
+  } | null>(null);
+  const [turningOn, setTurningOn] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
@@ -55,11 +66,16 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
   const loadText = (text: string, source: string) => {
     try {
       const read = readLayoutFile(text);
-      const plan: LayoutRestorePlan =
+      const replan = (): LayoutRestorePlan =>
         read.kind === "vialink"
           ? planLayoutRestore(keyboard, read.file, BUILTIN_EXTENSIONS)
-          : { ...planVilRestore(keyboard, parseVil(read.text)), notes: [], afterApply: () => undefined };
-      setPending({ name: source, plan });
+          : {
+              ...planVilRestore(keyboard, parseVil(read.text)),
+              notes: [],
+              turnOn: [],
+              afterApply: () => undefined,
+            };
+      setPending({ name: source, plan: replan(), replan });
     } catch (err) {
       onError(errorMessage(err));
     }
@@ -135,6 +151,19 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
     } finally {
       setBusy(false);
       setProgress(null);
+    }
+  };
+
+  const turnOn = async (id: string) => {
+    if (!onTurnOn) return;
+    setTurningOn(id);
+    try {
+      await onTurnOn(id);
+      setPending((p) => p && { ...p, plan: p.replan() });
+    } catch (err) {
+      onError(errorMessage(err));
+    } finally {
+      setTurningOn(null);
     }
   };
 
@@ -257,6 +286,21 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
                 ))}
               </ul>
             )}
+            {pending.plan.turnOn.map(({ id, name }) =>
+              onTurnOn ? (
+                <p key={id} className="turn-on">
+                  <span>
+                    {name} is turned off. Turn it on to load its data from this file too; otherwise it is kept
+                    for the next save.
+                  </span>
+                  <button onClick={() => void turnOn(id)} disabled={turningOn !== null}>
+                    {turningOn === id ? "Turning on…" : `Turn on ${name}`}
+                  </button>
+                </p>
+              ) : (
+                <p key={id}>Turn on {name} to load its data; it is kept for the next save.</p>
+              ),
+            )}
             {pending.plan.notes.map((note) => (
               <p key={note}>{note}</p>
             ))}
@@ -274,7 +318,7 @@ export function VilControls({ keyboard, busy, setBusy, onError, onNotice }: Prop
               <button
                 className="primary"
                 onClick={() => void apply()}
-                disabled={pending.plan.ops.length === 0}
+                disabled={pending.plan.ops.length === 0 || turningOn !== null}
               >
                 Write to keyboard
               </button>

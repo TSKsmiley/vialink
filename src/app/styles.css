@@ -304,6 +304,16 @@ svg.keyboard {
   gap: 8px;
   margin-top: 14px;
 }
+/* "Layer names is turned off" with its Turn on button (layout file load dialog). */
+.dialog .turn-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.dialog .turn-on span {
+  flex: 1 1 16em;
+}
 /* A yes/no question in place of the dialog's buttons (Extensions dialog). */
 .extension-question {
   align-items: center;
