@@ -35,6 +35,7 @@ import { planTurnOnFor, switchedOff, switchesFor } from "./extensions/switches.t
 import { errorMessage } from "./hooks.ts";
 import { useKeyboardLayoutLabels } from "./keyboardLayout.ts";
 import { DevicePanel } from "./shell/DevicePanel.tsx";
+import { SidePanelTaken } from "./shell/sidePanelSlot.ts";
 import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { useHistory } from "./shell/useHistory.ts";
@@ -217,115 +218,121 @@ export function App() {
           onError={setError}
         />
 
-        <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden md:px-5">
-          {!kb && (
-            <Banner
-              variant="alert"
-              size="sm"
-              icon={<WarningIcon weight="fill" aria-hidden="true" />}
-              description={
-                <>
-                  Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has only
-                  been tested on one keyboard, the{" "}
-                  <a
-                    href="https://github.com/GEIGEIGEIST/KLOR"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                  >
-                    KLOR by GEIGEIGEIST
-                  </a>
-                  . Save a backup of your layout before changing anything.
-                </>
-              }
-              role="note"
-            />
-          )}
-          {error && (
-            <Banner
-              variant="error"
-              size="sm"
-              role="alert"
-              description={error}
-              action={
-                <Button size="xs" variant="ghost" onClick={() => setError(null)} aria-label="Dismiss">
-                  ×
-                </Button>
-              }
-            />
-          )}
-          {notice && <Banner variant="default" size="sm" role="status" description={notice} />}
-          {kb?.isExampleUid() && (
-            <Banner
-              variant="alert"
-              size="sm"
-              role="alert"
-              description="This keyboard uses an example UID from vial-qmk. Give it a unique UID before shipping it."
-            />
-          )}
-        </div>
+        {/* The device panel docks under the top bar on the right (board 6): the
+            page leaves it room, and views leave their own side panel out. */}
+        <SidePanelTaken.Provider value={showLog}>
+          <div className={"flex flex-1 flex-col" + (showLog ? " lg:pr-[440px]" : "")}>
+            <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden md:px-5">
+              {!kb && (
+                <Banner
+                  variant="alert"
+                  size="sm"
+                  icon={<WarningIcon weight="fill" aria-hidden="true" />}
+                  description={
+                    <>
+                      Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has
+                      only been tested on one keyboard, the{" "}
+                      <a
+                        href="https://github.com/GEIGEIGEIST/KLOR"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        KLOR by GEIGEIGEIST
+                      </a>
+                      . Save a backup of your layout before changing anything.
+                    </>
+                  }
+                  role="note"
+                />
+              )}
+              {error && (
+                <Banner
+                  variant="error"
+                  size="sm"
+                  role="alert"
+                  description={error}
+                  action={
+                    <Button size="xs" variant="ghost" onClick={() => setError(null)} aria-label="Dismiss">
+                      ×
+                    </Button>
+                  }
+                />
+              )}
+              {notice && <Banner variant="default" size="sm" role="status" description={notice} />}
+              {kb?.isExampleUid() && (
+                <Banner
+                  variant="alert"
+                  size="sm"
+                  role="alert"
+                  description="This keyboard uses an example UID from vial-qmk. Give it a unique UID before shipping it."
+                />
+              )}
+            </div>
 
-        {kb && unlockRequest && (
-          <UnlockDialog
-            keyboard={kb}
-            reason={unlockRequest.reason}
-            onFinish={(ok) => {
-              unlockRequest.resolve(ok);
-              setUnlockRequest(null);
-            }}
-          />
-        )}
-        {confirmRequest && (
-          <ConfirmDialog
-            messages={confirmRequest.messages}
-            onAnswer={(ok) => {
-              confirmRequest.resolve(ok);
-              setConfirmRequest(null);
-            }}
-          />
-        )}
-        {showExtensions && (
-          <ExtensionsDialog
-            disabled={disabledExtensions}
-            keyboard={kb}
-            onError={setError}
-            onChange={setSwitches}
-            onClose={() => setShowExtensions(false)}
-          />
-        )}
+            {kb && unlockRequest && (
+              <UnlockDialog
+                keyboard={kb}
+                reason={unlockRequest.reason}
+                onFinish={(ok) => {
+                  unlockRequest.resolve(ok);
+                  setUnlockRequest(null);
+                }}
+              />
+            )}
+            {confirmRequest && (
+              <ConfirmDialog
+                messages={confirmRequest.messages}
+                onAnswer={(ok) => {
+                  confirmRequest.resolve(ok);
+                  setConfirmRequest(null);
+                }}
+              />
+            )}
+            {showExtensions && (
+              <ExtensionsDialog
+                disabled={disabledExtensions}
+                keyboard={kb}
+                onError={setError}
+                onChange={setSwitches}
+                onClose={() => setShowExtensions(false)}
+              />
+            )}
 
-        <main className="flex min-h-0 flex-1 flex-col">
-          {status.kind === "idle" && <ConnectScreen onConnect={(target) => void start(target)} />}
-          {status.kind === "connecting" && <Connecting progress={status.progress} />}
-          {status.kind === "connected" && (
-            <Editor
-              keyboard={status.connection.keyboard}
-              onError={setError}
-              onNotice={setNotice}
-              locked={restoring}
-            />
-          )}
-          {showLog && <DevicePanel queue={queue} keyboard={kb} onClose={() => setShowLog(false)} />}
-          {kb && <ExtensionOverlays keyboard={kb} />}
-        </main>
+            <main className="flex min-h-0 flex-1 flex-col">
+              {status.kind === "idle" && <ConnectScreen onConnect={(target) => void start(target)} />}
+              {status.kind === "connecting" && <Connecting progress={status.progress} />}
+              {status.kind === "connected" && (
+                <Editor
+                  keyboard={status.connection.keyboard}
+                  onError={setError}
+                  onNotice={setNotice}
+                  locked={restoring}
+                />
+              )}
+              {showLog && <DevicePanel queue={queue} keyboard={kb} onClose={() => setShowLog(false)} />}
+              {kb && <ExtensionOverlays keyboard={kb} />}
+            </main>
 
-        <UndoToast keyboard={kb} controls={history} />
+            <UndoToast keyboard={kb} controls={history} />
 
-        <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
-          Built on{" "}
-          <a className="underline" href="https://github.com/vial-kb/vial-gui">
-            vial-gui
-          </a>
-          ,{" "}
-          <a className="underline" href="https://github.com/tcyeee/vialite">
-            Vialite
-          </a>{" "}
-          and{" "}
-          <a className="underline" href="https://github.com/cloudflare/kumo">
-            Kumo
-          </a>
-          . Licensed under GPL-2.0.
-        </footer>
+            <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
+              Built on{" "}
+              <a className="underline" href="https://github.com/vial-kb/vial-gui">
+                vial-gui
+              </a>
+              ,{" "}
+              <a className="underline" href="https://github.com/tcyeee/vialite">
+                Vialite
+              </a>{" "}
+              and{" "}
+              <a className="underline" href="https://github.com/cloudflare/kumo">
+                Kumo
+              </a>
+              . Licensed under GPL-2.0.
+            </footer>
+          </div>
+        </SidePanelTaken.Provider>
       </div>
     </TooltipProvider>
   );

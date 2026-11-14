@@ -118,6 +118,21 @@ describe("keymap", () => {
     expect(screen.getByRole("group", { name: "Layer 1 keymap" })).toBeTruthy();
   });
 
+  it("renames a layer from its menu, the entry above Clear", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "Menu for Nav" }));
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent);
+    const rename = items.indexOf("Rename…");
+    expect(rename).toBeGreaterThan(-1);
+    expect(items[rename + 1]).toMatch(/^Clear layer/);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename…" }));
+    const box = await screen.findByLabelText("Name for layer 1");
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    fireEvent.change(box, { target: { value: "Arrows" } });
+    fireEvent.submit(box.closest("form")!);
+    expect(await screen.findByRole("tab", { name: "1: Arrows" })).toBeTruthy();
+  });
+
   it("writes layout options and re-renders the view", async () => {
     const { sim, kb } = await setup();
     const before = screen.getAllByRole("button", { name: /^Key / }).length;

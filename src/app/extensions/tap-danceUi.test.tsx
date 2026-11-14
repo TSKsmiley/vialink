@@ -109,6 +109,38 @@ describe("Tap dance view", () => {
     await waitFor(() => expect(td.entries[0].onTap).toBe(0));
   });
 
+  it("places a tap dance on the next key clicked in the keymap", async () => {
+    const { sim, kb } = await setup();
+    openTab();
+    fireEvent.click(within(detail(0)).getByRole("button", { name: "Place on a key…" }));
+    const status = await screen.findByText(/to put/);
+    expect(status.closest("[role=status]")?.textContent).toContain("Click a key on Base to put TD 0 on it.");
+    const [first] = kb.matrixPositions;
+    fireEvent.click(
+      screen.getAllByRole("button", { name: new RegExp(`^Key ${first.row},${first.col}:`) })[0],
+    );
+    const td0 = kb.keycodes.parse("TD(0)");
+    await waitFor(() => expect(sim.getKeycode(0, first.row, first.col)).toBe(td0));
+    expect(screen.queryByText(/to put TD 0/)).toBeNull();
+    await kb.history.undo();
+    expect(sim.getKeycode(0, first.row, first.col)).not.toBe(td0);
+  });
+
+  it("cancels placing", async () => {
+    const { sim, kb } = await setup();
+    openTab();
+    fireEvent.click(within(detail(0)).getByRole("button", { name: "Place on a key…" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/to put TD 0/)).toBeNull();
+    const [first] = kb.matrixPositions;
+    const before = sim.getKeycode(0, first.row, first.col);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: new RegExp(`^Key ${first.row},${first.col}:`) })[0],
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sim.getKeycode(0, first.row, first.col)).toBe(before);
+  });
+
   it("reports a rejected write through onError", async () => {
     const { sim, onError } = await setup();
     sim.handlers.unshift((msg) => {

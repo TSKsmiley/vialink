@@ -79,7 +79,7 @@ describe("Macros view", () => {
       expect.stringContaining("A"),
     ]);
     expect((screen.getByLabelText("Action 1 text") as HTMLInputElement).value).toBe("hi");
-    expect(screen.getByRole("status").textContent).toContain("Memory used by macros: 8/64");
+    expect(screen.getByRole("status").textContent).toContain("Memory: 8 of 64 bytes");
 
     fireEvent.click(entry("M1"));
     expect((screen.getByLabelText("Action 1 type") as HTMLSelectElement).value).toBe("tap");
@@ -174,7 +174,7 @@ describe("Macros view", () => {
     await setup({ memory: 8 });
     fireEvent.click(screen.getByRole("button", { name: /^Type text/ }));
     fireEvent.change(screen.getByLabelText("Action 1 text"), { target: { value: "too long text" } });
-    expect(screen.getByRole("status").textContent).toContain("16/8");
+    expect(screen.getByRole("status").textContent).toContain("16 of 8 bytes");
     expect(save().disabled).toBe(true);
   });
 

@@ -121,6 +121,15 @@
   .vl-on-accent {
     color: var(--vl-on-accent) !important;
   }
+
+  /* Kumo's Switch is hard-coded blue when on (bg-blue-500 utilities): mint here. */
+  .vl-switch[data-checked] {
+    background-color: var(--vl-accent) !important;
+    --tw-ring-color: var(--vl-accent) !important;
+  }
+  .vl-switch[data-checked] > div {
+    background-color: var(--vl-on-accent) !important;
+  }
 }
 
 /*

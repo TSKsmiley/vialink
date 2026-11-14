@@ -10,7 +10,7 @@
 //
 // Deviations (design board 4): a list of the macros in use and one in detail;
 // steps read as words (Type, Tap, Hold, Release, Wait) with drag handles and a
-// "Plays as" line; a key is selected in a step, then found by name, shortcut
+// "Plays as" line; memory reads "Memory: x of y bytes"; a key is selected in a step, then found by name, shortcut
 // or expression (vial-gui opens a picker popup per key); "+" and the "Add a
 // step" buttons select the key they add. Edits can be undone step by step
 // (Undo step, Ctrl+Z) until Save; Save is one entry in the keyboard's undo
@@ -21,6 +21,7 @@
 // one byte per character (so anything else comes back mangled), bytes 1-7 would
 // be read as key actions, and QMK's send_string only types ASCII.
 
+import { DotsSixVerticalIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { macrosExtension, type Macros } from "../../core/extensions/macros.ts";
 import { VIAL_PROTOCOL_ADVANCED_MACROS, VIAL_PROTOCOL_EXT_MACROS } from "../../core/protocol/constants.ts";
@@ -111,8 +112,8 @@ function toAction(d: DraftAction): MacroAction {
   return { type: d.type, keys: d.keys.map((k) => k.trim()) };
 }
 
-function MacrosPanel({ ctx, state, ui }: PanelProps<Macros>) {
-  return <MacroEditor ctx={ctx} ui={ui} macros={state} />;
+function MacrosPanel({ ctx, state, ui, onPlace }: PanelProps<Macros>) {
+  return <MacroEditor ctx={ctx} ui={ui} macros={state} onPlace={onPlace} />;
 }
 
 /** A step in words: "Type “hi”", "Tap Ctrl + C", "Hold Shift", "Wait 100 ms". */
@@ -144,7 +145,17 @@ const VERBS: Record<ActionType, string> = {
 /** How many draft states the step-level undo keeps. */
 const STEP_UNDO_LIMIT = 100;
 
-function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; macros: Macros }) {
+function MacroEditor({
+  ctx,
+  ui,
+  macros,
+  onPlace,
+}: {
+  ctx: DeviceContext;
+  ui: PanelKit;
+  macros: Macros;
+  onPlace?: (code: number, what: string) => void;
+}) {
   const board = ctx.board;
   const { error: onError, info: onNotice } = ctx.notify;
   const [base, setBase] = useState(macros.buffer);
@@ -305,7 +316,7 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
                 />
               </div>
               <span role="status" className={"text-xs " + (over ? "text-kumo-danger" : "text-kumo-subtle")}>
-                Memory used by macros: {data.length}/{macros.memory} bytes
+                Memory: {data.length.toLocaleString("en")} of {macros.memory.toLocaleString("en")} bytes
                 {over ? " — too much to save" : ""}
               </span>
             </div>
@@ -337,12 +348,13 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="m-0 text-lg font-semibold">M{selected}</h2>
             <span className="text-sm text-kumo-subtle">
-              {places.length
-                ? `Placed on ${places.join("; ")}`
-                : "Not on any key yet: use the Macro tab of the key inspector"}
+              {places.length ? `Placed on ${places.join("; ")}` : "Not on any key yet"}
             </span>
             <div className="flex-1" />
-            {!unchanged && <span className="text-sm text-accent-link">Unsaved changes</span>}
+            {onPlace && macroCode(selected) !== -1 && (
+              <Button onClick={() => onPlace(macroCode(selected), `M${selected}`)}>Place on a key…</Button>
+            )}
+            {!unchanged && <span className="text-sm text-kumo-warning">Unsaved changes</span>}
             <div role="group" aria-label="Macro edits" className="inline-flex gap-1">
               <Button
                 size="sm"
@@ -390,7 +402,7 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
                   <li
                     key={a.id}
                     className={
-                      "flex flex-wrap items-center gap-2.5 rounded-lg border px-3 py-2 " +
+                      "flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5 " +
                       (dragFrom === index ? "border-dashed border-accent" : "border-kumo-line bg-kumo-base")
                     }
                     onDragOver={(e) => {
@@ -407,9 +419,9 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
                       onDragEnd={() => setDragFrom(null)}
                       aria-hidden="true"
                       title="Drag to move"
-                      className="cursor-grab px-1 text-kumo-subtle select-none"
+                      className="grid w-5 cursor-grab place-items-center text-kumo-subtle select-none"
                     >
-                      ⠿
+                      <DotsSixVerticalIcon size={16} weight="bold" />
                     </span>
                     <span className="inline-flex flex-col">
                       <button
@@ -439,7 +451,8 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
                         patch(a.id, { type: e.target.value as ActionType, text: "", keys: [], delay: "0" });
                         if (slot?.action === a.id) setSlot(null);
                       }}
-                      className="min-h-8 rounded-md border border-kumo-line bg-kumo-control px-1.5 text-sm font-semibold"
+                      // Reads as the step's verb (TAP, HOLD…), as in the design; still a select.
+                      className="min-h-8 w-[5.5rem] cursor-pointer appearance-none rounded-md border border-transparent bg-transparent px-1.5 text-xs font-semibold tracking-[0.05em] text-kumo-subtle uppercase hover:border-kumo-line hover:bg-kumo-tint"
                     >
                       {(types.includes(a.type) ? types : [...types, a.type]).map((t) => (
                         <option key={t} value={t}>
@@ -469,9 +482,9 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
                         update((m) => m.filter((x) => x.id !== a.id));
                         if (slot?.action === a.id) setSlot(null);
                       }}
-                      className="cursor-pointer rounded px-2 text-kumo-subtle hover:text-kumo-default"
+                      className="grid size-8 cursor-pointer place-items-center rounded-md text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
                     >
-                      ×
+                      <XIcon size={14} aria-hidden="true" />
                     </button>
                   </li>
                 );
@@ -533,9 +546,9 @@ function MacroEditor({ ctx, ui, macros }: { ctx: DeviceContext; ui: PanelKit; ma
             </div>
           </div>
 
-          <div className="flex flex-wrap items-baseline gap-2 rounded-lg bg-kumo-tint px-3 py-2 text-sm">
-            <span className="text-kumo-subtle">Plays as</span>
-            <span>{playsAs(board, actions[selected] ?? [])}</span>
+          <div className="flex flex-wrap items-baseline gap-2.5 rounded-lg border border-kumo-line bg-kumo-base px-3.5 py-3">
+            <span className="text-xs text-kumo-subtle">Plays as</span>
+            <span className="font-mono text-[13px]">{playsAs(board, actions[selected] ?? [])}</span>
           </div>
         </DetailCard>
       }

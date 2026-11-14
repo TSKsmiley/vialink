@@ -3,7 +3,7 @@
 // fills a progress bar while they are held, and closes once the board reports
 // itself unlocked. Unlike vial-gui it can be cancelled.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { runUnlock, type UnlockProgress } from "../../core/unlock.ts";
 import { errorMessage } from "../hooks.ts";
@@ -20,14 +20,18 @@ interface Props {
 export function UnlockDialog({ keyboard, reason, onFinish, pollIntervalMs }: Props) {
   const [progress, setProgress] = useState<UnlockProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [controller] = useState(() => new AbortController());
+  // One controller per run of the effect: React's StrictMode runs it twice in
+  // development, and a controller shared with the first run is already aborted.
+  const controller = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let live = true;
+    const abort = new AbortController();
+    controller.current = abort;
     runUnlock(keyboard.queue, {
       scheduler: keyboard.scheduler,
       onProgress: (p) => live && setProgress(p),
-      signal: controller.signal,
+      signal: abort.signal,
       pollIntervalMs,
     })
       .then((ok) => {
@@ -38,7 +42,7 @@ export function UnlockDialog({ keyboard, reason, onFinish, pollIntervalMs }: Pro
       .catch((err: unknown) => live && setError(errorMessage(err)));
     return () => {
       live = false;
-      controller.abort();
+      abort.abort();
     };
     // Runs once per dialog; onFinish is stable for its lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,7 +83,7 @@ export function UnlockDialog({ keyboard, reason, onFinish, pollIntervalMs }: Pro
         <div className="dialog-actions">
           <button
             onClick={() => {
-              controller.abort();
+              controller.current?.abort();
               onFinish(false);
             }}
           >

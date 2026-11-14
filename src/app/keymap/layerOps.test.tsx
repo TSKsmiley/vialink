@@ -125,6 +125,25 @@ describe("layer operations", () => {
     expect(kb.history.nextUndo?.label).toMatch(/^Paste “Nav” from the text onto Layer 3/);
   });
 
+  it("aims Paste layer from text at the card whose menu opened it", async () => {
+    await setup();
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (t: string) => void (copied = t) },
+    });
+    await menuItem("Nav", /^Copy layer as text/);
+    await waitFor(() => expect(copied).toMatch(/^vialink:layer:1:/));
+    await menuItem("Raise", "Paste layer from text…");
+    expect(screen.getByRole("heading", { name: "Paste a layer from text" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Layer text from a friend"), { target: { value: copied } });
+    expect(await screen.findByText("Same keyboard.")).toBeTruthy();
+    // Still under the same top heading once decoded.
+    expect(screen.getByRole("heading", { level: 1, name: "Paste a layer from text" })).toBeTruthy();
+    const options = screen.getByRole("complementary", { name: "Paste options" });
+    expect((within(options).getByLabelText(/onto/) as HTMLSelectElement).value).toBe("2");
+  });
+
   it("refuses text from another keyboard", async () => {
     await setup();
     fireEvent.paste(document.body, {

@@ -14,9 +14,10 @@ interface Props {
   /** The view's id, e.g. "macros". */
   view: string;
   onOpen?: (view: string) => void;
+  onPlace?: (code: number, what: string) => void;
 }
 
-export function ExtensionView({ keyboard, view, onOpen }: Props) {
+export function ExtensionView({ keyboard, view, onOpen, onPlace }: Props) {
   useKeyboardVersion(keyboard);
   const found = activePanels(keyboard).find((p) => p.panel.id === view);
   if (!found) return null;
@@ -28,6 +29,7 @@ export function ExtensionView({ keyboard, view, onOpen }: Props) {
         state={owner.state}
         ui={kitFor(keyboard)}
         onOpen={onOpen}
+        onPlace={onPlace}
       />
     </ExtensionErrorBoundary>
   );

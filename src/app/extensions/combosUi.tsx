@@ -13,7 +13,8 @@
 // - Every change is written at once and is one undo step.
 
 import { useState } from "react";
-import { combosExtension, describeCombo, type Combos } from "../../core/extensions/combos.ts";
+import { WarningCircleIcon } from "@phosphor-icons/react";
+import { combosExtension, type Combos } from "../../core/extensions/combos.ts";
 import { qmkSettingValues } from "../../core/extensions/qmk-settings.ts";
 import type { DeviceContext } from "../../core/extensions/types.ts";
 import type { KeycodeTable } from "../../core/keycodes/table.ts";
@@ -96,6 +97,7 @@ function ComboDetail({
 }) {
   const onError = ctx.notify.error;
   const [busy, setBusy] = useState(false);
+  const [changing, setChanging] = useState(false);
   const entry = combos.get(idx);
   const table = ctx.board.keycodes;
   const triggers = triggersOf(entry);
@@ -143,7 +145,6 @@ function ComboDetail({
           Delete combo
         </Button>
       </div>
-      <p className="m-0 text-xs text-kumo-subtle">{describeCombo(table, entry)}</p>
 
       <div className="flex flex-col gap-2">
         <strong>1. Keys to press together</strong>
@@ -187,41 +188,56 @@ function ComboDetail({
 
       <div className="flex flex-col gap-2 border-t border-kumo-line pt-4">
         <strong>2. Key it sends</strong>
-        <p className="m-0 text-sm">
-          Sends: <strong>{output ? keyText(table, output) : "nothing yet"}</strong>
-          {output ? (
-            <code className="ml-2 font-mono text-xs text-kumo-subtle">{table.serialize(output)}</code>
-          ) : null}
-        </p>
-        <KeySearch
-          table={table}
-          label="Output key"
-          disabled={busy}
-          onPick={(code) => void write(triggers, code)}
-        />
-        {term !== undefined && (
-          <span className="text-sm text-kumo-subtle">
-            Combo term: {term} ms
-            {onOpen && (
-              <>
-                {" · "}
-                <button
-                  type="button"
-                  className="cursor-pointer text-accent-link underline"
-                  onClick={() => onOpen("qmk-settings")}
-                >
-                  Change in QMK settings
-                </button>
-              </>
-            )}
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          {output !== 0 && (
+            <button
+              type="button"
+              aria-label={`Key it sends: ${keyText(table, output)}. Change`}
+              aria-expanded={changing}
+              title={table.serialize(output)}
+              onClick={() => setChanging((c) => !c)}
+              className="inline-flex min-h-12 min-w-30 cursor-pointer items-center justify-between gap-4 rounded-lg border border-kumo-line bg-kumo-control px-3.5 py-2 hover:bg-kumo-tint"
+            >
+              <span className="font-semibold">{keyText(table, output)}</span>
+              <span className="text-xs text-kumo-subtle">Change</span>
+            </button>
+          )}
+          {term !== undefined && (
+            <span className="text-sm text-kumo-subtle">
+              Combo term: {term} ms
+              {onOpen && (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    className="cursor-pointer text-accent-link underline underline-offset-3"
+                    onClick={() => onOpen("qmk-settings")}
+                  >
+                    Change in QMK settings ›
+                  </button>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+        {(output === 0 || changing) && (
+          <KeySearch
+            table={table}
+            label="Output key"
+            disabled={busy}
+            onPick={(code) => {
+              void write(triggers, code);
+              setChanging(false);
+            }}
+          />
         )}
       </div>
 
       <p
         role="note"
-        className="m-0 rounded-lg border border-dashed border-kumo-line px-3 py-2 text-sm text-kumo-subtle"
+        className="m-0 flex items-start gap-2.5 rounded-lg border border-kumo-warning bg-kumo-warning-tint px-3.5 py-3 text-sm leading-snug text-kumo-warning"
       >
+        <WarningCircleIcon aria-hidden="true" size={18} className="mt-px shrink-0" />
         Combos match keycodes, not positions: this one also fires on any other key that sends the same keys.
       </p>
     </DetailCard>

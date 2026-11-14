@@ -129,9 +129,16 @@ export function PastePreview({
       <section aria-label="Paste preview" className="flex min-w-0 flex-col gap-3 [grid-area:board]">
         {before}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="m-0 text-xl font-semibold">
-            Paste {source.name} onto {targetName}
-          </h1>
+          {/* Under "Paste a layer from text" (board 7) this is a sub-heading. */}
+          {before ? (
+            <h2 className="m-0 text-base font-semibold">
+              Paste {source.name} onto {targetName}
+            </h2>
+          ) : (
+            <h1 className="m-0 text-xl font-semibold">
+              Paste {source.name} onto {targetName}
+            </h1>
+          )}
           <span className="text-sm text-kumo-subtle">Preview: nothing is written until you press Paste</span>
         </div>
         <div className="board-wrap rounded-xl border border-kumo-line bg-kumo-elevated p-2 md:p-3">

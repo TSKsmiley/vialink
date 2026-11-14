@@ -42,12 +42,20 @@ function renderPanel(kb: Keyboard) {
   return { onError };
 }
 
+const choose = (label: string, text: string) => {
+  const box = screen.getByLabelText(label);
+  fireEvent.change(box, { target: { value: text } });
+  fireEvent.keyDown(box, { key: "Enter" });
+};
+const detail = (n: number) => within(screen.getByRole("region", { name: `Key override ${n}` }));
+
 describe("key overrides panel", () => {
   it("adds a Key overrides tab to the editor only when the board has them", async () => {
     const { kb } = await setup();
     render(<Editor keyboard={kb} onError={() => undefined} onNotice={() => undefined} />);
     fireEvent.click(screen.getByRole("tab", { name: "Key overrides" }));
-    expect(screen.getAllByRole("region", { name: /^Key override \d$/ })).toHaveLength(2);
+    expect(screen.getByText("1 of 2 used")).toBeTruthy();
+    expect(detail(1).getByRole("heading", { name: "A sends B" })).toBeTruthy();
     cleanup();
 
     const none = await setup(0);
@@ -55,31 +63,37 @@ describe("key overrides panel", () => {
     expect(screen.queryByRole("tab", { name: "Key overrides" })).toBeNull();
   });
 
-  it("writes checkbox changes for enable, layers, mods and options", async () => {
+  it("writes changes for enable, layers, mods and options", async () => {
     const { kb, store } = await setup();
     const { onError } = renderPanel(kb);
-    const card = within(screen.getByRole("region", { name: "Key override 1" }));
+    const card = detail(1);
 
-    const enabled = card.getByRole("checkbox", { name: "Enabled" }) as HTMLInputElement;
-    expect(enabled.checked).toBe(true);
+    const enabled = card.getByRole("switch", { name: "Enabled" });
+    expect(enabled.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(enabled);
     await waitFor(() => expect(store.get(0).options & KO_ENABLED).toBe(0));
-    expect(enabled.checked).toBe(false);
+    await waitFor(() => expect(enabled.getAttribute("aria-checked")).toBe("false"));
 
-    fireEvent.click(card.getByRole("checkbox", { name: "Layer 2" }));
+    // Only this board's 4 layers are shown; the other bits stay as they are.
+    expect(card.queryByRole("button", { name: "Layer 4" })).toBeNull();
+    fireEvent.click(card.getByRole("button", { name: "Layer 2" }));
     await waitFor(() => expect(store.get(0).layers).toBe(0xfffb));
-    fireEvent.click(card.getByRole("button", { name: "Disable all" }));
+    fireEvent.click(card.getByRole("button", { name: "None" }));
     await waitFor(() => expect(store.get(0).layers).toBe(0));
+    fireEvent.click(card.getByRole("button", { name: "All layers" }));
+    await waitFor(() => expect(store.get(0).layers).toBe(0xffff));
 
     const trigger = within(card.getByRole("group", { name: "Trigger mods" }));
-    fireEvent.click(trigger.getByRole("checkbox", { name: "LShift" }));
-    fireEvent.click(trigger.getByRole("checkbox", { name: "RGui" }));
+    fireEvent.click(trigger.getByRole("button", { name: "LShift" }));
+    await waitFor(() => expect(store.get(0).triggerMods).toBe(0x02));
+    fireEvent.click(trigger.getByRole("button", { name: "RGui" }));
     await waitFor(() => expect(store.get(0).triggerMods).toBe(0x82));
+    expect(card.getByRole("heading", { name: "Shift + Right GUI + A sends B" })).toBeTruthy();
     const suppressed = within(card.getByRole("group", { name: "Suppressed mods" }));
-    fireEvent.click(suppressed.getByRole("checkbox", { name: "LCtrl" }));
+    fireEvent.click(suppressed.getByRole("button", { name: "LCtrl" }));
     await waitFor(() => expect(store.get(0).suppressedMods).toBe(0x01));
     const negative = within(card.getByRole("group", { name: "Negative mods" }));
-    fireEvent.click(negative.getByRole("checkbox", { name: "RAlt" }));
+    fireEvent.click(negative.getByRole("button", { name: "RAlt" }));
     await waitFor(() => expect(store.get(0).negativeModMask).toBe(0x40));
 
     fireEvent.click(card.getByRole("checkbox", { name: "Activate on one modifier" }));
@@ -87,29 +101,30 @@ describe("key overrides panel", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("assigns trigger and replacement keycodes from the picker", async () => {
+  it("sets up a new override by choosing its trigger and replacement keys", async () => {
     const { kb, store } = await setup();
     renderPanel(kb);
-    const card = within(screen.getByRole("region", { name: "Key override 2" }));
-
-    fireEvent.click(card.getByRole("button", { name: /^Trigger of key override 2:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Q" }));
+    fireEvent.click(screen.getByRole("button", { name: "New key override" }));
+    const card = detail(2);
+    // New opens on the trigger slot.
+    choose("Trigger: choose a key", "q");
     await waitFor(() => expect(store.get(1).trigger).toBe(0x14));
 
     fireEvent.click(card.getByRole("button", { name: /^Replacement of key override 2:/ }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "LSFT(KC_1)" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    choose("Replacement: choose a key", "LSFT(KC_1)");
     await waitFor(() => expect(store.get(1).replacement).toBe(0x021e));
     expect(card.getByRole("button", { name: "Replacement of key override 2: LSFT(KC_1)" })).toBeTruthy();
+
+    fireEvent.click(card.getByRole("button", { name: "Clear" }));
+    await waitFor(() => expect(store.get(1).trigger).toBe(0));
+    expect(store.get(1).replacement).toBe(0);
   });
 
   it("reports a refused unlock through onError", async () => {
     const { kb, store } = await setup();
     const { onError } = renderPanel(kb);
-    const card = within(screen.getByRole("region", { name: "Key override 1" }));
-    fireEvent.click(card.getByRole("button", { name: /^Replacement of key override 1:/ }));
-    fireEvent.change(screen.getByLabelText("Any"), { target: { value: "QK_BOOT" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    fireEvent.click(detail(1).getByRole("button", { name: /^Replacement of key override 1:/ }));
+    choose("Replacement: choose a key", "QK_BOOT");
     await waitFor(() => expect(onError).toHaveBeenCalledWith(expect.stringMatching(/unlocked/)));
     expect(store.get(0).replacement).toBe(0x05);
   });

@@ -5,4 +5,5 @@
 export { Button, type ButtonProps } from "./Button.tsx";
 export { Banner } from "@cloudflare/kumo/components/banner";
 export { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
+export { Switch, type SwitchProps } from "./Switch.tsx";
 export { TooltipProvider } from "@cloudflare/kumo/components/tooltip";
