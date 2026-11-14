@@ -90,4 +90,52 @@ describe("MatrixTester", () => {
     await screen.findByRole("button", { name: "Unlock" });
     expect(kb.unlocked).toBe(false);
   });
+
+  it("keeps key presses away from the page while testing, unless switched off", async () => {
+    const { sim, kb } = await setup();
+    sim.unlocked = true;
+    await kb.isUnlocked();
+    const pageKeys = vi.fn();
+    window.addEventListener("keydown", pageKeys);
+    try {
+      render(<MatrixTester keyboard={kb} onError={() => undefined} intervalMs={1} />);
+      await screen.findByText(/Tested:/);
+      expect(fireEvent.keyDown(document.body, { key: "z", ctrlKey: true })).toBe(false);
+      expect(fireEvent.keyDown(document.body, { key: "Tab" })).toBe(false);
+      expect(pageKeys).not.toHaveBeenCalled();
+
+      const toggle = screen.getByRole<HTMLInputElement>("checkbox", { name: "Capture keys" });
+      expect(toggle.checked).toBe(true);
+      fireEvent.click(toggle);
+      expect(toggle.checked).toBe(false);
+      expect(fireEvent.keyDown(document.body, { key: "Tab" })).toBe(true);
+      expect(pageKeys).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", pageKeys);
+    }
+  });
+
+  it("lets keys through once Esc is held, but not when it is tapped", async () => {
+    const { sim, kb } = await setup();
+    sim.unlocked = true;
+    await kb.isUnlocked();
+    render(<MatrixTester keyboard={kb} onError={() => undefined} intervalMs={1} releaseHoldMs={30} />);
+    await screen.findByText(/Hold Esc to let them through/);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.keyUp(document.body, { key: "Escape" });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(screen.getByRole<HTMLInputElement>("checkbox", { name: "Capture keys" }).checked).toBe(true);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await screen.findByText("Keys also reach the page.");
+    expect(fireEvent.keyDown(document.body, { key: "Tab" })).toBe(true);
+  });
+
+  it("doesn't capture keys while the board is locked", async () => {
+    const { kb } = await setup();
+    render(<MatrixTester keyboard={kb} onError={() => undefined} intervalMs={1} />);
+    await screen.findByRole("button", { name: "Unlock" });
+    expect(fireEvent.keyDown(document.body, { key: "Tab" })).toBe(true);
+  });
 });
