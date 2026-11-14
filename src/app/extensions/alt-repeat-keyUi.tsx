@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Alt repeat key editor tab, after vial-gui src/main/python/editor/alt_repeat_key.py
-// (AltRepeatKey, AltRepeatKeyEntryUI, ModsUI, OptionsUI): one numbered tab per
-// entry with Enable, Last key, Alt key, Allowed mods and Options; every change
-// is written straight to the board (write-through), as vial-gui's on_change does.
+// Alt repeat key editor, after vial-gui src/main/python/editor/alt_repeat_key.py
+// (AltRepeatKey, AltRepeatKeyEntryUI, ModsUI, OptionsUI): per entry Enable,
+// Last key, Alt key, Allowed mods and Options; every change is written straight
+// to the board (write-through), as vial-gui's on_change does.
 //
-// Deviation: vial-gui's key widgets open a keycode picker in a popup; here the
-// selected key slot is filled from the regular keycode picker under the form.
+// Deviations:
+// - the layout of the other feature views (design boards 2-4): the entries in
+//   use in a list, one in detail, instead of one numbered tab per entry;
+// - the keys are slots chosen by search (as in tap dance), not vial-gui's
+//   picker popup; Clear empties both;
+// - allowed mods are toggle chips, left hand over right hand.
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import { altRepeatKeyExtension, type AltRepeatKeys } from "../../core/extensions/alt-repeat-key.ts";
+import type { DeviceContext } from "../../core/extensions/types.ts";
+import type { KeycodeTable } from "../../core/keycodes/table.ts";
 import {
   AREP_ENABLED,
   AREP_OPTION_BIDIRECTIONAL,
@@ -16,13 +22,15 @@ import {
   AREP_OPTION_IGNORE_MOD_HANDEDNESS,
   type AltRepeatKeyEntry,
 } from "../../core/protocol/alt-repeat-key.ts";
-import { KeycodePicker } from "../components/KeycodePicker.tsx";
 import { errorMessage } from "../hooks.ts";
+import { KeySearch, keyText } from "../keymap/KeySearch.tsx";
+import { Button, Switch } from "../ui/index.ts";
+import { DetailCard, EntryList, FeatureLayout, SlotButton } from "./featureLayout.tsx";
 import { panel, type AppExtension, type PanelProps } from "./registry.tsx";
-import "./alt-repeat-key.css";
 
-/** ModsUI checkbox order: bit n of allowed_mods. Shown left mods on the first row, right on the second. */
+/** ModsUI order: bit n of allowed_mods; left-hand mods are bits 0-3, right-hand 4-7. */
 const MODS = ["LCtrl", "LShift", "LAlt", "LGui", "RCtrl", "RShift", "RAlt", "RGui"];
+const MOD_WORDS = ["Ctrl", "Shift", "Alt", "GUI"];
 
 /** OptionsUI checkboxes. */
 const OPTIONS: [number, string][] = [
@@ -32,177 +40,193 @@ const OPTIONS: [number, string][] = [
 ];
 
 type Slot = "keycode" | "altKeycode";
+const SLOTS: Record<Slot, { title: string; hint: string }> = {
+  keycode: { title: "Last key", hint: "The key you pressed last" },
+  altKeycode: { title: "Alt key", hint: "What Alt Repeat sends after it" },
+};
 
-function AltRepeatKeyPanel({ ctx, state, ui }: PanelProps<AltRepeatKeys>) {
-  const [index, setIndex] = useState(0);
-  const [slot, setSlot] = useState<Slot | null>(null);
-  const [busy, setBusy] = useState(false);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+const isSet = (e: Readonly<AltRepeatKeyEntry>) => e.keycode !== 0 || e.altKeycode !== 0;
 
-  const idx = Math.min(index, state.count - 1);
-  const entry = state.get(idx);
+function summary(table: KeycodeTable, e: Readonly<AltRepeatKeyEntry>): string {
+  if (!isSet(e)) return "Not set up";
+  return `${e.keycode ? keyText(table, e.keycode) : "nothing"} → ${e.altKeycode ? keyText(table, e.altKeycode) : "nothing"}`;
+}
+
+function AltRepeatKeyPanel({ ctx, state }: PanelProps<AltRepeatKeys>) {
   const table = ctx.board.keycodes;
-  const n = idx + 1;
+  const used = state.entries.flatMap((e, i) => (isSet(e) ? [i] : []));
+  const [selected, setSelected] = useState(used[0] ?? 0);
+  const [slot, setSlot] = useState<Slot | null>(null);
+  const shown = used.includes(selected) ? used : [...used, selected].sort((a, b) => a - b);
+  const free = state.entries.findIndex((e, i) => !isSet(e) && i !== selected);
+
+  return (
+    <FeatureLayout
+      list={
+        <EntryList
+          title="Alt repeat key"
+          used={`${used.length} of ${state.count} used`}
+          description="Pairs for QMK's Alt Repeat Key: after the last key, Alt Repeat sends its partner."
+          items={shown.map((i) => ({
+            id: i,
+            title: `Pair ${i + 1}`,
+            meta: (state.get(i).options & AREP_ENABLED) !== 0 ? "on" : "off",
+            summary: summary(table, state.get(i)),
+          }))}
+          selected={selected}
+          onSelect={(i) => {
+            setSelected(i);
+            setSlot(null);
+          }}
+          newLabel="New pair"
+          onNew={
+            free === -1
+              ? undefined
+              : () => {
+                  setSelected(free);
+                  setSlot("keycode");
+                }
+          }
+        />
+      }
+      detail={
+        <PairDetail key={selected} ctx={ctx} state={state} index={selected} slot={slot} onSlot={setSlot} />
+      }
+    />
+  );
+}
+
+function PairDetail({
+  ctx,
+  state,
+  index,
+  slot,
+  onSlot,
+}: {
+  ctx: DeviceContext;
+  state: AltRepeatKeys;
+  index: number;
+  slot: Slot | null;
+  onSlot: (s: Slot | null) => void;
+}) {
+  const table = ctx.board.keycodes;
+  const entry = state.get(index);
+  const n = index + 1;
+  const [busy, setBusy] = useState(false);
 
   const write = async (next: AltRepeatKeyEntry) => {
     setBusy(true);
     try {
-      await state.set(idx, next);
+      await state.set(index, next);
     } catch (err) {
-      ctx.notify.error(errorMessage(err));
+      ctx.notify.error(`Alt repeat key ${n}: ${errorMessage(err)}`);
     } finally {
       setBusy(false);
     }
   };
-
   const toggle = (field: "options" | "allowedMods", bit: number, on: boolean) =>
     void write({ ...entry, [field]: on ? entry[field] | bit : entry[field] & ~bit });
 
-  const selectTab = (i: number) => {
-    setIndex(i);
-    setSlot(null);
-  };
-
-  // WAI-ARIA tabs: arrow keys, Home and End move between entries (roving tabindex).
-  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const last = state.count - 1;
-    const target =
-      e.key === "ArrowRight"
-        ? idx === last
-          ? 0
-          : idx + 1
-        : e.key === "ArrowLeft"
-          ? idx === 0
-            ? last
-            : idx - 1
-          : e.key === "Home"
-            ? 0
-            : e.key === "End"
-              ? last
-              : null;
-    if (target === null) return;
-    e.preventDefault();
-    selectTab(target);
-    tabRefs.current[target]?.focus();
-  };
-
-  const current = slot ? entry[slot] : null;
-  const pick = (code: number) => {
-    if (!slot || busy) return;
-    // As in the keymap editor: a basic keycode picked for a masked key fills its inner key.
-    const value =
-      current !== null && table.isMasked(current) && table.isBasic(code) ? (current & 0xff00) | code : code;
-    if (!table.isMasked(value) || (current !== null && table.isMasked(current))) setSlot(null);
-    void write({ ...entry, [slot]: value });
-  };
-
-  const keyButton = (which: Slot, title: string) => {
-    const code = entry[which];
-    const label = table.label(code);
-    const text = label.inner !== null ? `${label.text} (${label.inner})` : label.text;
-    return (
-      <button
-        type="button"
-        className={`arep-key${slot === which ? " selected" : ""}`}
-        aria-label={`${title} for alt repeat key ${n}: ${table.serialize(code)}`}
-        aria-pressed={slot === which}
-        title={label.tooltip ?? table.serialize(code)}
-        disabled={busy}
-        onClick={() => setSlot(slot === which ? null : which)}
-      >
-        {text.replace(/\n/g, " ") || " "}
-      </button>
-    );
-  };
+  const title = isSet(entry)
+    ? `After ${entry.keycode ? keyText(table, entry.keycode) : "nothing"}, Alt Repeat sends ${entry.altKeycode ? keyText(table, entry.altKeycode) : "nothing"}`
+    : `Alt repeat key ${n}`;
+  const chip = (on: boolean) =>
+    "min-h-9 cursor-pointer rounded-lg border px-3 text-sm disabled:cursor-default disabled:opacity-50 " +
+    (on ? "border-accent bg-accent-tint font-semibold" : "border-kumo-line hover:bg-kumo-tint");
 
   return (
-    <div className="arep">
-      <div className="tabs arep-tabs" role="tablist" aria-label="Alt repeat key entries">
-        {state.entries.map((e, i) => (
-          <button
-            key={i}
-            ref={(el) => {
-              tabRefs.current[i] = el;
-            }}
-            type="button"
-            role="tab"
-            id={`arep-tab-${i}`}
-            aria-controls="arep-panel"
-            aria-selected={i === idx}
-            tabIndex={i === idx ? 0 : -1}
-            className={`${i === idx ? "active" : ""}${e.options & AREP_ENABLED ? " arep-on" : ""}`}
-            onClick={() => selectTab(i)}
-            onKeyDown={onTabKey}
-          >
-            {i + 1}
-          </button>
+    <DetailCard label={`Alt repeat key ${n}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="m-0 text-lg font-semibold">{title}</h2>
+        <div className="flex-1" />
+        <Switch
+          label="Enabled"
+          checked={(entry.options & AREP_ENABLED) !== 0}
+          onCheckedChange={(on) => toggle("options", AREP_ENABLED, on)}
+        />
+        <Button
+          variant="secondary-destructive"
+          disabled={busy || !isSet(entry)}
+          onClick={() => void write({ ...entry, keycode: 0, altKeycode: 0 })}
+        >
+          Clear
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {(["keycode", "altKeycode"] as const).map((f) => {
+          const code = entry[f];
+          return (
+            <SlotButton
+              key={f}
+              title={SLOTS[f].title}
+              hint={slot === f ? "Choosing a key below" : code ? SLOTS[f].hint : `${SLOTS[f].hint}: not set`}
+              cap={keyText(table, code)}
+              selected={slot === f}
+              empty={code === 0}
+              onClick={() => onSlot(slot === f ? null : f)}
+              label={`${SLOTS[f].title} for alt repeat key ${n}: ${table.serialize(code)}`}
+            />
+          );
+        })}
+      </div>
+      {slot && (
+        <KeySearch
+          table={table}
+          label={`${SLOTS[slot].title}: choose a key`}
+          disabled={busy}
+          onPick={(code) => {
+            void write({ ...entry, [slot]: code });
+            onSlot(null);
+          }}
+        />
+      )}
+
+      <fieldset className="m-0 flex flex-col gap-2 border-0 border-t border-kumo-line p-0 pt-4">
+        <legend className="float-left m-0 w-full text-sm font-semibold">Allowed mods</legend>
+        <span className="text-xs text-kumo-subtle">
+          Modifiers that may be held with the last key for this pair to apply.
+        </span>
+        {[0, 4].map((side) => (
+          <div key={side} className="flex flex-wrap items-center gap-1.5">
+            <span className="w-10 text-xs text-kumo-subtle">{side ? "Right" : "Left"}</span>
+            {MOD_WORDS.map((word, i) => {
+              const bit = 1 << (side + i);
+              const on = (entry.allowedMods & bit) !== 0;
+              return (
+                <button
+                  key={word}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={MODS[side + i]}
+                  disabled={busy}
+                  onClick={() => toggle("allowedMods", bit, !on)}
+                  className={chip(on)}
+                >
+                  {word}
+                </button>
+              );
+            })}
+          </div>
         ))}
-      </div>
+      </fieldset>
 
-      <div className="arep-entry" role="tabpanel" id="arep-panel" aria-label={`Alt repeat key ${n}`}>
-        <label className="arep-label" htmlFor="arep-enable">
-          Enable
-        </label>
-        <div>
-          <input
-            id="arep-enable"
-            type="checkbox"
-            checked={(entry.options & AREP_ENABLED) !== 0}
-            disabled={busy}
-            onChange={(e) => toggle("options", AREP_ENABLED, e.target.checked)}
-          />
-        </div>
-
-        <span className="arep-label">Last key</span>
-        <div>{keyButton("keycode", "Last key")}</div>
-
-        <span className="arep-label">Alt key</span>
-        <div>{keyButton("altKeycode", "Alt key")}</div>
-
-        <span className="arep-label" id="arep-mods-label">
-          Allowed mods
-        </span>
-        <div className="arep-mods" role="group" aria-labelledby="arep-mods-label">
-          {MODS.map((name, bit) => (
-            <label key={name} style={{ gridRow: bit < 4 ? 1 : 2, gridColumn: (bit % 4) + 1 }}>
-              <input
-                type="checkbox"
-                checked={(entry.allowedMods & (1 << bit)) !== 0}
-                disabled={busy}
-                onChange={(e) => toggle("allowedMods", 1 << bit, e.target.checked)}
-              />
-              {name}
-            </label>
-          ))}
-        </div>
-
-        <span className="arep-label" id="arep-options-label">
-          Options
-        </span>
-        <div className="arep-options" role="group" aria-labelledby="arep-options-label">
-          {OPTIONS.map(([bit, name]) => (
-            <label key={name}>
-              <input
-                type="checkbox"
-                checked={(entry.options & bit) !== 0}
-                disabled={busy}
-                onChange={(e) => toggle("options", bit, e.target.checked)}
-              />
-              {name}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <KeycodePicker
-        hint="Select Last key or Alt key above, then pick a keycode."
-        info={ui.pickerInfo()}
-        table={table}
-        disabled={slot === null || busy}
-        current={current}
-        onPick={pick}
-      />
-    </div>
+      <fieldset className="m-0 flex flex-col gap-2 border-0 border-t border-kumo-line p-0 pt-4">
+        <legend className="float-left m-0 mb-1 w-full text-sm font-semibold">Options</legend>
+        {OPTIONS.map(([bit, name]) => (
+          <label key={name} className="flex items-center gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={(entry.options & bit) !== 0}
+              disabled={busy}
+              onChange={(e) => toggle("options", bit, e.target.checked)}
+            />
+            {name}
+          </label>
+        ))}
+      </fieldset>
+    </DetailCard>
   );
 }
 
@@ -211,9 +235,10 @@ export const altRepeatKeyUi: AppExtension = {
   panels: [
     panel<AltRepeatKeys>({
       id: "alt-repeat-key",
+      modern: true,
       title: "Alt repeat key",
       Component: AltRepeatKeyPanel,
-      count: (state) => state.entries.filter((e) => e.keycode !== 0 || e.altKeycode !== 0).length,
+      count: (state) => state.entries.filter(isSet).length,
     }),
   ],
 };
