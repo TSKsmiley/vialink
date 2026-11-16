@@ -40,7 +40,8 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
 The desktop app is released by pushing a `desktop-v<version>` tag, which builds a draft GitHub
 release (README, "Releasing the desktop app"). Every release must have patch notes before it is
 published: a "What's new" list of each change a user would notice (what changed, where to find
-it, and the details an engineer would want: shortcuts, formats, compatibility), then the fixes. Publish with them as the release body
+it, and the details an engineer would want: shortcuts, formats, compatibility), then the fixes.
+Publish with them as the release body
 (`gh release edit desktop-v<version> --draft=false --latest --notes-file <notes>`); never publish
 a release with an empty or generated body.
 
