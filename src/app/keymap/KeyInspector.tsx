@@ -20,6 +20,8 @@ import { KeycodePicker, type PickerInfo } from "../components/KeycodePicker.tsx"
 import { LayerKeyBuilder } from "../components/LayerKeyBuilder.tsx";
 import { TapDancePicker } from "../components/TapDancePicker.tsx";
 import { KeySearch, keyText } from "./KeySearch.tsx";
+import { MOD } from "../platform.ts";
+import { Button } from "../ui/index.ts";
 
 export type KeyKind = "key" | "layer" | "mods" | "tapdance" | "macro" | "all";
 
@@ -114,6 +116,10 @@ export interface KeyInspectorProps {
   info: PickerInfo;
   layerName: (l: number) => string;
   recent: readonly number[];
+  /** Copies the selected keys (Ctrl+C). */
+  onCopy?: () => void;
+  /** Pastes copied keys onto the selected ones (Ctrl+V); undefined while nothing is copied. */
+  onPaste?: () => void;
 }
 
 export function KeyInspector({
@@ -126,6 +132,8 @@ export function KeyInspector({
   info,
   layerName,
   recent,
+  onCopy,
+  onPaste,
 }: KeyInspectorProps) {
   const table = keyboard.keycodes;
   const groups = useMemo(() => table.groups(), [table]);
@@ -162,12 +170,30 @@ export function KeyInspector({
         <div className="flex flex-col gap-1">
           <h2 className="m-0 text-[15px] font-semibold">No key selected</h2>
           <p className="m-0 text-sm text-kumo-subtle">
-            Click a key on the keyboard to change it. Shift-click to select several.
+            Click a key on the keyboard to change it. Drag across keys or {MOD}+click to select several.
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          <span className="text-xs text-kumo-subtle">{where}</span>
+          <div className="flex items-center gap-1">
+            <span className="min-w-0 flex-1 text-xs text-kumo-subtle">{where}</span>
+            {onCopy && (
+              <Button size="sm" variant="ghost" onClick={onCopy} title={`Copy (${MOD}+C)`}>
+                Copy
+              </Button>
+            )}
+            {onCopy && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onPaste}
+                disabled={!onPaste || busy}
+                title={onPaste ? `Paste the copied keys here (${MOD}+V)` : "Copy keys first"}
+              >
+                Paste
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-3.5">
             <span
               aria-hidden="true"

@@ -4,14 +4,18 @@
 // tabbed picker under it. Differences from vial-gui:
 // - Assigning a key does not move to the next key unless "Move to the next
 //   key after assigning" is ticked (off by default; remembered per browser).
-// - Shift-click selects several keys; an assignment sets all of them as one
-//   undo step.
+// - Several keys can be selected (KeyboardView: drag, Ctrl/⌘+click, Shift+click
+//   for a block); an assignment sets all of them as one undo step.
 // - Transparent keys show the key they fall through to, dimmed (a toggle turns it off: ▽).
 // - Layer operations (design board 5): copy, paste with a preview and three
-//   modes, duplicate, swap (menu or drag), clear; Ctrl+C / Ctrl+V copy the
-//   selected keys, or the whole layer when nothing is selected.
+//   modes, duplicate, swap (menu or drag), clear; Ctrl+C / Ctrl+V with nothing
+//   selected copy the whole layer and paste it with a preview.
+// - Keys copy and paste onto other keys, on any layer (core/keyPaste.ts): Ctrl+C
+//   copies the selected keys (also as text, e.g. "KC_A LT1(KC_SPACE)", for the
+//   system clipboard), Ctrl+V puts them on the selected keys as one undo step.
+//   Keycode text copied elsewhere pastes the same way.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Keyboard } from "../../core/keyboard.ts";
 import { keyCount, reachSummary, visiblePositions } from "../../core/layerInfo.ts";
 import {
@@ -22,7 +26,16 @@ import {
   snapshotLayer,
   swapLayers,
 } from "../../core/layers.ts";
-import { KeyboardView, type Selection } from "../components/KeyboardView.tsx";
+import { KeyboardView, type SelectHow, type Selection } from "../components/KeyboardView.tsx";
+import {
+  inReadingOrder,
+  keysBetween,
+  keysText,
+  parseKeysText,
+  planKeyPaste,
+  type CopiedKey,
+} from "../../core/keyPaste.ts";
+import { MOD } from "../platform.ts";
 import { LayoutOptionsPanel } from "../components/LayoutOptionsPanel.tsx";
 import { OperationCancelledError } from "../../core/extensions/hooks.ts";
 import { pasteLayer, shareData } from "../../core/extensions/layer-sharing.api.ts";
@@ -86,6 +99,10 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
   const [writing, setWriting] = useState(false);
   const busy = writing || locked;
   const [clipboard, setClipboard] = useState<PasteSource | null>(null);
+  // Keys copied with Ctrl+C, for pasting onto other keys; `text` is what went to the system clipboard.
+  const [keyCopy, setKeyCopy] = useState<{ keys: CopiedKey[]; text: string } | null>(null);
+  // Where a Shift+click block starts: the key last clicked.
+  const anchor = useRef<Target | null>(null);
   const [pasting, setPasting] = useState<{ source: PasteSource; target: number } | null>(null);
   // target: the layer whose menu opened it; none (Ctrl+V) aims at the first empty layer.
   const [importing, setImporting] = useState<{ text: string; target?: number } | null>(null);
@@ -125,7 +142,12 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const select = (s: Selection, shift: boolean) => {
+  const write = (t: Target, value: number) =>
+    t.kind === "key"
+      ? keyboard.setKey(layer, t.row, t.col, value)
+      : keyboard.setEncoder(layer, t.index, t.direction, value);
+
+  const select = (s: Selection, how: SelectHow) => {
     if (s && placing) {
       setTargets([s]);
       void run(async () => {
@@ -135,9 +157,20 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
       return;
     }
     if (!s) return setTargets([]);
-    if (!shift) return setTargets([s]);
+    const from = anchor.current;
+    if (how === "range" && from?.kind === "key" && s.kind === "key")
+      return setTargets(keysBetween(keyboard, from, s));
+    anchor.current = s;
+    if (how !== "toggle") return setTargets([s]);
     setTargets((prev) =>
       prev.some((p) => sameTarget(p, s)) ? prev.filter((p) => !sameTarget(p, s)) : [...prev, s],
+    );
+  };
+  /** A box dragged over the board: its keys replace the selection, or join it with a modifier held. */
+  const selectArea = (picked: Target[], add: boolean) => {
+    if (picked.length > 0) anchor.current = picked[0];
+    setTargets((prev) =>
+      add ? [...prev, ...picked.filter((p) => !prev.some((q) => sameTarget(p, q)))] : picked,
     );
   };
 
@@ -185,6 +218,37 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
         onError(`Could not copy the layer as text: ${errorMessage(err)}`);
       }
     })();
+  /** Copies the selected keys: for pasting onto keys, as text on the system clipboard, and for the layer paste. */
+  const copyKeys = (only: readonly Target[]) => {
+    const keys = inReadingOrder(keyboard, only).map((t) => ({ code: codeOf(t) ?? 0, from: t }));
+    const text = keysText(
+      table,
+      keys.map((k) => k.code),
+    );
+    setKeyCopy({ keys, text });
+    copy(layer, only);
+    // Best effort: without clipboard access, pasting inside ViaLink still works.
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  };
+  /** Puts copied keys on the selected keys of the current layer, as one undo step. */
+  const pasteKeys = (copied: readonly CopiedKey[]) => {
+    if (busy) return;
+    const plan = planKeyPaste(keyboard, copied, targets);
+    if ("error" in plan) return onNotice(plan.error);
+    void run(async () => {
+      const n = plan.writes.length;
+      const what = n === 1 ? table.serialize(plan.writes[0].code) : `${n} keys`;
+      await keyboard.history.group(`Paste ${what} on ${layerName(layer)}`, async () => {
+        for (const w of plan.writes) await write(w.target, w.code);
+      });
+      // Show where they went (pasting a copied shape onto one key selects the keys it covered).
+      setTargets(plan.writes.map((w) => w.target));
+      if (plan.missed > 0)
+        onNotice(
+          `${plan.missed} of the copied keys had no key to land on at that spot, so ${plan.missed === 1 ? "it was" : "they were"} left out.`,
+        );
+    });
+  };
   const emptyLayer = firstEmptyLayer(keyboard, (l) => named(l) !== null);
   // What layer commands (the layer card's ⋯ menu) can do here; layer sharing's commands use these.
   const menu: LayerCommandEnv = {
@@ -231,9 +295,9 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // Ctrl+C copies the selected keys, or the whole layer; Ctrl+Shift+C copies the layer as text.
+  // Ctrl+C copies the selected keys, or with nothing selected the whole layer
+  // (layer sharing); Ctrl+Shift+C copies the layer as text.
   useEffect(() => {
-    if (!sharing) return;
     const editable = (t: HTMLElement | null) =>
       !!t &&
       (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest('[role="dialog"]'));
@@ -241,22 +305,42 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "c") return;
       if (editable(e.target as HTMLElement | null)) return;
       if (window.getSelection()?.toString()) return; // copying page text
-      e.preventDefault();
-      if (e.shiftKey) copyAsText(layer);
-      else copy(layer, targets.length > 0 ? targets : undefined);
+      if (e.shiftKey) {
+        if (!sharing) return;
+        e.preventDefault();
+        copyAsText(layer);
+      } else if (targets.length > 0) {
+        e.preventDefault();
+        copyKeys(targets);
+      } else if (sharing) {
+        e.preventDefault();
+        copy(layer);
+      }
     };
-    // Ctrl+V: shared layer text anywhere opens the import; otherwise the copied layer pastes here.
-    // The paste event carries the text without a clipboard permission prompt.
+    // Ctrl+V: shared layer text anywhere opens the import; with keys selected,
+    // copied keys (or keycode text from elsewhere) go onto them; otherwise the
+    // copied layer pastes here with a preview. The paste event carries the
+    // text without a clipboard permission prompt.
     const onPaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData("text/plain") ?? "";
       const t = e.target as HTMLElement | null;
-      if (isShareText(text)) {
+      if (sharing && isShareText(text)) {
         if (t?.id && t.closest('[aria-label="Paste a layer from text"], [aria-label="Paste preview"]'))
           return;
         e.preventDefault();
         setImporting({ text: text.trim() });
         setPasting(null);
-      } else if (clipboard && !editable(t)) {
+        return;
+      }
+      if (editable(t)) return;
+      if (targets.length > 0) {
+        // Text copied after our own copy (another window, a chat) wins over it.
+        const fromText = text.trim() && text !== keyCopy?.text ? parseKeysText(table, text) : null;
+        const copied = fromText ? fromText.map((code) => ({ code })) : keyCopy?.keys;
+        e.preventDefault();
+        if (copied) pasteKeys(copied);
+        else onNotice(`Nothing to paste: select keys and press ${MOD}+C to copy them first.`);
+      } else if (sharing && clipboard) {
         e.preventDefault();
         pasteOnto(layer);
       }
@@ -268,11 +352,6 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
       window.removeEventListener("paste", onPaste);
     };
   });
-
-  const write = (t: Target, value: number) =>
-    t.kind === "key"
-      ? keyboard.setKey(layer, t.row, t.col, value)
-      : keyboard.setEncoder(layer, t.index, t.direction, value);
 
   const pick = async (code: number, opts: { fillInner?: boolean } = {}) => {
     if (targets.length === 0 || busy) return;
@@ -348,6 +427,8 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
             info={info}
             layerName={layerName}
             recent={recent}
+            onCopy={() => copyKeys(targets)}
+            onPaste={keyCopy ? () => pasteKeys(keyCopy.keys) : undefined}
           />
         )
       }
@@ -379,7 +460,10 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
             commands={layerCommandsOf(keyboard)}
             marks={(l) => decorationsOf(keyboard).layerCard(l)}
             copied={clipboard ? { name: clipboard.name, ...snapshotCounts(clipboard.snapshot) } : null}
-            onClearCopied={() => setClipboard(null)}
+            onClearCopied={() => {
+              setClipboard(null);
+              setKeyCopy(null);
+            }}
             pasteTarget={pasting?.target ?? null}
           />
         </div>
@@ -477,6 +561,7 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
                   layer={shownLayer}
                   isSelected={peek !== null ? () => false : (s) => targets.some((t) => sameTarget(t, s))}
                   onSelect={peek !== null ? undefined : select}
+                  onSelectArea={peek !== null || placing ? undefined : selectArea}
                   fallthrough={showThrough}
                   mark={(row, col) => decorationsOf(keyboard).keycap(shownLayer, row, col)}
                 />
@@ -490,7 +575,11 @@ export function KeymapView({ keyboard, onError, onNotice, locked, placing = null
                   <span className="size-3 rounded-[3px] border-2 border-accent bg-accent-tint" />
                   Selected
                 </span>
-                <span>Click a key to edit it. Shift-click to select several. Esc clears the selection.</span>
+                <span>
+                  Click a key to edit it. Drag across keys or {MOD}+click to select several, Shift+click for a
+                  block. {MOD}+C and {MOD}+V copy and paste keys, also onto other layers. Esc clears the
+                  selection.
+                </span>
               </div>
               <div className="legacy-view">
                 <LayoutOptionsPanel keyboard={keyboard} onChange={(c) => void setLayout(c)} busy={busy} />

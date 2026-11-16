@@ -169,6 +169,15 @@ svg.keyboard {
   stroke: var(--accent);
   stroke-width: 2;
 }
+/* The box dragged across the board to select keys. */
+svg.keyboard .marquee {
+  fill: var(--accent-soft);
+  fill-opacity: 0.5;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
 /* An extension's mark on a key (decorations), e.g. a dot on keys that have a note. */
 .key circle.key-mark,
 .key.selected circle.key-mark {

@@ -183,11 +183,11 @@ describe("keymap", () => {
     expect(within(inspector()).getByText("Ctrl + Shift + C")).toBeTruthy();
   });
 
-  it("sets several shift-clicked keys as one undo step", async () => {
+  it("sets several Ctrl+clicked keys as one undo step", async () => {
     const { sim, kb, first, second, third } = await setup();
     fireEvent.click(keyButton(first));
-    fireEvent.click(keyButton(second), { shiftKey: true });
-    fireEvent.click(keyButton(third), { shiftKey: true });
+    fireEvent.click(keyButton(second), { ctrlKey: true });
+    fireEvent.click(keyButton(third), { ctrlKey: true });
     expect(within(inspector()).getByText("3 keys selected · Base")).toBeTruthy();
     search("Replace with any key", "esc");
     await waitFor(() => expect(sim.getKeycode(0, third.row, third.col)).toBe(0x29));

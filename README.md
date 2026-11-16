@@ -23,7 +23,12 @@ See [NOTICE.md](NOTICE.md) for what comes from where.
 - **Keymap:** a layer rail (name, keys set, how each layer is reached; Alt to peek) and a key
   inspector beside the keyboard: describe the key in words, build layer keys ("When held / When
   tapped"), add modifiers, pick tap dances and macros, or search any key by name, shortcut (`ctrl+c`)
-  or expression (`LT(1, KC_SPC)`). Shift-click to change several keys at once.
+  or expression (`LT(1, KC_SPC)`). Select several keys by dragging a box, Ctrl+click (⌘ on a Mac) or
+  Shift+click for a block, and change them at once.
+- **Copy and paste keys:** Ctrl+C copies the selected keys and Ctrl+V puts them on the selected keys
+  of any layer, as one undo step: one key fills every selected key, as many as selected pair up in
+  reading order, several onto one key keep their shape. The copy also goes to the clipboard as text
+  (`KC_A LT1(KC_SPACE)`), and keycode text copied elsewhere pastes the same way.
 - **Undo and redo** for every change written to the keyboard (Ctrl+Z / Ctrl+Shift+Z, the top bar,
   and a toast after each change). Loading a layout is one step.
 - **Layers:** copy, paste (with a preview and three modes), duplicate, swap (names too) and clear.

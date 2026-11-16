@@ -73,7 +73,7 @@ describe("layer operations", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("Ctrl+C copies the selected keys and Ctrl+V pastes them onto the current layer", async () => {
+  it("Ctrl+C copies the selected keys; with nothing selected, Ctrl+V pastes them in place with a preview", async () => {
     const { sim, p, q } = await setup();
     fireEvent.click(screen.getByRole("tab", { name: "2: Raise" }));
     fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Key ${q.row},${q.col}:`) })[0]);
@@ -81,6 +81,8 @@ describe("layer operations", () => {
     expect(screen.getByText("1 key from Raise")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "0: Base" }));
+    // With keys selected, Ctrl+V puts the copy on them (keyCopyPaste.test.tsx); Esc clears the selection.
+    fireEvent.keyDown(document.body, { key: "Escape" });
     fireEvent.paste(document.body, { clipboardData: { getData: () => "" } });
     const options = await screen.findByRole("complementary", { name: "Paste options" });
     fireEvent.click(within(options).getByRole("button", { name: /^Paste 1 change$/ }));

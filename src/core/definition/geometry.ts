@@ -113,3 +113,43 @@ export function placeLayout(
     height: maxY - minY,
   };
 }
+
+/** Where a placed shape sits as drawn, in key units: its centre and the box around its corners. */
+export interface ShapeBox {
+  cx: number;
+  cy: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** The drawn position of a placed key or encoder (rotation and option shift applied). */
+export function shapeBox(p: Placed<PhysicalShape>): ShapeBox {
+  const s = p.shape;
+  const [cx, cy] = rotatePoint(
+    s.x + s.width / 2,
+    s.y + s.height / 2,
+    s.rotationAngle,
+    s.rotationX,
+    s.rotationY,
+  );
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of corners(s)) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return {
+    cx: cx + p.shiftX,
+    cy: cy + p.shiftY,
+    minX: minX + p.shiftX,
+    minY: minY + p.shiftY,
+    maxX: maxX + p.shiftX,
+    maxY: maxY + p.shiftY,
+  };
+}
