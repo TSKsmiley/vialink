@@ -142,24 +142,28 @@ function UpdateItems({ updater }: { updater: Updater }) {
   useUpdater(updater);
   if (!updater.enabled) return null;
   const ready = updater.readyInBackground;
+  // A menu label must sit in a group: Base UI throws otherwise, and that
+  // took the whole app down when the menu opened (TopBar.test.tsx).
   return (
     <>
       <DropdownMenu.Separator />
-      <DropdownMenu.Label>ViaLink {__APP_VERSION__}</DropdownMenu.Label>
-      {ready ? (
-        <DropdownMenu.Item onClick={() => updater.showReady()}>
-          Restart to update to {ready}
-        </DropdownMenu.Item>
-      ) : (
-        <DropdownMenu.Item onClick={() => void updater.check(true)}>Check for updates</DropdownMenu.Item>
-      )}
-      <DropdownMenu.CheckboxItem
-        checked={updater.autoCheck}
-        onCheckedChange={(on: boolean) => updater.setAutoCheck(on)}
-        closeOnClick={false}
-      >
-        Check for updates at launch
-      </DropdownMenu.CheckboxItem>
+      <DropdownMenu.Group>
+        <DropdownMenu.Label>ViaLink {__APP_VERSION__}</DropdownMenu.Label>
+        {ready ? (
+          <DropdownMenu.Item onClick={() => updater.showReady()}>
+            Restart to update to {ready}
+          </DropdownMenu.Item>
+        ) : (
+          <DropdownMenu.Item onClick={() => void updater.check(true)}>Check for updates</DropdownMenu.Item>
+        )}
+        <DropdownMenu.CheckboxItem
+          checked={updater.autoCheck}
+          onCheckedChange={(on: boolean) => updater.setAutoCheck(on)}
+          closeOnClick={false}
+        >
+          Check for updates at launch
+        </DropdownMenu.CheckboxItem>
+      </DropdownMenu.Group>
     </>
   );
 }
