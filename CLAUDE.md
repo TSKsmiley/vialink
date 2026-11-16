@@ -31,6 +31,15 @@ pnpm tauri dev      # desktop app (src-tauri/, needs Rust); native HID instead o
 
 pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
 
+## Releases
+
+The desktop app is released by pushing a `desktop-v<version>` tag, which builds a draft GitHub
+release (README, "Releasing the desktop app"). Every release must have patch notes before it is
+published: a "What's new" list of each change a user would notice, in plain words (what changed
+and where to find it), then the fixes. Publish with them as the release body
+(`gh release edit desktop-v<version> --draft=false --latest --notes-file <notes>`); never publish
+a release with an empty or generated body.
+
 ## Rules of the codebase
 
 - `src/core/` never imports React or the DOM (ESLint enforces it); it runs under Node in tests.

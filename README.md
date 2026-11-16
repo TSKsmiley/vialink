@@ -119,7 +119,8 @@ Builds made without the key (local ones, and CI before this setup) have no updat
 2. Tag it: `git tag desktop-v0.2.0 && git push origin desktop-v0.2.0`. The workflow checks that
    the tag names the version, then builds and signs the installers and attaches them, with the
    `latest.json` the apps read, to a draft release.
-3. Look over the draft and publish it. Installed apps offer the update from their next start.
+3. Write the patch notes into the draft (what's new for users, then the fixes) and publish it.
+   No release goes out without patch notes. Installed apps offer the update from their next start.
 
 ### Layout
 
