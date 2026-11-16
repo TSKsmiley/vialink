@@ -148,6 +148,8 @@ Builds made without the key (local ones, and CI before this setup) have no updat
 
 Every feature beyond the keymap is an extension, written against one API: a context (`ctx`)
 an extension calls, and hooks ViaLink calls. The design is in the plan doc's "Extension API" tab.
+The full guide, with a worked example, is [docs/extensions.md](docs/extensions.md); this is the
+short version.
 
 1. **Core part** in `src/core/extensions/<id>.ts`: a `KeyboardExtension` with `id`, `name`,
    `description` and `group`. The group decides what it may send to the keyboard:
