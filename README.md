@@ -5,6 +5,8 @@ keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera
 to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
 before).
 
+![ViaLink's keymap editor in the dark theme: a KLOR split keyboard, with the thumb key "Space, or Lower while held" open in the key panel](docs/screenshots/keymap-dark.png)
+
 > **Experimental.** ViaLink is vibe coded: most of it was written by an AI coding assistant, and it
 > has only been tested on one real keyboard, the [KLOR](https://github.com/GEIGEIGEIST/KLOR) by
 > GEIGEIGEIST (plus a simulated keyboard in the test suite). It can write wrong
@@ -47,6 +49,19 @@ See [NOTICE.md](NOTICE.md) for what comes from where.
   [Kumo](https://github.com/cloudflare/kumo) components.
 
 Not yet: the firmware flasher.
+
+### Screenshots
+
+| Several keys selected on a layer | A macro, step by step |
+| --- | --- |
+| ![The Raise layer in the light theme with twelve keys selected by dragging a box over the F-keys, and Copy in the key panel](docs/screenshots/select-light.png) | ![The macro editor: one "type text" step, the steps to add, and how the macro plays](docs/screenshots/macros-light.png) |
+
+The device panel's HID log decodes every request (here a key change and its undo) and shows its
+bytes:
+
+![The keymap with the device panel open: USB ids, protocol, and the HID log with two decoded "Set key" writes and their bytes](docs/screenshots/device-dark.png)
+
+The screenshots show the demo keyboard (a simulated KLOR), which you can try on the website.
 
 ## Development
 
@@ -145,7 +160,8 @@ Builds made without the key (local ones, and CI before this setup) have no updat
   `theme.css` holds the colour tokens.
 - `docs/`: guides in Markdown, and the website's page for each (`docs/*.html`). The build renders
   the Markdown into the page (`src/docs/markdown.ts`, wired up in `vite.config.ts`); edit the
-  `.md` file only.
+  `.md` file only. `docs/screenshots/` holds this README's images, taken from the demo keyboard
+  at 1440×800, twice the pixels.
 - `src-tauri/`: the desktop app's shell (Rust): window, app icons and the native HID commands.
 - `fixtures/`: keyboard definitions and `.vil` files used by tests.
 - `scripts/`: `dump_keycodes.py` and `dump_keymaps.py` regenerate the keycode tables and the

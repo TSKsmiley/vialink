@@ -27,6 +27,7 @@ import { NativeHidTransport, type NativeKeyboard } from "../core/transport/nativ
 import type { Transport } from "../core/transport/types.ts";
 import { WebHidTransport } from "../core/transport/webhid.ts";
 import { tauriHid } from "./desktop.ts";
+import { demoKeymap } from "./demoKeymap.ts";
 
 export function webHidSupported(): boolean {
   return typeof navigator !== "undefined" && "hid" in navigator;
@@ -110,28 +111,20 @@ export function nativeTransport(device: NativeKeyboard): Transport {
   return new NativeHidTransport(tauriHid, device);
 }
 
-/** A simulated KLOR running the layer-names firmware, with a small starter keymap. */
+/** A simulated KLOR running the layer-names firmware, with a starter keymap (demoKeymap.ts). */
 export async function demoTransport(): Promise<Transport> {
   const response = await fetch(klorDefinitionUrl);
   const compressed = new Uint8Array(await response.arrayBuffer());
-  // KLOR matrix: rows 0-3 left half, 4-7 right half; 6 columns each.
-  const letters = [
-    [0x00, 0x14, 0x1a, 0x08, 0x15, 0x17],
-    [0x00, 0x04, 0x16, 0x07, 0x09, 0x0a],
-    [0x00, 0x1d, 0x1b, 0x06, 0x19, 0x05],
-    [0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0x13, 0x12, 0x0c, 0x18, 0x1c, 0x00],
-    [0x33, 0x0f, 0x0e, 0x0d, 0x0b, 0x00],
-    [0x38, 0x37, 0x36, 0x10, 0x11, 0x00],
-    [0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-  ];
+  const { keymap, encoders } = demoKeymap();
   const sim = new SimulatedKeyboard({
     info: { productName: "Klor (demo)", vendorId: 0xfc32, productId: 0x0287 },
     compressedDefinition: compressed,
     rows: 8,
     cols: 6,
     layers: 4,
-    keymap: [letters, letters.map((row) => row.map(() => 0x01))],
+    keymap,
+    encoderCount: 2,
+    encoders,
     macroCount: 16,
     macroBufferSize: 1024,
     dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 4, featureFlags: 0b11 },
