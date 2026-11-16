@@ -20,11 +20,18 @@ interface Props {
   className?: string;
 }
 
-// Literal class names, so Tailwind sees them.
+// Literal class names, so Tailwind sees them. Beside the main part, the panel
+// stays in view under the sticky top bar, one window tall, and scrolls on its
+// own: its last part (the key search) sits at the window's bottom however
+// long the page is, instead of at the bottom of the page.
 const ROW = { lg: "lg:flex-row", xl: "xl:flex-row" };
 const PANEL = {
-  lg: "lg:w-[340px] lg:shrink-0 lg:border-t-0 lg:border-l min-[1600px]:w-[380px]",
-  xl: "xl:w-80 xl:shrink-0 xl:border-t-0 xl:border-l",
+  lg:
+    "lg:sticky lg:top-[var(--vl-top-bar,0px)] lg:h-[calc(100dvh-var(--vl-top-bar,0px))] lg:self-start lg:overflow-y-auto " +
+    "lg:w-[340px] lg:shrink-0 lg:border-t-0 lg:border-l min-[1600px]:w-[380px]",
+  xl:
+    "xl:sticky xl:top-[var(--vl-top-bar,0px)] xl:h-[calc(100dvh-var(--vl-top-bar,0px))] xl:self-start xl:overflow-y-auto " +
+    "xl:w-80 xl:shrink-0 xl:border-t-0 xl:border-l",
 };
 
 export const SidePanelLayout = forwardRef<HTMLElement, Props>(function SidePanelLayout(

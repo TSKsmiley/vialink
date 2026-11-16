@@ -330,25 +330,30 @@ export function App() {
             <UndoToast keyboard={kb} controls={history} />
             {updater && <UpdateNotice updater={updater} busy={restoring} />}
 
-            <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
-              Built on{" "}
-              <a className="underline" href="https://github.com/vial-kb/vial-gui">
-                vial-gui
-              </a>
-              ,{" "}
-              <a className="underline" href="https://github.com/tcyeee/vialite">
-                Vialite
-              </a>{" "}
-              and{" "}
-              <a className="underline" href="https://github.com/cloudflare/kumo">
-                Kumo
-              </a>
-              . Licensed under GPL-2.0.{" "}
-              <a className="underline" href={docsUrl("extensions")} target="_blank" rel="noreferrer">
-                Writing an extension
-              </a>
-              .
-            </footer>
+            {/* The credits show on the launch screen only: in the editor a
+                footer would sit under the side panel, which runs down to the
+                window's edge. */}
+            {status.kind !== "connected" && (
+              <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
+                Built on{" "}
+                <a className="underline" href="https://github.com/vial-kb/vial-gui">
+                  vial-gui
+                </a>
+                ,{" "}
+                <a className="underline" href="https://github.com/tcyeee/vialite">
+                  Vialite
+                </a>{" "}
+                and{" "}
+                <a className="underline" href="https://github.com/cloudflare/kumo">
+                  Kumo
+                </a>
+                . Licensed under GPL-2.0.{" "}
+                <a className="underline" href={docsUrl("extensions")} target="_blank" rel="noreferrer">
+                  Writing an extension
+                </a>
+                .
+              </footer>
+            )}
           </div>
         </SidePanelTaken.Provider>
       </div>
