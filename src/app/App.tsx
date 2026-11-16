@@ -41,6 +41,7 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { UpdateNotice } from "./shell/UpdateNotice.tsx";
 import { useHistory } from "./shell/useHistory.ts";
+import { docsUrl } from "./docs.ts";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 import { BUILTIN_EXTENSIONS } from "../core/extensions/index.ts";
 
@@ -342,7 +343,11 @@ export function App() {
               <a className="underline" href="https://github.com/cloudflare/kumo">
                 Kumo
               </a>
-              . Licensed under GPL-2.0.
+              . Licensed under GPL-2.0.{" "}
+              <a className="underline" href={docsUrl("extensions")} target="_blank" rel="noreferrer">
+                Writing an extension
+              </a>
+              .
             </footer>
           </div>
         </SidePanelTaken.Provider>

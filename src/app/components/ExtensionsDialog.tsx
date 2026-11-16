@@ -12,6 +12,7 @@ import {
   switchesFor,
   type SwitchChange,
 } from "../extensions/switches.ts";
+import { docsUrl } from "../docs.ts";
 import { errorMessage, useKeyboardVersion } from "../hooks.ts";
 
 const GROUPS: { id: ExtensionGroup; title: string; hint: string; open: boolean }[] = [
@@ -156,6 +157,13 @@ export function ExtensionsDialog({
           <p className="hint">
             Turn features off to hide them. Click a section heading to fold it. Your choices are remembered in
             this browser; nothing is written to the keyboard, so this is not part of undo.
+          </p>
+          <p className="hint">
+            Want to build one? Read{" "}
+            <a href={docsUrl("extensions")} target="_blank" rel="noreferrer">
+              Writing an extension
+            </a>
+            .
           </p>
         </div>
         <div className="dialog-body">
