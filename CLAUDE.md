@@ -35,6 +35,10 @@ pnpm tauri dev      # desktop app (src-tauri/, needs Rust); native HID instead o
 
 pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
 
+Before pushing to master, run what CI runs: `pnpm lint`, `pnpm format:check`, `pnpm check`,
+`pnpm test` and `pnpm build`. CI deploys the website only when all of them pass, and
+`format:check` covers every file, Markdown included (a README edit has failed it).
+
 ## Releases
 
 The desktop app is released by pushing a `desktop-v<version>` tag, which builds a draft GitHub
