@@ -3,6 +3,10 @@
 Browser-based Vial keyboard configurator: a TypeScript port of vial-gui's protocol and keycode
 logic with a React UI, talking to keyboards over WebHID.
 
+Its users range from keyboard power users to software engineers. UI text, docs and patch notes can
+use Vial and QMK terms as they are (layers, tap dance, keycodes such as `KC_A` or `LT(1, KC_SPC)`)
+without explaining them, and should be precise: exact shortcuts, formats and limits.
+
 ## Design and plan
 
 The implementation plan (milestones, phases, decisions, risks) is a claude.ai doc:
@@ -35,8 +39,8 @@ pnpm lives at `~/.local/bin/pnpm`; there is no system npm.
 
 The desktop app is released by pushing a `desktop-v<version>` tag, which builds a draft GitHub
 release (README, "Releasing the desktop app"). Every release must have patch notes before it is
-published: a "What's new" list of each change a user would notice, in plain words (what changed
-and where to find it), then the fixes. Publish with them as the release body
+published: a "What's new" list of each change a user would notice (what changed, where to find
+it, and the details an engineer would want: shortcuts, formats, compatibility), then the fixes. Publish with them as the release body
 (`gh release edit desktop-v<version> --draft=false --latest --notes-file <notes>`); never publish
 a release with an empty or generated body.
 
