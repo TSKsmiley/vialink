@@ -54,8 +54,8 @@ Not yet: the firmware flasher.
 
 ### Screenshots
 
-| Several keys selected on a layer | A macro, step by step |
-| --- | --- |
+| Several keys selected on a layer                                                                                                                                | A macro, step by step                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | ![The Raise layer in the light theme with twelve keys selected by dragging a box over the F-keys, and Copy in the key panel](docs/screenshots/select-light.png) | ![The macro editor: one "type text" step, the steps to add, and how the macro plays](docs/screenshots/macros-light.png) |
 
 The device panel's HID log decodes every request (here a key change and its undo) and shows its
