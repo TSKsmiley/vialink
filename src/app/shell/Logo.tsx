@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // ViaLink's logo: a keycap seen from above with the V of Vial on its face. The
-// same drawing as the app icon (src-tauri/icons/icon.svg) and the favicon, in
-// the same colours in both themes.
+// same drawing as the app icon (src-tauri/icons/icon.svg) and the favicon
+// (public/icons/icon.svg), in the same colours in both themes.
 
 export function Logo({ size = 24 }: { size?: number }) {
   return (

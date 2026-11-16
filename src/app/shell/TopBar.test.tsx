@@ -3,7 +3,7 @@
 // The "More" menu in the desktop app, where the updater adds its items. Its
 // "ViaLink <version>" label once sat outside a menu group, which Base UI
 // refuses: opening the menu then took the whole app down (0.2.0, 0.2.1).
-// And the logo, which disconnects.
+// The logo, which disconnects, and the install offer of the web app.
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -76,4 +76,35 @@ it("disconnects when the logo is clicked, and is plain text with no keyboard", a
   rerender(<Harness keyboard={null} />);
   expect(screen.queryByRole("button", { name: "ViaLink" })).toBeNull();
   expect(screen.getByText("ViaLink")).toBeTruthy();
+});
+
+it("offers to install the web app while the browser does, once", async () => {
+  render(
+    <TopBar
+      keyboard={null}
+      history={{} as HistoryControls}
+      showLog={false}
+      onToggleLog={() => undefined}
+      onExtensions={() => undefined}
+      onDisconnect={() => undefined}
+      onError={() => undefined}
+    />,
+  );
+  const more = () => fireEvent.click(screen.getByRole("button", { name: "More" }));
+  more();
+  await screen.findByText("Keyboard layout");
+  expect(screen.queryByRole("menuitem", { name: "Install ViaLink as an app" })).toBeNull();
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+  const prompt = vi.fn(async () => ({ outcome: "accepted" }));
+  const offer = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt });
+  act(() => void window.dispatchEvent(offer));
+  expect(offer.defaultPrevented).toBe(true);
+  more();
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Install ViaLink as an app" }));
+  expect(prompt).toHaveBeenCalledTimes(1);
+
+  more();
+  await screen.findByText("Keyboard layout");
+  expect(screen.queryByRole("menuitem", { name: "Install ViaLink as an app" })).toBeNull();
 });

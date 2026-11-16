@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Top bar of the app shell (design board 1): logo, device pill, lock
 // state, Undo/Redo, Layouts, Extensions and a "More" menu with the theme
-// switch and Disconnect. Clicking the logo disconnects too, back to the start
+// switch, "Install ViaLink as an app" (when the browser offers it) and
+// Disconnect. Clicking the logo disconnects too, back to the start
 // screen, as a site's logo goes home.
 //
 // The device pill opens the device side bar with the HID log (DevicePanel).
@@ -28,6 +29,7 @@ import type { HistoryControls } from "./useHistory.ts";
 import type { Updater } from "../updates.ts";
 import { useUpdater } from "./useUpdater.ts";
 import { Logo } from "./Logo.tsx";
+import { useInstallOffer } from "../install.ts";
 
 interface Props {
   keyboard: Keyboard | null;
@@ -110,6 +112,7 @@ export function TopBar({
           <ThemeItems />
           <DropdownMenu.Separator />
           <KeyboardLayoutItems />
+          <InstallItem />
           {updater && <UpdateItems updater={updater} />}
           {keyboard && (
             <>
@@ -120,6 +123,18 @@ export function TopBar({
         </DropdownMenu.Content>
       </DropdownMenu>
     </header>
+  );
+}
+
+/** "Install ViaLink as an app", while the browser offers it (install.ts). */
+function InstallItem() {
+  const install = useInstallOffer();
+  if (!install) return null;
+  return (
+    <>
+      <DropdownMenu.Separator />
+      <DropdownMenu.Item onClick={() => void install()}>Install ViaLink as an app</DropdownMenu.Item>
+    </>
   );
 }
 

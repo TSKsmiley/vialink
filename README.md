@@ -3,7 +3,9 @@
 A browser-based configurator for [Vial](https://get.vial.today/) keyboards. It talks to the
 keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera) with nothing
 to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
-before).
+before). In Chrome or Edge it also installs as an app, with its own window and icon: ⋯ menu >
+"Install ViaLink as an app", or the install button in the address bar. Without a browser that has
+WebHID, use the [desktop app](#desktop-app).
 
 ![ViaLink's keymap editor in the dark theme: a KLOR split keyboard, with the thumb key "Space, or Lower while held" open in the key panel](docs/screenshots/keymap-dark.png)
 
@@ -162,6 +164,8 @@ Builds made without the key (local ones, and CI before this setup) have no updat
   the Markdown into the page (`src/docs/markdown.ts`, wired up in `vite.config.ts`); edit the
   `.md` file only. `docs/screenshots/` holds this README's images, taken from the demo keyboard
   at 1440×800, twice the pixels.
+- `public/`: the web app manifest and its icons, which make the website installable as an app
+  (`src/app/install.ts` offers it in the ⋯ menu), and the favicon.
 - `src-tauri/`: the desktop app's shell (Rust): window, app icons and the native HID commands.
 - `fixtures/`: keyboard definitions and `.vil` files used by tests.
 - `scripts/`: `dump_keycodes.py` and `dump_keymaps.py` regenerate the keycode tables and the
