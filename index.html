@@ -3,12 +3,57 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ViaLink: configure Vial keyboards in your browser</title>
+    <meta
+      name="description"
+      content="Remap keys and layers on your Vial keyboard and build macros, tap dances and combos, in Chrome, Edge or the desktop app. Free and open source."
+    />
+    <link rel="canonical" href="https://vialink.dev/" />
+    <meta name="application-name" content="ViaLink" />
+    <meta name="apple-mobile-web-app-title" content="ViaLink" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!-- Installable as an app in Chromium browsers (install.ts). -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#f9f9f9" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#060606" media="(prefers-color-scheme: dark)" />
-    <title>ViaLink</title>
+    <!-- Link previews (Open Graph; X reads these too, with its own card type). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ViaLink" />
+    <meta property="og:title" content="ViaLink: configure Vial keyboards in your browser" />
+    <meta
+      property="og:description"
+      content="Remap keys and layers on your Vial keyboard and build macros, tap dances and combos, in Chrome, Edge or the desktop app. Free and open source."
+    />
+    <meta property="og:url" content="https://vialink.dev/" />
+    <meta property="og:image" content="https://vialink.dev/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="ViaLink: configure your Vial keyboard. The keymap of a KLOR split keyboard."
+    />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- For search engines: what ViaLink is (schema.org SoftwareApplication). -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "ViaLink",
+        "url": "https://vialink.dev/",
+        "description": "A configurator for Vial keyboards: keymap, layers, macros, tap dance, combos, key overrides and lighting. Runs in Chrome, Edge and Opera over WebHID, or as a desktop app.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Windows, macOS, Linux, ChromeOS",
+        "browserRequirements": "Requires WebHID: Chrome, Edge or Opera",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+        "image": "https://vialink.dev/og-image.png",
+        "downloadUrl": "https://github.com/TSKsmiley/vialink/releases/latest",
+        "sameAs": ["https://github.com/TSKsmiley/vialink"]
+      }
+    </script>
     <script>
       // Same rule as src/app/theme.ts, run before first paint.
       try {
@@ -19,6 +64,10 @@
     </script>
   </head>
   <body>
+    <noscript>
+      ViaLink configures Vial keyboards in the browser: keymap, layers, macros, tap dance, combos and
+      lighting. It needs JavaScript; turn it on to use it.
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
