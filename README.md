@@ -137,6 +137,9 @@ Builds made without the key (local ones, and CI before this setup) have no updat
 - `src/app/`: the React UI. `shell/` is the top bar, sidebar, undo and device panel; `keymap/` the
   keymap view; `extensions/` the feature views; `ui/` wraps the Kumo components ViaLink uses;
   `theme.css` holds the colour tokens.
+- `docs/`: guides in Markdown, and the website's page for each (`docs/*.html`). The build renders
+  the Markdown into the page (`src/docs/markdown.ts`, wired up in `vite.config.ts`); edit the
+  `.md` file only.
 - `src-tauri/`: the desktop app's shell (Rust): window, app icons and the native HID commands.
 - `fixtures/`: keyboard definitions and `.vil` files used by tests.
 - `scripts/`: `dump_keycodes.py` and `dump_keymaps.py` regenerate the keycode tables and the
@@ -148,8 +151,8 @@ Builds made without the key (local ones, and CI before this setup) have no updat
 
 Every feature beyond the keymap is an extension, written against one API: a context (`ctx`)
 an extension calls, and hooks ViaLink calls. The design is in the plan doc's "Extension API" tab.
-The full guide, with a worked example, is [docs/extensions.md](docs/extensions.md); this is the
-short version.
+The full guide, with a worked example, is [docs/extensions.md](docs/extensions.md), also on the
+website at <https://tsksmiley.github.io/vialink/docs/extensions.html>; this is the short version.
 
 1. **Core part** in `src/core/extensions/<id>.ts`: a `KeyboardExtension` with `id`, `name`,
    `description` and `group`. The group decides what it may send to the keyboard:

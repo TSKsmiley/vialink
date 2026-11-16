@@ -2,17 +2,54 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { renderMarkdown } from "./src/docs/markdown.ts";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
   version: string;
 };
 
+/**
+ * Docs pages: an HTML page (docs/*.html) with `<!-- vialink:markdown docs/x.md -->` gets that
+ * Markdown file rendered in its place, at build time and in the dev server (which reloads the
+ * page when the file changes).
+ */
+function docsPages(): Plugin {
+  const MARKER = /<!--\s*vialink:markdown\s+(\S+)\s*-->/g;
+  const root = import.meta.dirname;
+  return {
+    name: "vialink-docs",
+    transformIndexHtml: {
+      order: "pre",
+      handler: (html) =>
+        html.replace(MARKER, (_, file: string) => renderMarkdown(readFileSync(resolve(root, file), "utf8"))),
+    },
+    configureServer(server) {
+      server.watcher.add(resolve(root, "docs"));
+      server.watcher.on("change", (file) => {
+        if (file.endsWith(".md") && file.startsWith(resolve(root, "docs")))
+          server.ws.send({ type: "full-reload" });
+      });
+    },
+  };
+}
+
 export default defineConfig(({ command, isPreview }) => ({
   // GitHub Pages serves the site from https://tsksmiley.github.io/vialink/; the
   // desktop app (Tauri sets TAURI_ENV_PLATFORM for its build) from its own root.
   base: (command === "build" || isPreview) && !process.env.TAURI_ENV_PLATFORM ? "/vialink/" : "/",
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), docsPages()],
+  build: {
+    rolldownOptions: {
+      // The app, and the docs pages next to it (https://tsksmiley.github.io/vialink/docs/…).
+      input: {
+        main: resolve(import.meta.dirname, "index.html"),
+        extensions: resolve(import.meta.dirname, "docs/extensions.html"),
+      },
+    },
+  },
   // ViaLink's version, written into .vialink files (manifest.app).
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   test: {

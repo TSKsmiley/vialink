@@ -1,0 +1,170 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* The docs pages (docs/*.html): a readable column of rendered Markdown in ViaLink's theme. */
+
+body {
+  margin: 0;
+  background: var(--color-kumo-canvas);
+  color: var(--text-color-kumo-default);
+}
+
+.docs-page {
+  min-height: 100vh;
+}
+
+.docs-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-kumo-line);
+  background: var(--color-kumo-base);
+  font-size: 14px;
+}
+.docs-bar a {
+  color: inherit;
+  text-decoration: none;
+}
+.docs-home {
+  font-weight: 600;
+}
+.docs-crumb {
+  color: var(--text-color-kumo-subtle);
+}
+.docs-crumb::before {
+  content: "/";
+  margin-right: 12px;
+}
+.docs-source {
+  margin-left: auto;
+  color: var(--vl-accent-link) !important;
+}
+.docs-source:hover {
+  text-decoration: underline !important;
+}
+
+.docs {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.docs h1,
+.docs h2,
+.docs h3,
+.docs h4 {
+  line-height: 1.25;
+  font-weight: 650;
+  scroll-margin-top: 64px;
+}
+.docs h1 {
+  font-size: 32px;
+  margin: 16px 0 12px;
+}
+.docs h2 {
+  font-size: 22px;
+  margin: 48px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-kumo-line);
+}
+.docs h3 {
+  font-size: 17px;
+  margin: 32px 0 8px;
+}
+.docs p,
+.docs ul,
+.docs ol,
+.docs pre,
+.docs .table {
+  margin: 0 0 16px;
+}
+.docs ul,
+.docs ol {
+  padding-left: 24px;
+}
+.docs ul {
+  list-style: disc;
+}
+.docs ol {
+  list-style: decimal;
+}
+.docs li {
+  margin: 4px 0;
+}
+.docs li > ul,
+.docs li > ol {
+  margin: 4px 0;
+}
+.docs li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -20px;
+}
+.docs input[type="checkbox"] {
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+.docs a {
+  color: var(--vl-accent-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.docs strong {
+  font-weight: 650;
+}
+.docs code {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-kumo-recessed);
+  overflow-wrap: break-word;
+}
+.docs h1 code,
+.docs h2 code,
+.docs h3 code,
+.docs a code {
+  padding: 0 2px;
+  background: none;
+}
+.docs pre {
+  overflow-x: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--color-kumo-line);
+  border-radius: 8px;
+  background: var(--color-kumo-recessed);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.docs pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+  overflow-wrap: normal;
+}
+.docs .table {
+  overflow-x: auto;
+}
+.docs table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.docs th,
+.docs td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-kumo-line);
+  text-align: left;
+  vertical-align: top;
+}
+.docs th {
+  font-weight: 600;
+  color: var(--text-color-kumo-subtle);
+}
+/* The first column holds names: as narrow as its longest word, the rest for the text. */
+.docs td:first-child {
+  width: 1%;
+}
