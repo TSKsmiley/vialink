@@ -3,9 +3,9 @@
 A browser-based configurator for [Vial](https://get.vial.today/) keyboards. It talks to the
 keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera) with nothing
 to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
-before). In Chrome or Edge it also installs as an app, with its own window and icon: ⋯ menu >
-"Install ViaLink as an app", or the install button in the address bar. Without a browser that has
-WebHID, use the [desktop app](#desktop-app).
+before). The start page offers both ways to install it: **Install as web app** (Chrome, Edge,
+Opera: its own window and icon, also in the ⋯ menu) or **Install standalone app**, the
+[desktop app](#desktop-app), which needs no WebHID and so is the way in from Firefox or Safari.
 
 ![ViaLink's keymap editor in the dark theme: a KLOR split keyboard, with the thumb key "Space, or Lower while held" open in the key panel](docs/screenshots/keymap-dark.png)
 
@@ -22,7 +22,9 @@ See [NOTICE.md](NOTICE.md) for what comes from where.
 ## What it does
 
 - Connects to a Vial keyboard (VIA protocol 9, Vial protocol up to 6), with unlock, lock and a warning
-  for vial-qmk example UIDs. A demo keyboard (a simulated KLOR) lets you try everything without
+  for vial-qmk example UIDs. A keyboard used before connects in one click, or on its own when it is
+  the only one plugged in (browser, web app and desktop app alike), and after an unplug ViaLink
+  connects again when it is back. A demo keyboard (a simulated KLOR) lets you try everything without
   hardware.
 - **Keymap:** a layer rail (name, keys set, how each layer is reached; Alt to peek) and a key
   inspector beside the keyboard: describe the key in words, build layer keys ("When held / When

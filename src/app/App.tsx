@@ -43,7 +43,10 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { UpdateNotice } from "./shell/UpdateNotice.tsx";
 import { useHistory } from "./shell/useHistory.ts";
-import { docsUrl } from "./docs.ts";
+import { docsUrl, VIAL_UDEV_RULE } from "./docs.ts";
+import { runsAsInstalledApp } from "./install.ts";
+import { currentOs } from "./platform.ts";
+import { InstallOptions } from "./shell/InstallOptions.tsx";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 import { BUILTIN_EXTENSIONS } from "../core/extensions/index.ts";
 
@@ -483,6 +486,7 @@ function ConnectScreen({
 }) {
   const desktop = isDesktop();
   const supported = webHidSupported();
+  const os = currentOs();
   if (waitingFor) {
     return (
       <section
@@ -520,12 +524,22 @@ function ConnectScreen({
           {available?.length
             ? "Connect a keyboard you have used here before, or choose another in the browser's device list."
             : "Plug in your keyboard and choose it in the browser's device list."}
+          {os === "linux" && (
+            <>
+              {" "}
+              On Linux the keyboard needs Vial&rsquo;s{" "}
+              <a className="underline" href={VIAL_UDEV_RULE} target="_blank" rel="noreferrer">
+                udev rule
+              </a>{" "}
+              first.
+            </>
+          )}
         </p>
       ) : (
         <Banner
           variant="alert"
           size="sm"
-          description="This browser does not support WebHID. Use a Chromium-based browser such as Chrome, Edge or Opera. On Linux the keyboard's hidraw device also needs a udev rule that grants your user access."
+          description="This browser can't talk to keyboards: it has no WebHID. Install the standalone app below, or open this page in Chrome, Edge or Opera."
         />
       )}
       <div className="mt-2 flex flex-wrap justify-center gap-3">
@@ -545,6 +559,7 @@ function ConnectScreen({
         )}
         <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>
       </div>
+      {!desktop && !runsAsInstalledApp() && <InstallOptions os={os} webHid={supported} />}
     </section>
   );
 }

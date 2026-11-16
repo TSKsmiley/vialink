@@ -2,7 +2,8 @@
 // Installing the website as an app (a PWA). Chromium browsers fire
 // beforeinstallprompt when the page meets their install rules
 // (public/manifest.webmanifest) and ViaLink isn't installed yet; while that
-// offer stands, the ⋯ menu shows "Install ViaLink as an app" (TopBar.tsx). The
+// offer stands, the ⋯ menu shows "Install ViaLink as an app" (TopBar.tsx), and
+// the start screen's "Install as web app" opens it (InstallOptions.tsx). The
 // browser's own install button in the address bar works either way. No
 // service worker: the installed app loads the site like a tab, so it is never
 // stuck on an old version, and the desktop app is the one that works offline.
@@ -46,4 +47,12 @@ export function useInstallOffer(): (() => Promise<void>) | null {
     changed();
     await current.prompt();
   };
+}
+
+/** True in the installed web app's own window, where offering to install it makes no sense. */
+export function runsAsInstalledApp(): boolean {
+  if (typeof matchMedia === "undefined") return false;
+  return ["standalone", "minimal-ui", "window-controls-overlay", "fullscreen"].some(
+    (mode) => matchMedia(`(display-mode: ${mode})`).matches,
+  );
 }

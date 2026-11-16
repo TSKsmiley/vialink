@@ -2,7 +2,7 @@
 // The Kumo components ViaLink uses, in one place, so a Kumo upgrade touches
 // only this folder. Import UI pieces from here, not from @cloudflare/kumo.
 
-export { Button, type ButtonProps } from "./Button.tsx";
+export { Button, LinkButton, type ButtonProps, type LinkButtonProps } from "./Button.tsx";
 export { Banner } from "@cloudflare/kumo/components/banner";
 export { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 export { Switch, type SwitchProps } from "./Switch.tsx";

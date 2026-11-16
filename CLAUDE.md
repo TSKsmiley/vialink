@@ -49,6 +49,11 @@ Publish with them as the release body
 (`gh release edit desktop-v<version> --draft=false --latest --notes-file <notes>`); never publish
 a release with an empty or generated body.
 
+Then check the release is complete: a `.dmg`, an `.exe`, an `.AppImage` (with their `.sig`s), and
+`latest.json` listing `darwin-*`, `windows-*` and `linux-*`. A platform's job can be cancelled
+without failing the release (GitHub had no macOS runner for 0.3.1); re-run it with
+`gh run rerun <run> --failed`, and it adds its files to the published release.
+
 ## Rules of the codebase
 
 - `src/core/` never imports React or the DOM (ESLint enforces it); it runs under Node in tests.
