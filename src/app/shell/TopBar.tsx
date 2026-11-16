@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// Top bar of the app shell (design board 1): wordmark, device pill, lock
+// Top bar of the app shell (design board 1): logo, device pill, lock
 // state, Undo/Redo, Layouts, Extensions and a "More" menu with the theme
-// switch and Disconnect.
+// switch and Disconnect. Clicking the logo disconnects too, back to the start
+// screen, as a site's logo goes home.
 //
 // The device pill opens the device side bar with the HID log (DevicePanel).
 // The bar stays at the top while the page scrolls, and publishes its height
@@ -26,6 +27,7 @@ import { Button, DropdownMenu } from "../ui/index.ts";
 import type { HistoryControls } from "./useHistory.ts";
 import type { Updater } from "../updates.ts";
 import { useUpdater } from "./useUpdater.ts";
+import { Logo } from "./Logo.tsx";
 
 interface Props {
   keyboard: Keyboard | null;
@@ -71,7 +73,22 @@ export function TopBar({
       ref={bar}
       className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-kumo-line bg-kumo-elevated px-4 py-3 md:px-5"
     >
-      <strong className="text-[17px] tracking-tight">ViaLink</strong>
+      {keyboard ? (
+        <button
+          type="button"
+          onClick={onDisconnect}
+          title="Disconnect and go back to the start screen"
+          className="flex cursor-pointer items-center gap-2 rounded-md text-[17px] font-bold tracking-tight hover:text-accent-link"
+        >
+          <Logo />
+          ViaLink
+        </button>
+      ) : (
+        <span className="flex items-center gap-2 text-[17px] font-bold tracking-tight">
+          <Logo />
+          ViaLink
+        </span>
+      )}
       {keyboard ? (
         <>
           <DevicePill keyboard={keyboard} pressed={showLog} onClick={onToggleLog} />
