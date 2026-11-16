@@ -36,14 +36,14 @@ function docsPages(): Plugin {
   };
 }
 
-export default defineConfig(({ command, isPreview }) => ({
-  // GitHub Pages serves the site from https://tsksmiley.github.io/vialink/; the
-  // desktop app (Tauri sets TAURI_ENV_PLATFORM for its build) from its own root.
-  base: (command === "build" || isPreview) && !process.env.TAURI_ENV_PLATFORM ? "/vialink/" : "/",
+export default defineConfig(() => ({
+  // The site and the desktop app both serve from their root: GitHub Pages at
+  // https://vialink.dev/ (tsksmiley.github.io/vialink/ redirects there).
+  base: "/",
   plugins: [react(), tailwindcss(), docsPages()],
   build: {
     rolldownOptions: {
-      // The app, and the docs pages next to it (https://tsksmiley.github.io/vialink/docs/…).
+      // The app, and the docs pages next to it (https://vialink.dev/docs/…).
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         extensions: resolve(import.meta.dirname, "docs/extensions.html"),

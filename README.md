@@ -2,7 +2,7 @@
 
 A browser-based configurator for [Vial](https://get.vial.today/) keyboards. It talks to the
 keyboard over WebHID, so it runs in Chromium-based browsers (Chrome, Edge, Opera) with nothing
-to install. Try it at https://tsksmiley.github.io/vialink/ (the project was called vial-ts
+to install. Try it at https://vialink.dev/ (the project was called vial-ts
 before). The start page offers both ways to install it: **Install as web app** (Chrome, Edge,
 Opera: its own window and icon, also in the ⋯ menu) or **Install standalone app**, the
 [desktop app](#desktop-app), which needs no WebHID and so is the way in from Firefox or Safari.
@@ -180,7 +180,7 @@ Builds made without the key (local ones, and CI before this setup) have no updat
 Every feature beyond the keymap is an extension, written against one API: a context (`ctx`)
 an extension calls, and hooks ViaLink calls. The design is in the plan doc's "Extension API" tab.
 The full guide, with a worked example, is [docs/extensions.md](docs/extensions.md), also on the
-website at <https://tsksmiley.github.io/vialink/docs/extensions.html>; this is the short version.
+website at <https://vialink.dev/docs/extensions.html>; this is the short version.
 
 1. **Core part** in `src/core/extensions/<id>.ts`: a `KeyboardExtension` with `id`, `name`,
    `description` and `group`. The group decides what it may send to the keyboard:

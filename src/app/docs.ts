@@ -4,7 +4,7 @@
 // website, since its window shows only the app.
 import { isDesktop } from "./desktop.ts";
 
-const SITE = "https://tsksmiley.github.io/vialink/";
+const SITE = "https://vialink.dev/";
 
 /** The URL of a docs page, e.g. docsUrl("extensions"). */
 export function docsUrl(page: "extensions"): string {
