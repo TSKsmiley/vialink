@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoadProgress } from "../core/keyboard.ts";
 import type { NativeKeyboard } from "../core/transport/native.ts";
+import type { DeviceInfo } from "../core/transport/types.ts";
 import type { RequestQueue } from "../core/transport/queue.ts";
 import {
   connect,
@@ -16,6 +17,7 @@ import {
   type ConnectTarget,
 } from "./connection.ts";
 import { isDesktop, tauriUpdater } from "./desktop.ts";
+import { sameKind, usePermittedKeyboards } from "./reconnect.ts";
 import { browserPrefs, Updater } from "./updates.ts";
 import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
@@ -74,17 +76,23 @@ export function App() {
     resolve: (ok: boolean) => void;
   } | null>(null);
 
+  /** The keyboard that was unplugged, while ViaLink waits for it to come back. */
+  const [waitingFor, setWaitingFor] = useState<DeviceInfo | null>(null);
+
   const start = useCallback(
     async (target: ConnectTarget) => {
       setError(null);
       setNotice(null);
+      setWaitingFor(null);
       try {
         const transport =
           target.kind === "demo"
             ? await demoTransport()
             : target.kind === "native"
               ? nativeTransport(target.device)
-              : webHidTransport(await requestDevice());
+              : target.kind === "device"
+                ? webHidTransport(target.device)
+                : webHidTransport(await requestDevice());
         setStatus({ kind: "connecting", progress: null });
         // At most one progress render per frame: a render after every request
         // delays the next one past its USB frame and nearly doubles the load.
@@ -132,22 +140,32 @@ export function App() {
     void updater?.start(UPDATE_CHECK_DELAY_MS);
   }, []);
 
-  // The desktop app connects on its own when exactly one keyboard is plugged
-  // in, so launching it goes straight to the keymap. Only once per launch: after
-  // an unplug or a disconnect the connect screen stays put.
+  // Keyboards ViaLink can open without the browser's chooser: the desktop app's
+  // list, or the ones this site already has permission for (reconnect.ts).
+  // Each fresh list (not a re-render) decides whether to connect on its own:
+  // - with exactly one keyboard, ViaLink connects to it, so opening it goes
+  //   straight to the keymap; only once per page load (or app launch), so
+  //   after a disconnect the connect screen stays put;
+  // - after an unplug, as soon as the same kind of keyboard is back.
+  const desktop = isDesktop();
+  const idle = status.kind === "idle";
   const autoConnectTried = useRef(false);
-  useEffect(() => {
-    if (!isDesktop() || autoConnectTried.current) return;
-    autoConnectTried.current = true;
-    void listNativeKeyboards().then(
-      (found) => {
-        if (found.length === 1) void start({ kind: "native", device: found[0] });
-      },
-      () => undefined,
-    );
-  }, [start]);
+  const onKeyboards = (list: readonly AvailableKeyboard[]) => {
+    if (!autoConnectTried.current) {
+      autoConnectTried.current = true;
+      if (list.length === 1 && !waitingFor) return void start(list[0].target);
+    }
+    const back = waitingFor && list.find((k) => sameKind(k, waitingFor));
+    if (back) void start(back.target);
+  };
+  const native = useNativeKeyboards(desktop && idle, (found) => onKeyboards(found.map(fromNative)));
+  const permitted = usePermittedKeyboards(!desktop && webHidSupported() && idle, (found) =>
+    onKeyboards(found.map(fromHid)),
+  );
+  const available = desktop ? (native?.map(fromNative) ?? null) : (permitted?.map(fromHid) ?? null);
 
   const disconnect = useCallback(async () => {
+    setWaitingFor(null);
     if (status.kind === "connected") await status.connection.queue.close().catch(() => undefined);
     setStatus({ kind: "idle" });
   }, [status]);
@@ -163,12 +181,15 @@ export function App() {
     return () => document.removeEventListener("visibilitychange", update);
   }, [scheduler]);
 
-  // An unplug drops back to the connect screen with an explanation.
+  // An unplug drops back to the connect screen, which waits for the keyboard
+  // to come back (the demo can't be unplugged, so it never waits).
   useEffect(() => {
     if (status.kind !== "connected") return;
-    return status.connection.queue.transport.onDisconnect(() => {
+    const { transport } = status.connection.queue;
+    return transport.onDisconnect(() => {
       setStatus({ kind: "idle" });
-      setError("The keyboard was disconnected.");
+      if (status.connection.demo) setError("The keyboard was disconnected.");
+      else setWaitingFor({ ...transport.info });
     });
   }, [status]);
 
@@ -313,7 +334,14 @@ export function App() {
             )}
 
             <main className="flex min-h-0 flex-1 flex-col">
-              {status.kind === "idle" && <ConnectScreen onConnect={(target) => void start(target)} />}
+              {status.kind === "idle" && (
+                <ConnectScreen
+                  onConnect={(target) => void start(target)}
+                  available={available}
+                  waitingFor={waitingFor}
+                  onStopWaiting={() => setWaitingFor(null)}
+                />
+              )}
               {status.kind === "connecting" && <Connecting progress={status.progress} />}
               {status.kind === "connected" && (
                 <Editor
@@ -385,14 +413,25 @@ function latestPerFrame<T>(fn: (value: T) => void) {
 }
 
 /** The desktop app's keyboards, looked up again every second while the connect screen shows. */
-function useNativeKeyboards(enabled: boolean): NativeKeyboard[] | null {
+function useNativeKeyboards(
+  enabled: boolean,
+  onFound?: (keyboards: NativeKeyboard[]) => void,
+): NativeKeyboard[] | null {
   const [keyboards, setKeyboards] = useState<NativeKeyboard[] | null>(null);
+  const latest = useRef(onFound);
+  useEffect(() => {
+    latest.current = onFound;
+  });
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     const refresh = () =>
       listNativeKeyboards().then(
-        (found) => alive && setKeyboards(found),
+        (found) => {
+          if (!alive) return;
+          setKeyboards(found);
+          latest.current?.(found);
+        },
         () => alive && setKeyboards([]),
       );
     void refresh();
@@ -405,24 +444,82 @@ function useNativeKeyboards(enabled: boolean): NativeKeyboard[] | null {
   return keyboards;
 }
 
-function ConnectScreen({ onConnect }: { onConnect: (target: ConnectTarget) => void }) {
+/** A keyboard ViaLink can open straight away, without the browser's chooser. */
+interface AvailableKeyboard {
+  key: string;
+  name: string;
+  vendorId: number;
+  productId: number;
+  target: ConnectTarget;
+}
+
+const fromNative = (d: NativeKeyboard): AvailableKeyboard => ({
+  key: d.path,
+  name: d.productName,
+  vendorId: d.vendorId,
+  productId: d.productId,
+  target: { kind: "native", device: d },
+});
+
+const fromHid = (d: HIDDevice, i: number): AvailableKeyboard => ({
+  key: `${i}:${d.vendorId}:${d.productId}`,
+  name: d.productName,
+  vendorId: d.vendorId,
+  productId: d.productId,
+  target: { kind: "device", device: d },
+});
+
+function ConnectScreen({
+  onConnect,
+  available,
+  waitingFor,
+  onStopWaiting,
+}: {
+  onConnect: (target: ConnectTarget) => void;
+  available: readonly AvailableKeyboard[] | null;
+  /** The keyboard that was unplugged, while waiting for it to come back. */
+  waitingFor: DeviceInfo | null;
+  onStopWaiting: () => void;
+}) {
   const desktop = isDesktop();
-  const keyboards = useNativeKeyboards(desktop);
   const supported = webHidSupported();
+  if (waitingFor) {
+    return (
+      <section
+        aria-labelledby="waiting-title"
+        className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center"
+      >
+        <h2 id="waiting-title" className="m-0 text-xl font-semibold">
+          {waitingFor.productName || "The keyboard"} was unplugged
+        </h2>
+        <p role="status" className="m-0 text-kumo-subtle">
+          Plug it back in and ViaLink connects to it again. Undo history starts afresh after reconnecting.
+        </p>
+        <div className="mt-2 flex flex-wrap justify-center gap-3">
+          {!desktop && supported && (
+            <Button onClick={() => onConnect({ kind: "webhid" })}>Choose it again…</Button>
+          )}
+          <Button onClick={onStopWaiting}>Stop waiting</Button>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center">
       <h2 className="m-0 text-xl font-semibold">Connect a Vial keyboard</h2>
       {desktop ? (
         <p className="m-0 text-kumo-subtle">
-          {keyboards === null
+          {available === null
             ? "Looking for keyboards…"
-            : keyboards.length === 0
+            : available.length === 0
               ? "No keyboard found yet. Plug one in and it shows up here."
               : "Choose a keyboard."}
         </p>
       ) : supported ? (
         <p className="m-0 text-kumo-subtle">
-          Plug in your keyboard and choose it in the browser's device list.
+          {available?.length
+            ? "Connect a keyboard you have used here before, or choose another in the browser's device list."
+            : "Plug in your keyboard and choose it in the browser's device list."}
         </p>
       ) : (
         <Banner
@@ -432,15 +529,18 @@ function ConnectScreen({ onConnect }: { onConnect: (target: ConnectTarget) => vo
         />
       )}
       <div className="mt-2 flex flex-wrap justify-center gap-3">
-        {desktop ? (
-          keyboards?.map((device) => (
-            <Button key={device.path} variant="primary" onClick={() => onConnect({ kind: "native", device })}>
-              Connect {device.productName}
-            </Button>
-          ))
-        ) : (
-          <Button variant="primary" disabled={!supported} onClick={() => onConnect({ kind: "webhid" })}>
-            Connect keyboard
+        {available?.map((k) => (
+          <Button key={k.key} variant="primary" onClick={() => onConnect(k.target)}>
+            Connect {k.name}
+          </Button>
+        ))}
+        {!desktop && (
+          <Button
+            variant={available?.length ? "secondary" : "primary"}
+            disabled={!supported}
+            onClick={() => onConnect({ kind: "webhid" })}
+          >
+            {available?.length ? "Another keyboard…" : "Connect keyboard"}
           </Button>
         )}
         <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>

@@ -40,14 +40,17 @@ export class NoDeviceSelectedError extends Error {
   }
 }
 
+/** The raw-HID interface VIA and Vial share (a keyboard also lists its keyboard and other interfaces). */
+export function isRawHid(device: HIDDevice): boolean {
+  return device.collections.some((c) => c.usagePage === RAW_HID_USAGE_PAGE && c.usage === RAW_HID_USAGE);
+}
+
 /** Shows the browser's device chooser, filtered to the raw-HID interface VIA and Vial share. */
 export async function requestDevice(): Promise<HIDDevice> {
   const devices = await navigator.hid.requestDevice({
     filters: [{ usagePage: RAW_HID_USAGE_PAGE, usage: RAW_HID_USAGE }],
   });
-  const device = devices.find((d) =>
-    d.collections.some((c) => c.usagePage === RAW_HID_USAGE_PAGE && c.usage === RAW_HID_USAGE),
-  );
+  const device = devices.find(isRawHid);
   if (!device) throw new NoDeviceSelectedError();
   return device;
 }
@@ -99,6 +102,8 @@ export type ConnectTarget =
   | { kind: "demo" }
   /** The browser's device chooser. */
   | { kind: "webhid" }
+  /** A keyboard the browser already lets this site open (no chooser). */
+  | { kind: "device"; device: HIDDevice }
   /** A keyboard the desktop app found (no WebHID there). */
   | { kind: "native"; device: NativeKeyboard };
 
