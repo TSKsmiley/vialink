@@ -14,5 +14,11 @@ export function docsUrl(page: "extensions"): string {
 /** The newest desktop app release, with its installers for each system. */
 export const DESKTOP_DOWNLOADS = "https://github.com/TSKsmiley/vialink/releases/latest";
 
+/** The latest release as GitHub's API describes it, with each file's download URL (downloads.ts). */
+export const LATEST_RELEASE_API = "https://api.github.com/repos/TSKsmiley/vialink/releases/latest";
+
 /** Vial's udev rule, which Linux needs before a browser or the desktop app may open the keyboard. */
 export const VIAL_UDEV_RULE = "https://get.vial.today/manual/linux-udev.html";
+
+/** The project on GitHub: source, issues and releases. */
+export const GITHUB_PROJECT = "https://github.com/TSKsmiley/vialink";

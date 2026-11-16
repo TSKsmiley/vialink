@@ -137,7 +137,7 @@ describe("connecting without the chooser", () => {
 
     act(() => hid.unplug(first));
     fireEvent.click(await screen.findByRole("button", { name: "Stop waiting" }));
-    expect(await screen.findByRole("heading", { name: "Connect a Vial keyboard" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Configure your Vial keyboard" })).toBeTruthy();
 
     act(() => hid.plug(new FakeHidDevice(sim)));
     expect(await screen.findByRole("button", { name: "Connect Klor" })).toBeTruthy();

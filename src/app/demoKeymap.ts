@@ -15,6 +15,9 @@ import { KeycodeTable } from "../core/keycodes/table.ts";
 
 type Layer = readonly (readonly string[])[];
 
+/** The demo's layer names, as its layer-names firmware reports them. */
+export const DEMO_LAYER_NAMES = ["Base", "Lower", "Raise", "Adjust"];
+
 const BASE: Layer = [
   ["", "KC_Q", "KC_W", "KC_E", "KC_R", "KC_T"],
   ["TD(0)", "KC_A", "KC_S", "KC_D", "KC_F", "KC_G"],

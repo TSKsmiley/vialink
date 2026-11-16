@@ -27,10 +27,13 @@ import { NativeHidTransport, type NativeKeyboard } from "../core/transport/nativ
 import type { Transport } from "../core/transport/types.ts";
 import { WebHidTransport } from "../core/transport/webhid.ts";
 import { tauriHid } from "./desktop.ts";
-import { demoKeymap } from "./demoKeymap.ts";
+import { DEMO_LAYER_NAMES, demoKeymap } from "./demoKeymap.ts";
+
+/** `?nohid` in the address pretends the browser has no WebHID: the page Firefox and Safari get. */
+const pretendNoHid = typeof location !== "undefined" && new URLSearchParams(location.search).has("nohid");
 
 export function webHidSupported(): boolean {
-  return typeof navigator !== "undefined" && "hid" in navigator;
+  return !pretendNoHid && typeof navigator !== "undefined" && "hid" in navigator;
 }
 
 export class NoDeviceSelectedError extends Error {
@@ -133,7 +136,7 @@ export async function demoTransport(): Promise<Transport> {
     macroCount: 16,
     macroBufferSize: 1024,
     dynamic: { tapDance: 4, combo: 8, keyOverride: 4, altRepeatKey: 4, featureFlags: 0b11 },
-    layerNames: ["Base", "Lower", "Raise", "Adjust"],
+    layerNames: DEMO_LAYER_NAMES,
     unlockKeys: [
       { row: 0, col: 3 },
       { row: 4, col: 3 },

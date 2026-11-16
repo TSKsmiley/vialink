@@ -81,6 +81,9 @@ pnpm format         # Prettier
 pnpm build          # production build in dist/
 ```
 
+Add `?nohid` to the address (`http://localhost:5173/?nohid`) to see the start page as browsers
+without WebHID (Firefox, Safari) show it.
+
 On Linux the browser needs read/write access to the keyboard's hidraw device; Vial's
 [udev rule](https://get.vial.today/manual/linux-udev.html) covers this.
 

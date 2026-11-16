@@ -19,7 +19,6 @@ import {
 import { isDesktop, tauriUpdater } from "./desktop.ts";
 import { sameKind, usePermittedKeyboards } from "./reconnect.ts";
 import { browserPrefs, Updater } from "./updates.ts";
-import { WarningIcon } from "@phosphor-icons/react";
 import { Editor } from "./components/Editor.tsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.tsx";
 import { ExtensionOverlays } from "./extensions/ExtensionSlot.tsx";
@@ -43,10 +42,8 @@ import { TopBar } from "./shell/TopBar.tsx";
 import { UndoToast } from "./shell/UndoToast.tsx";
 import { UpdateNotice } from "./shell/UpdateNotice.tsx";
 import { useHistory } from "./shell/useHistory.ts";
-import { docsUrl, VIAL_UDEV_RULE } from "./docs.ts";
-import { runsAsInstalledApp } from "./install.ts";
-import { currentOs } from "./platform.ts";
-import { InstallOptions } from "./shell/InstallOptions.tsx";
+import { docsUrl, GITHUB_PROJECT } from "./docs.ts";
+import { ConnectScreen, type AvailableKeyboard } from "./shell/ConnectScreen.tsx";
 import { Banner, Button, TooltipProvider } from "./ui/index.ts";
 import { BUILTIN_EXTENSIONS } from "../core/extensions/index.ts";
 
@@ -260,29 +257,6 @@ export function App() {
         <SidePanelTaken.Provider value={showLog}>
           <div className={"flex flex-1 flex-col" + (showLog ? " lg:pr-[440px]" : "")}>
             <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden md:px-5">
-              {!kb && (
-                <Banner
-                  variant="alert"
-                  size="sm"
-                  icon={<WarningIcon weight="fill" aria-hidden="true" />}
-                  description={
-                    <>
-                      Experimental: ViaLink is vibe coded (written largely by an AI coding assistant) and has
-                      only been tested on one keyboard, the{" "}
-                      <a
-                        href="https://github.com/GEIGEIGEIST/KLOR"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline"
-                      >
-                        KLOR by GEIGEIGEIST
-                      </a>
-                      . Save a backup of your layout before changing anything.
-                    </>
-                  }
-                  role="note"
-                />
-              )}
               {error && (
                 <Banner
                   variant="error"
@@ -361,11 +335,11 @@ export function App() {
             <UndoToast keyboard={kb} controls={history} />
             {updater && <UpdateNotice updater={updater} busy={restoring} />}
 
-            {/* The credits show on the launch screen only: in the editor a
-                footer would sit under the side panel, which runs down to the
-                window's edge. */}
+            {/* The credits show on the launch screen only, lined up with the
+                start page: in the editor a footer would sit under the side
+                panel, which runs down to the window's edge. */}
             {status.kind !== "connected" && (
-              <footer className="px-4 py-3 text-[13px] text-kumo-subtle md:px-5">
+              <footer className="mx-auto w-full max-w-[1040px] px-4 py-4 text-[13px] text-kumo-subtle md:px-8">
                 Built on{" "}
                 <a className="underline" href="https://github.com/vial-kb/vial-gui">
                   vial-gui
@@ -379,6 +353,10 @@ export function App() {
                   Kumo
                 </a>
                 . Licensed under GPL-2.0.{" "}
+                <a className="underline" href={GITHUB_PROJECT}>
+                  Source on GitHub
+                </a>
+                .{" "}
                 <a className="underline" href={docsUrl("extensions")} target="_blank" rel="noreferrer">
                   Writing an extension
                 </a>
@@ -447,15 +425,6 @@ function useNativeKeyboards(
   return keyboards;
 }
 
-/** A keyboard ViaLink can open straight away, without the browser's chooser. */
-interface AvailableKeyboard {
-  key: string;
-  name: string;
-  vendorId: number;
-  productId: number;
-  target: ConnectTarget;
-}
-
 const fromNative = (d: NativeKeyboard): AvailableKeyboard => ({
   key: d.path,
   name: d.productName,
@@ -471,98 +440,6 @@ const fromHid = (d: HIDDevice, i: number): AvailableKeyboard => ({
   productId: d.productId,
   target: { kind: "device", device: d },
 });
-
-function ConnectScreen({
-  onConnect,
-  available,
-  waitingFor,
-  onStopWaiting,
-}: {
-  onConnect: (target: ConnectTarget) => void;
-  available: readonly AvailableKeyboard[] | null;
-  /** The keyboard that was unplugged, while waiting for it to come back. */
-  waitingFor: DeviceInfo | null;
-  onStopWaiting: () => void;
-}) {
-  const desktop = isDesktop();
-  const supported = webHidSupported();
-  const os = currentOs();
-  if (waitingFor) {
-    return (
-      <section
-        aria-labelledby="waiting-title"
-        className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center"
-      >
-        <h2 id="waiting-title" className="m-0 text-xl font-semibold">
-          {waitingFor.productName || "The keyboard"} was unplugged
-        </h2>
-        <p role="status" className="m-0 text-kumo-subtle">
-          Plug it back in and ViaLink connects to it again. Undo history starts afresh after reconnecting.
-        </p>
-        <div className="mt-2 flex flex-wrap justify-center gap-3">
-          {!desktop && supported && (
-            <Button onClick={() => onConnect({ kind: "webhid" })}>Choose it again…</Button>
-          )}
-          <Button onClick={onStopWaiting}>Stop waiting</Button>
-        </div>
-      </section>
-    );
-  }
-  return (
-    <section className="mx-auto my-10 flex max-w-xl flex-col items-center gap-3 px-4 text-center">
-      <h2 className="m-0 text-xl font-semibold">Connect a Vial keyboard</h2>
-      {desktop ? (
-        <p className="m-0 text-kumo-subtle">
-          {available === null
-            ? "Looking for keyboards…"
-            : available.length === 0
-              ? "No keyboard found yet. Plug one in and it shows up here."
-              : "Choose a keyboard."}
-        </p>
-      ) : supported ? (
-        <p className="m-0 text-kumo-subtle">
-          {available?.length
-            ? "Connect a keyboard you have used here before, or choose another in the browser's device list."
-            : "Plug in your keyboard and choose it in the browser's device list."}
-          {os === "linux" && (
-            <>
-              {" "}
-              On Linux the keyboard needs Vial&rsquo;s{" "}
-              <a className="underline" href={VIAL_UDEV_RULE} target="_blank" rel="noreferrer">
-                udev rule
-              </a>{" "}
-              first.
-            </>
-          )}
-        </p>
-      ) : (
-        <Banner
-          variant="alert"
-          size="sm"
-          description="This browser can't talk to keyboards: it has no WebHID. Install the standalone app below, or open this page in Chrome, Edge or Opera."
-        />
-      )}
-      <div className="mt-2 flex flex-wrap justify-center gap-3">
-        {available?.map((k) => (
-          <Button key={k.key} variant="primary" onClick={() => onConnect(k.target)}>
-            Connect {k.name}
-          </Button>
-        ))}
-        {!desktop && (
-          <Button
-            variant={available?.length ? "secondary" : "primary"}
-            disabled={!supported}
-            onClick={() => onConnect({ kind: "webhid" })}
-          >
-            {available?.length ? "Another keyboard…" : "Connect keyboard"}
-          </Button>
-        )}
-        <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>
-      </div>
-      {!desktop && !runsAsInstalledApp() && <InstallOptions os={os} webHid={supported} />}
-    </section>
-  );
-}
 
 function Connecting({ progress }: { progress: LoadProgress | null }) {
   return (

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // SPDX-License-Identifier: GPL-2.0-or-later
-// The start screen's "Install as web app" and "Install standalone app", and
-// which desktop download fits which computer (platform.ts).
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+// The start page's "Install as web app" and the standalone app's download
+// button, and which desktop download fits which computer (platform.ts).
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DESKTOP_DOWNLOADS } from "../docs.ts";
 import { currentOs } from "../platform.ts";
@@ -11,25 +11,36 @@ import { InstallOptions } from "./InstallOptions.tsx";
 afterEach(cleanup);
 
 const webApp = () => screen.getByRole("button", { name: "Install as web app" }) as HTMLButtonElement;
-const standalone = () => screen.getByRole("link", { name: "Install standalone app" }) as HTMLAnchorElement;
 
-describe("installing ViaLink from the start screen", () => {
-  it("greys out the web app without WebHID and points to the standalone app", () => {
-    render(<InstallOptions os="linux" webHid={false} />);
+describe("installing ViaLink from the start page", () => {
+  it("greys out the web app without WebHID and downloads the standalone app for this computer", async () => {
+    const download = vi.fn(async () => "https://example.test/ViaLink_amd64.AppImage");
+    const navigate = vi.fn();
+    render(<InstallOptions os="linux" webHid={false} download={download} navigate={navigate} />);
     expect(webApp().disabled).toBe(true);
-    expect(screen.getByText(/Needs Chrome, Edge or Opera/)).toBeTruthy();
-    expect(standalone().href).toBe(DESKTOP_DOWNLOADS);
-    expect(standalone().target).toBe("_blank");
-    expect(screen.getByText(/take the \.AppImage, or the \.deb or \.rpm/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "udev rule" })).toBeTruthy();
+    expect(screen.getByText("Needs Chrome, Edge or Opera.")).toBeTruthy();
+    const button = screen.getByRole("link", { name: "Download for Linux" }) as HTMLAnchorElement;
+    expect(button.href).toBe(DESKTOP_DOWNLOADS); // where it goes without JavaScript
+    fireEvent.click(button);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("https://example.test/ViaLink_amd64.AppImage"));
+    expect(download).toHaveBeenCalledWith("linux");
+    expect((screen.getByRole("link", { name: "Other downloads" }) as HTMLAnchorElement).href).toBe(
+      DESKTOP_DOWNLOADS,
+    );
   });
 
-  it("names the download for the computer it runs on", () => {
+  it("names the system, and sends other systems to the release page", () => {
     render(<InstallOptions os="windows" webHid />);
-    expect(screen.getByText(/take the -setup\.exe installer/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Download for Windows" })).toBeTruthy();
     cleanup();
     render(<InstallOptions os="mac" webHid />);
-    expect(screen.getByText(/take the \.dmg/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Download for macOS" })).toBeTruthy();
+    cleanup();
+    const navigate = vi.fn();
+    render(<InstallOptions os="other" webHid navigate={navigate} />);
+    fireEvent.click(screen.getByRole("link", { name: "Download the standalone app" }));
+    expect(navigate).not.toHaveBeenCalled(); // the link itself opens the release page
+    expect(screen.getByText(/For Windows, macOS and Linux/)).toBeTruthy();
   });
 
   it("explains the browser's own install button when the browser has made no offer", () => {

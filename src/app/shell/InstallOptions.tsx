@@ -1,62 +1,75 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// The start screen's two ways to install ViaLink from a browser: as a web app
+// The start page's two ways to install ViaLink from a browser: as a web app
 // (install.ts; Chrome, Edge and Opera, the browsers that also have WebHID) or
-// the standalone desktop app (src-tauri/), which needs no particular browser.
-// In a browser without WebHID the web app button is greyed out and the
-// standalone app is the main way in. App.tsx leaves this out in the desktop
-// app and in the installed web app.
+// the standalone desktop app (src-tauri/), which needs no browser. The
+// download button fetches the file for this computer from the latest release
+// (downloads.ts). Without WebHID (Firefox, Safari) the web app button is
+// greyed out and the download is the main button. ConnectScreen leaves this
+// out in the desktop app and in the installed web app.
 
-import { useState } from "react";
-import { DESKTOP_DOWNLOADS, VIAL_UDEV_RULE } from "../docs.ts";
+import { useState, type MouseEvent } from "react";
+import { DESKTOP_DOWNLOADS } from "../docs.ts";
+import { desktopDownloadUrl } from "../downloads.ts";
 import { useInstallOffer } from "../install.ts";
 import type { Os } from "../platform.ts";
 import { Button, LinkButton } from "../ui/index.ts";
 
-/** Which download to take, as the release lists them (ViaLink_<version>_x64-setup.exe, …). */
-const DOWNLOAD: Record<Os, string> = {
-  windows: "For Windows, take the -setup.exe installer (or the .msi).",
-  mac: "For macOS, take the .dmg: one app for Apple Silicon and Intel.",
-  linux: "For Linux, take the .AppImage, or the .deb or .rpm.",
-  other: "For Windows, macOS and Linux.",
-};
+const OS_NAME: Record<Os, string | null> = { windows: "Windows", mac: "macOS", linux: "Linux", other: null };
 
-export function InstallOptions({ os, webHid }: { os: Os; webHid: boolean }) {
+export function InstallOptions({
+  os,
+  webHid,
+  download = desktopDownloadUrl,
+  navigate = (url) => window.location.assign(url),
+}: {
+  os: Os;
+  webHid: boolean;
+  /** Where the download button goes, and going there (tests replace both). */
+  download?: (os: Os) => Promise<string>;
+  navigate?: (url: string) => void;
+}) {
   const install = useInstallOffer();
   const [showHow, setShowHow] = useState(false);
+  const osName = OS_NAME[os];
+
+  const onDownload = async (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!osName) return; // no build for this system: the link shows the release page
+    e.preventDefault();
+    navigate(await download(os));
+  };
+
   return (
-    <section aria-labelledby="install-heading" className="mt-8 w-full border-t border-kumo-line pt-6">
-      <h3 id="install-heading" className="m-0 text-base font-semibold">
+    <section aria-labelledby="install-heading" className="flex flex-col gap-4">
+      <h2 id="install-heading" className="m-0 text-[17px] font-semibold">
         Install ViaLink
-      </h3>
-      <div className="mt-4 grid gap-5 text-left sm:grid-cols-2">
+      </h2>
+      <div className="grid max-w-[760px] gap-x-12 gap-y-6 sm:grid-cols-2">
         <div className="flex flex-col items-start gap-2">
           <Button disabled={!webHid} onClick={() => (install ? void install() : setShowHow(true))}>
             Install as web app
           </Button>
           <p className="m-0 text-sm text-kumo-subtle">
             {!webHid
-              ? "Needs Chrome, Edge or Opera: this browser can't talk to keyboards."
+              ? "Needs Chrome, Edge or Opera."
               : showHow
-                ? "Use the install button at the right end of the address bar, or Install in the browser's menu. If ViaLink is installed already, the address bar offers to open it."
-                : "Its own window and icon, and always the newest version."}
+                ? "Use the install button at the right end of the address bar."
+                : "Opens in its own window, like any other app."}
           </p>
         </div>
         <div className="flex flex-col items-start gap-2">
-          <LinkButton variant={webHid ? "secondary" : "primary"} href={DESKTOP_DOWNLOADS} external>
-            Install standalone app
+          <LinkButton
+            variant={webHid ? "secondary" : "primary"}
+            href={DESKTOP_DOWNLOADS}
+            onClick={onDownload}
+          >
+            {osName ? `Download for ${osName}` : "Download the standalone app"}
           </LinkButton>
           <p className="m-0 text-sm text-kumo-subtle">
-            The desktop app, for any browser or none. {DOWNLOAD[os]}
-            {os === "linux" && !webHid && (
-              // With WebHID the start screen says so above, for the browser.
-              <>
-                {" "}
-                The keyboard also needs Vial&rsquo;s{" "}
-                <a className="underline" href={VIAL_UDEV_RULE} target="_blank" rel="noreferrer">
-                  udev rule
-                </a>
-                .
-              </>
+            {osName ? "The standalone app. It doesn't need a browser. " : "For Windows, macOS and Linux. "}
+            {osName && (
+              <a className="underline" href={DESKTOP_DOWNLOADS} target="_blank" rel="noreferrer">
+                Other downloads
+              </a>
             )}
           </p>
         </div>
