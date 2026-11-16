@@ -77,9 +77,9 @@ pnpm tauri build                # installers in src-tauri/target/release/bundle/
 VIALINK_TRACE=1 pnpm tauri dev  # also log startup and every HID request's timing
 ```
 
-The "Desktop app" GitHub workflow builds the installers on every pull request and push to
-`master` that touches the app (or by hand from the Actions tab); download them from the run's
-Artifacts:
+The "Desktop app" GitHub workflow builds the installers on every pull request that touches the
+app, on each `desktop-v*` release tag, and by hand from the Actions tab; download them from the
+run's Artifacts. Pushes to `master` don't build them: a release's tag build would only repeat it.
 
 - **Linux**: `.deb` and `.rpm` (about 2 MB, using the system's WebKitGTK), or an `.AppImage` that
   runs on most distributions. All need Vial's udev rule, as above.

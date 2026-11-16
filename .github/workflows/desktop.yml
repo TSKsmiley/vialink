@@ -6,10 +6,13 @@ name: Desktop app
 #   .AppImage (one file that runs on most distributions, WebKitGTK inside).
 # - macOS: one universal .dmg for Apple Silicon and Intel Macs, ad-hoc signed.
 # - Windows: an .exe installer and an .msi.
-# Runs on pull requests and pushes to master that touch the app, by hand from
-# the Actions tab, and on desktop-v* tags, which also attach the installers to
-# a draft GitHub release. Not signed with a certificate yet, so macOS and
-# Windows ask the user to confirm the first time it opens.
+# Runs on pull requests that touch the app, by hand from the Actions tab, and
+# on desktop-v* tags, which also attach the installers to a draft GitHub
+# release. Pushes to master don't build: a release pushes master and its tag
+# together, and the tag's run is the one that counts, so a master build would
+# repeat it (CI still tests every push).
+# Not signed with a certificate yet, so macOS and Windows ask the user to
+# confirm the first time it opens.
 #
 # Updates: once the updater key is set up (README, "Releasing the desktop
 # app"), builds carry the updater and signed update files, and a tag's draft
@@ -27,17 +30,7 @@ on:
       - "vite.config.ts"
       - ".github/workflows/desktop.yml"
   push:
-    branches: [master]
-    # Path filters don't apply to tag pushes: a desktop-v* tag always builds.
     tags: ["desktop-v*"]
-    paths:
-      - "src/**"
-      - "src-tauri/**"
-      - "index.html"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "vite.config.ts"
-      - ".github/workflows/desktop.yml"
   workflow_dispatch:
 
 concurrency:
