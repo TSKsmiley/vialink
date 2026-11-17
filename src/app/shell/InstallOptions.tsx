@@ -39,11 +39,14 @@ export function InstallOptions({
   };
 
   return (
-    <section aria-labelledby="install-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="install-heading"
+      className="flex flex-col gap-4 lg:mt-2 lg:border-l lg:border-kumo-line lg:pl-8"
+    >
       <h2 id="install-heading" className="m-0 text-[17px] font-semibold">
         Install ViaLink
       </h2>
-      <div className="grid max-w-[760px] gap-x-12 gap-y-6 sm:grid-cols-2">
+      <div className="grid max-w-[760px] gap-x-12 gap-y-6 sm:grid-cols-2 lg:grid-cols-1">
         <div className="flex flex-col items-start gap-2">
           <Button disabled={!webHid} onClick={() => (install ? void install() : setShowHow(true))}>
             Install as web app

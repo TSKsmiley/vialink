@@ -49,10 +49,14 @@ export function useInstallOffer(): (() => Promise<void>) | null {
   };
 }
 
-/** True in the installed web app's own window, where offering to install it makes no sense. */
+/**
+ * True in the installed web app's own window, where offering to install it makes no sense.
+ * Not "fullscreen": a browser tab in full screen (F11) reports that too, and the manifest asks
+ * for "standalone" anyway.
+ */
 export function runsAsInstalledApp(): boolean {
   if (typeof matchMedia === "undefined") return false;
-  return ["standalone", "minimal-ui", "window-controls-overlay", "fullscreen"].some(
+  return ["standalone", "minimal-ui", "window-controls-overlay"].some(
     (mode) => matchMedia(`(display-mode: ${mode})`).matches,
   );
 }

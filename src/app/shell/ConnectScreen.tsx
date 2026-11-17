@@ -110,69 +110,69 @@ export function ConnectScreen({
     );
   }
 
-  const install = !runsAsInstalledApp() ? <InstallOptions os={os} webHid={supported} /> : null;
   return (
     <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-14 px-4 pt-10 pb-12 md:px-8 md:pt-16">
-      <section aria-labelledby="landing-title" className="flex flex-col items-start gap-5">
-        <h1
-          id="landing-title"
-          className="m-0 max-w-[13ch] text-[38px] leading-[1.04] font-semibold tracking-[-0.025em] md:text-[54px]"
-        >
-          Configure your Vial keyboard
-        </h1>
-        <p className="m-0 max-w-[56ch] text-base leading-[1.55] text-kumo-subtle md:text-[17px]">
-          Remap keys and layers, and build macros, tap dances and combos. Every change goes to the keyboard as
-          you make it, and every change can be undone. Free and open source,{" "}
-          <a className={link} href={GITHUB_PROJECT}>
-            on GitHub
-          </a>
-          .
-        </p>
-
-        {!supported && (
-          <div className="max-w-[64ch]">
-            <Banner
-              variant="alert"
-              size="sm"
-              description="This browser can't talk to keyboards. Open ViaLink in Chrome, Edge or Opera, or download the standalone app below."
-            />
-          </div>
-        )}
-
-        <div className="mt-1 flex flex-wrap gap-3">
-          {known.map((k) => (
-            <Button key={k.key} variant="primary" onClick={() => onConnect(k.target)}>
-              Connect {k.name}
-            </Button>
-          ))}
-          {supported && (
-            <Button
-              variant={known.length ? "secondary" : "primary"}
-              onClick={() => onConnect({ kind: "webhid" })}
-            >
-              {known.length ? "Another keyboard…" : "Connect keyboard"}
-            </Button>
-          )}
-          <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>
-        </div>
-
-        {supported && os === "linux" && (
-          <p className="m-0 text-sm text-kumo-subtle">
-            On Linux the keyboard first needs Vial&rsquo;s{" "}
-            <a className={link} href={VIAL_UDEV_RULE} target="_blank" rel="noreferrer">
-              udev rule
+      {/* Install sits beside the headline on wide screens and under it on narrow ones, so the download is on the first screen either way. */}
+      <div className="grid items-start gap-x-14 gap-y-12 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <section aria-labelledby="landing-title" className="flex flex-col items-start gap-5">
+          <h1
+            id="landing-title"
+            className="m-0 max-w-[13ch] text-[38px] leading-[1.04] font-semibold tracking-[-0.025em] md:text-[54px]"
+          >
+            Configure your Vial keyboard
+          </h1>
+          <p className="m-0 max-w-[56ch] text-base leading-[1.55] text-kumo-subtle md:text-[17px]">
+            Remap keys and layers, and build macros, tap dances and combos. Every change goes to the keyboard
+            as you make it, and every change can be undone. Free and open source,{" "}
+            <a className={link} href={GITHUB_PROJECT}>
+              on GitHub
             </a>
             .
           </p>
-        )}
 
-        <ExperimentalNote />
-      </section>
+          {!supported && (
+            <div className="max-w-[64ch]">
+              <Banner
+                variant="alert"
+                size="sm"
+                description="This browser can't talk to keyboards. Open ViaLink in Chrome, Edge or Opera, or download the standalone app."
+              />
+            </div>
+          )}
 
-      {/* Without WebHID the download is the way in, so it comes before the picture. */}
-      {install && !supported && install}
+          <div className="mt-1 flex flex-wrap gap-3">
+            {known.map((k) => (
+              <Button key={k.key} variant="primary" onClick={() => onConnect(k.target)}>
+                Connect {k.name}
+              </Button>
+            ))}
+            {supported && (
+              <Button
+                variant={known.length ? "secondary" : "primary"}
+                onClick={() => onConnect({ kind: "webhid" })}
+              >
+                {known.length ? "Another keyboard…" : "Connect keyboard"}
+              </Button>
+            )}
+            <Button onClick={() => onConnect({ kind: "demo" })}>Try the demo keyboard</Button>
+          </div>
+
+          {supported && os === "linux" && (
+            <p className="m-0 text-sm text-kumo-subtle">
+              On Linux the keyboard first needs Vial&rsquo;s{" "}
+              <a className={link} href={VIAL_UDEV_RULE} target="_blank" rel="noreferrer">
+                udev rule
+              </a>
+              .
+            </p>
+          )}
+
+          <ExperimentalNote />
+        </section>
+        {!runsAsInstalledApp() && <InstallOptions os={os} webHid={supported} />}
+      </div>
+
       <KeyboardPreview />
-      {install && supported && install}
     </div>
   );
 }
